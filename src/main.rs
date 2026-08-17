@@ -32,13 +32,15 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
   match command {
     Commands::Build {
       content,
-      template,
+      template_name,
+      source,
       output,
       schema,
       font_path,
     } => run_build(
       &content,
-      template.as_deref(),
+      &template_name,
+      source.as_deref(),
       output.as_deref(),
       schema.as_deref(),
       font_path.as_deref(),
@@ -46,24 +48,28 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
     ),
     Commands::Check {
       content,
-      template,
+      template_name,
+      source,
       schema,
       font_path,
     } => run_check(
       &content,
-      template.as_deref(),
+      &template_name,
+      source.as_deref(),
       schema.as_deref(),
       font_path.as_deref(),
       quiet,
     ),
     Commands::Watch {
       content,
-      template,
+      template_name,
+      source,
       output,
       font_path,
     } => run_watch(
       &content,
-      template.as_deref(),
+      &template_name,
+      source.as_deref(),
       output.as_deref(),
       font_path.as_deref(),
     ),
@@ -78,7 +84,8 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
 
 fn run_build(
   content: &Path,
-  template: Option<&Path>,
+  template_name: &str,
+  source: Option<&Path>,
   output: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
@@ -103,7 +110,7 @@ fn run_build(
 
   // 2. Resolve paths
   let engine = TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template)?;
+  let resolved_template = engine.resolve_template(template_name, source)?;
   let output_pdf = match output {
     Some(out) => out.to_path_buf(),
     None => derive_output_filename(content),
@@ -144,7 +151,8 @@ fn run_build(
 
 fn run_check(
   content: &Path,
-  template: Option<&Path>,
+  template_name: &str,
+  source: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
@@ -167,7 +175,7 @@ fn run_check(
 
   // 2. Layout telemetry check
   let engine = TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template)?;
+  let resolved_template = engine.resolve_template(template_name, source)?;
   let page_json =
     engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
   let bullets_json =
@@ -202,7 +210,8 @@ fn run_check(
 
 fn run_watch(
   content: &Path,
-  template: Option<&Path>,
+  template_name: &str,
+  source: Option<&Path>,
   output: Option<&Path>,
   font_path: Option<&Path>,
 ) -> Result<(), String> {
@@ -211,7 +220,7 @@ fn run_watch(
   }
 
   let engine = TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template)?;
+  let resolved_template = engine.resolve_template(template_name, source)?;
   let output_pdf = match output {
     Some(out) => out.to_path_buf(),
     None => derive_output_filename(content),

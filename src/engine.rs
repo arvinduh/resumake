@@ -1,4 +1,5 @@
-//! Typst engine orchestration, embedded component cache, and subprocess execution.
+//! Typst engine orchestration, embedded component cache, and subprocess
+//! execution.
 
 use std::fmt;
 use std::fs;
@@ -6,21 +7,110 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use which::which;
 
-// Embedded modular Typst engine components
-const EMBEDDED_MAIN: &str = include_str!("embedded/main.typ");
-const EMBEDDED_TOKENS: &str = include_str!("embedded/tokens.typ");
-const EMBEDDED_PRIMITIVES: &str = include_str!("embedded/primitives.typ");
-const EMBEDDED_BLOCK_EDU: &str = include_str!("embedded/blocks/education.typ");
-const EMBEDDED_BLOCK_EXP: &str = include_str!("embedded/blocks/experience.typ");
-const EMBEDDED_BLOCK_PROJ: &str = include_str!("embedded/blocks/projects.typ");
-const EMBEDDED_BLOCK_SKILLS: &str = include_str!("embedded/blocks/skills.typ");
-const EMBEDDED_BLOCK_PUBS: &str =
-  include_str!("embedded/blocks/publications.typ");
-const EMBEDDED_BLOCK_SPLIT: &str =
-  include_str!("embedded/blocks/split_line.typ");
-const EMBEDDED_BLOCK_REFS: &str =
-  include_str!("embedded/blocks/references.typ");
-const EMBEDDED_BLOCK_LINES: &str = include_str!("embedded/blocks/lines.typ");
+/// A single Typst source file belonging to an embedded template, keyed by
+/// its path relative to the template's root directory (e.g.
+/// `"blocks/experience.typ"`).
+struct TemplateFile {
+  /// Path relative to the template root, using forward slashes.
+  rel_path: &'static str,
+  /// Embedded file contents.
+  contents: &'static str,
+}
+
+/// A complete named résumé template bundled into the binary. Every
+/// template is a self-contained Typst module tree with its own
+/// `main.typ` entry point, so multiple visual layouts (single-column,
+/// sidebar, etc.) can coexist and be selected at the CLI without
+/// touching the data model in `models.rs`.
+///
+/// # Template contract
+///
+/// To stay compatible with `resumake check`/`build` telemetry, a
+/// template's `main.typ` must still emit the `<pageinfo>` metadata tag
+/// (see `templates/classic/main.typ`) and route bullet-like content
+/// through the `guard()` primitive to emit `<bulletinfo>` tags. Layout is
+/// otherwise entirely up to the template.
+struct EmbeddedTemplate {
+  /// Registry name selected via `--template <name>` (e.g. `"classic"`).
+  name: &'static str,
+  /// Entry point file, always extracted as `main.typ`.
+  entry: &'static str,
+  /// All other files in the template tree (tokens, primitives, blocks/*).
+  files: &'static [TemplateFile],
+}
+
+const CLASSIC_TEMPLATE: EmbeddedTemplate = EmbeddedTemplate {
+  name: "classic",
+  entry: include_str!("embedded/templates/classic/main.typ"),
+  files: &[
+    TemplateFile {
+      rel_path: "tokens.typ",
+      contents: include_str!("embedded/templates/classic/tokens.typ"),
+    },
+    TemplateFile {
+      rel_path: "primitives.typ",
+      contents: include_str!("embedded/templates/classic/primitives.typ"),
+    },
+    TemplateFile {
+      rel_path: "blocks/education.typ",
+      contents: include_str!("embedded/templates/classic/blocks/education.typ"),
+    },
+    TemplateFile {
+      rel_path: "blocks/experience.typ",
+      contents: include_str!(
+        "embedded/templates/classic/blocks/experience.typ"
+      ),
+    },
+    TemplateFile {
+      rel_path: "blocks/projects.typ",
+      contents: include_str!("embedded/templates/classic/blocks/projects.typ"),
+    },
+    TemplateFile {
+      rel_path: "blocks/skills.typ",
+      contents: include_str!("embedded/templates/classic/blocks/skills.typ"),
+    },
+    TemplateFile {
+      rel_path: "blocks/publications.typ",
+      contents: include_str!(
+        "embedded/templates/classic/blocks/publications.typ"
+      ),
+    },
+    TemplateFile {
+      rel_path: "blocks/split_line.typ",
+      contents: include_str!(
+        "embedded/templates/classic/blocks/split_line.typ"
+      ),
+    },
+    TemplateFile {
+      rel_path: "blocks/references.typ",
+      contents: include_str!(
+        "embedded/templates/classic/blocks/references.typ"
+      ),
+    },
+    TemplateFile {
+      rel_path: "blocks/lines.typ",
+      contents: include_str!("embedded/templates/classic/blocks/lines.typ"),
+    },
+  ],
+};
+
+/// Registry of all templates bundled into the binary. Add a new entry
+/// here (and a matching `embedded/templates/<name>/` tree) to register
+/// another built-in layout.
+const TEMPLATE_REGISTRY: &[&EmbeddedTemplate] = &[&CLASSIC_TEMPLATE];
+
+/// The default template name used when `--template` is not specified.
+pub const DEFAULT_TEMPLATE: &str = "classic";
+
+/// Looks up a bundled template by registry name.
+fn find_embedded_template(name: &str) -> Option<&'static EmbeddedTemplate> {
+  TEMPLATE_REGISTRY.iter().find(|t| t.name == name).copied()
+}
+
+/// Lists the names of all bundled templates, for error messages.
+fn known_template_names() -> Vec<&'static str> {
+  TEMPLATE_REGISTRY.iter().map(|t| t.name).collect()
+}
 
 /// Errors originating from the Typst execution engine.
 #[derive(Debug)]
@@ -34,6 +124,13 @@ pub enum EngineError {
   FontDirNotFound {
     /// Searched locations.
     searched: Vec<PathBuf>,
+  },
+  /// The requested `--template <name>` is not registered.
+  TemplateNotFound {
+    /// The requested template name.
+    name: String,
+    /// Names of templates actually bundled into the binary.
+    known: Vec<&'static str>,
   },
   /// `typst compile` exited with a non-zero status.
   CompilationFailed {
@@ -69,6 +166,13 @@ impl fmt::Display for EngineError {
             .map(|p| format!("  - {}", p.display()))
             .collect::<Vec<_>>()
             .join("\n")
+        )
+      }
+      EngineError::TemplateNotFound { name, known } => {
+        write!(
+          f,
+          "Unknown template '{name}'. Available templates: {}",
+          known.join(", ")
         )
       }
       EngineError::CompilationFailed { stderr } => {
@@ -110,7 +214,8 @@ impl From<EngineError> for String {
 ///
 /// # Errors
 ///
-/// Returns an [`EngineError::TypstNotFound`] if `typst` is not installed on `PATH`.
+/// Returns an [`EngineError::TypstNotFound`] if `typst` is not installed
+/// on `PATH`.
 pub fn find_typst_binary() -> Result<PathBuf, EngineError> {
   which("typst").map_err(|_| EngineError::TypstNotFound {
     instructions: concat!(
@@ -122,12 +227,13 @@ pub fn find_typst_binary() -> Result<PathBuf, EngineError> {
   })
 }
 
-/// Discovers the font directory if present (user override, `./fonts`, or `assets/fonts`).
+/// Discovers the font directory if present (user override, `./fonts`, or
+/// `assets/fonts`).
 ///
 /// # Errors
 ///
-/// Returns an [`EngineError::FontDirNotFound`] if a custom font path was provided
-/// but does not exist.
+/// Returns an [`EngineError::FontDirNotFound`] if a custom font path was
+/// provided but does not exist.
 pub fn discover_font_dir(
   root: &Path,
   user_override: Option<&Path>,
@@ -157,7 +263,8 @@ pub fn discover_font_dir(
   Ok(None)
 }
 
-/// Normalizes a content file path into a POSIX-compliant input path for Typst.
+/// Normalizes a content file path into a POSIX-compliant input path for
+/// Typst.
 pub fn normalize_posix_path(root: &Path, content_path: &Path) -> String {
   if let Ok(rel) = content_path.strip_prefix(root) {
     let posix = rel.to_string_lossy().replace('\\', "/");
@@ -189,8 +296,9 @@ pub fn normalize_posix_path(root: &Path, content_path: &Path) -> String {
   content_path.to_string_lossy().replace('\\', "/")
 }
 
-/// Finds project root by checking for markers (`resume.yaml`, `content.yaml`, `Cargo.toml`, `.git`)
-/// or defaulting to current directory.
+/// Finds project root by checking for markers (`resume.yaml`,
+/// `content.yaml`, `Cargo.toml`, `.git`) or defaulting to current
+/// directory.
 pub fn find_project_root() -> PathBuf {
   let mut curr = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
   loop {
@@ -208,7 +316,8 @@ pub fn find_project_root() -> PathBuf {
   std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-/// Engine facade coordinating Typst discovery, embedded modular templates, and subprocess execution.
+/// Engine facade coordinating Typst discovery, embedded modular templates,
+/// and subprocess execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypstEngine {
   /// Absolute path to the discovered `typst` binary.
@@ -220,11 +329,13 @@ pub struct TypstEngine {
 }
 
 impl TypstEngine {
-  /// Discovers the Typst binary and optional font directory automatically relative to project root.
+  /// Discovers the Typst binary and optional font directory automatically
+  /// relative to project root.
   ///
   /// # Errors
   ///
-  /// Returns an error string if `typst` cannot be found on `PATH` or font directory is invalid.
+  /// Returns an error string if `typst` cannot be found on `PATH` or font
+  /// directory is invalid.
   pub fn new(font_path_override: Option<&Path>) -> Result<Self, String> {
     let root_path = find_project_root();
     let typst_binary = find_typst_binary().map_err(|e| e.to_string())?;
@@ -237,53 +348,52 @@ impl TypstEngine {
     })
   }
 
-  /// Resolves the template path. If a custom template is provided and exists, returns it.
-  /// Otherwise, extracts the embedded modular component tree into `.resumake/` and returns `main.typ`.
+  /// Resolves the template path. If a custom template file is provided
+  /// and exists, returns it directly (the `template_name` registry pick
+  /// is ignored in that case). Otherwise, looks up `template_name` in the
+  /// built-in template registry, extracts its modular component tree
+  /// into `.resumake/<template_name>/`, and returns its `main.typ`.
   ///
   /// # Errors
   ///
-  /// Returns an error string if extracting embedded files to disk fails.
+  /// Returns an error string if `template_name` is not a registered
+  /// template, or if extracting embedded files to disk fails.
   pub fn resolve_template(
     &self,
+    template_name: &str,
     custom_template: Option<&Path>,
   ) -> Result<PathBuf, String> {
     if let Some(tpl) = custom_template.filter(|p| p.exists()) {
       return Ok(tpl.to_path_buf());
     }
 
-    let cache_dir = self.root_path.join(".resumake");
-    let blocks_dir = cache_dir.join("blocks");
-    fs::create_dir_all(&blocks_dir).map_err(|e| {
+    let template = find_embedded_template(template_name).ok_or_else(|| {
+      EngineError::TemplateNotFound {
+        name: template_name.to_string(),
+        known: known_template_names(),
+      }
+      .to_string()
+    })?;
+
+    let cache_dir = self.root_path.join(".resumake").join(template.name);
+    fs::create_dir_all(&cache_dir).map_err(|e| {
       format!(
         "Failed to create engine cache directory '{}': {}",
-        blocks_dir.display(),
+        cache_dir.display(),
         e
       )
     })?;
 
-    // Write modular components to cache
-    fs::write(cache_dir.join("main.typ"), EMBEDDED_MAIN)
+    fs::write(cache_dir.join("main.typ"), template.entry)
       .map_err(|e| e.to_string())?;
-    fs::write(cache_dir.join("tokens.typ"), EMBEDDED_TOKENS)
-      .map_err(|e| e.to_string())?;
-    fs::write(cache_dir.join("primitives.typ"), EMBEDDED_PRIMITIVES)
-      .map_err(|e| e.to_string())?;
-    fs::write(blocks_dir.join("education.typ"), EMBEDDED_BLOCK_EDU)
-      .map_err(|e| e.to_string())?;
-    fs::write(blocks_dir.join("experience.typ"), EMBEDDED_BLOCK_EXP)
-      .map_err(|e| e.to_string())?;
-    fs::write(blocks_dir.join("projects.typ"), EMBEDDED_BLOCK_PROJ)
-      .map_err(|e| e.to_string())?;
-    fs::write(blocks_dir.join("skills.typ"), EMBEDDED_BLOCK_SKILLS)
-      .map_err(|e| e.to_string())?;
-    fs::write(blocks_dir.join("publications.typ"), EMBEDDED_BLOCK_PUBS)
-      .map_err(|e| e.to_string())?;
-    fs::write(blocks_dir.join("split_line.typ"), EMBEDDED_BLOCK_SPLIT)
-      .map_err(|e| e.to_string())?;
-    fs::write(blocks_dir.join("references.typ"), EMBEDDED_BLOCK_REFS)
-      .map_err(|e| e.to_string())?;
-    fs::write(blocks_dir.join("lines.typ"), EMBEDDED_BLOCK_LINES)
-      .map_err(|e| e.to_string())?;
+
+    for file in template.files {
+      let dest = cache_dir.join(file.rel_path);
+      if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+      }
+      fs::write(&dest, file.contents).map_err(|e| e.to_string())?;
+    }
 
     Ok(cache_dir.join("main.typ"))
   }
@@ -323,7 +433,8 @@ impl TypstEngine {
     Ok(())
   }
 
-  /// Queries Typst metadata elements (e.g. `<bulletinfo>`, `<pageinfo>`) from the document.
+  /// Queries Typst metadata elements (e.g. `<bulletinfo>`, `<pageinfo>`)
+  /// from the document.
   ///
   /// # Errors
   ///
@@ -408,21 +519,27 @@ mod tests {
       root_path: temp.path().to_path_buf(),
     };
 
-    let resolved = engine.resolve_template(None).unwrap();
+    let resolved = engine.resolve_template(DEFAULT_TEMPLATE, None).unwrap();
     assert!(resolved.exists());
-    assert!(temp.path().join(".resumake").join("main.typ").exists());
-    assert!(temp.path().join(".resumake").join("tokens.typ").exists());
-    assert!(temp
-      .path()
-      .join(".resumake")
-      .join("primitives.typ")
-      .exists());
-    assert!(temp
-      .path()
-      .join(".resumake")
-      .join("blocks")
-      .join("experience.typ")
-      .exists());
+    let cache_dir = temp.path().join(".resumake").join("classic");
+    assert!(cache_dir.join("main.typ").exists());
+    assert!(cache_dir.join("tokens.typ").exists());
+    assert!(cache_dir.join("primitives.typ").exists());
+    assert!(cache_dir.join("blocks").join("experience.typ").exists());
+  }
+
+  #[test]
+  fn test_resolve_template_rejects_unknown_name() {
+    let temp = TempDir::new().unwrap();
+    let engine = TypstEngine {
+      typst_binary: PathBuf::from("typst"),
+      font_path: None,
+      root_path: temp.path().to_path_buf(),
+    };
+
+    let err = engine.resolve_template("does-not-exist", None).unwrap_err();
+    assert!(err.contains("does-not-exist"));
+    assert!(err.contains("classic"));
   }
 
   #[test]
@@ -440,7 +557,9 @@ mod tests {
 
     for block in blocks {
       assert!(
-        EMBEDDED_MAIN.contains(&format!("blocks/{block}.typ")),
+        CLASSIC_TEMPLATE
+          .entry
+          .contains(&format!("blocks/{block}.typ")),
         "Block '{block}' is missing an #import in main.typ!"
       );
     }

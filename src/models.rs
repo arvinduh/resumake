@@ -1,7 +1,8 @@
 //! Strongly-typed résumé data models and JSON Schema definitions.
 //!
 //! Provides the canonical representation for modular, block-based résumés,
-//! deriving JSON Schema Draft 2020-12 via `schemars`.
+//! deriving a JSON Schema (Draft-07, per the pinned `schemars` version) from
+//! these types.
 
 #![allow(clippy::large_enum_variant)]
 
@@ -11,6 +12,7 @@ use std::collections::BTreeMap;
 
 /// Top-level Résumé document root.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ResumeDocument {
   /// Document metadata, contact details, ATS keywords, and theme tokens.
   pub meta: Meta,
@@ -20,6 +22,7 @@ pub struct ResumeDocument {
 
 /// Metadata, author info, ATS targets, contact items, and styling theme.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Meta {
   /// Full display name of the candidate.
   pub name: String,
@@ -68,8 +71,10 @@ pub enum ContactItem {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct ThemeConfig {
-  /// Font family for the document (e.g. "Crimson Pro", "Inter", "Linux Libertine").
+  /// Font family for the document (e.g. "Crimson Pro", "Inter", "Linux
+  /// Libertine").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub font_family: Option<String>,
   /// Body font size (e.g. "11.5pt", "10pt").
@@ -103,7 +108,8 @@ pub struct ThemeConfig {
   /// Accent color for rules and highlights (hex string, e.g. "#2a2a2a").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub accent_color: Option<String>,
-  /// Muted color for secondary metadata, dates, and locations (hex string, e.g. "#444444").
+  /// Muted color for secondary metadata, dates, and locations (hex
+  /// string, e.g. "#444444").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub muted_color: Option<String>,
 }
@@ -130,10 +136,14 @@ pub enum StringOrNumber {
 
 /// A modular résumé section supporting polymorphic block types.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Section {
-  /// Section header title (e.g., "Education", "Experience", "Technical Skills", "Projects").
+  /// Section header title (e.g., "Education", "Experience", "Technical
+  /// Skills", "Projects").
   pub title: String,
-  /// Explicit block type descriptor (e.g. "experience", "education", "skills", "projects", "publications", "split_line", "columns", "lines", "bullets", "text").
+  /// Explicit block type descriptor (e.g. "experience", "education",
+  /// "skills", "projects", "publications", "split_line", "columns",
+  /// "lines", "bullets", "text").
   #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
   pub section_type: Option<String>,
 
@@ -205,6 +215,7 @@ pub enum EducationValue {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct EducationItem {
   /// Name of university or institution.
   #[serde(
@@ -260,7 +271,8 @@ pub enum ThesisValue {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(untagged)]
 pub enum SkillsValue {
-  /// Key-value dictionary mapping category name to comma-separated skills or array of skills.
+  /// Key-value dictionary mapping category name to comma-separated
+  /// skills or array of skills.
   Dictionary(BTreeMap<String, StringOrList>),
   /// List of skill categories with explicit category name and items.
   List(Vec<SkillCategoryItem>),
@@ -268,6 +280,7 @@ pub enum SkillsValue {
 
 /// Explicit skill category item.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SkillCategoryItem {
   /// Category name (e.g. "Languages", "ML & Systems", "Cloud").
   #[serde(alias = "name")]
@@ -280,6 +293,7 @@ pub struct SkillCategoryItem {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct ExperienceItem {
   /// Company or organization name.
   #[serde(
@@ -327,6 +341,7 @@ pub struct ExperienceItem {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct RoleItem {
   /// Job title or position (e.g. "Staff AI Systems Engineer").
   #[serde(alias = "role", alias = "position")]
@@ -353,6 +368,7 @@ pub struct RoleItem {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct ProjectItem {
   /// Project title.
   pub name: String,
@@ -381,6 +397,7 @@ pub struct ProjectItem {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct PublicationItem {
   /// Publication title.
   pub title: String,
@@ -410,6 +427,7 @@ pub struct PublicationItem {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct CertificationItem {
   /// Credential name.
   pub name: String,
@@ -438,6 +456,7 @@ pub struct CertificationItem {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct AwardItem {
   /// Award title.
   pub name: String,
@@ -460,6 +479,7 @@ pub struct AwardItem {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct SpeakingItem {
   /// Talk title.
   pub title: String,
@@ -498,6 +518,7 @@ pub enum ReferencesValue {
 #[derive(
   Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default,
 )]
+#[serde(deny_unknown_fields)]
 pub struct ReferenceItem {
   /// Reference person's name.
   pub name: String,

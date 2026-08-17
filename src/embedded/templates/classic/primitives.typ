@@ -3,11 +3,16 @@
 #import "tokens.typ": *
 
 // Wrap guard + fill-ratio telemetry
+#let bulletinfo-counter = counter("resumake-bulletinfo")
+
 #let guard(body, kind: "bullet") = layout(size => context {
+  bulletinfo-counter.step()
+  let n = bulletinfo-counter.get().first()
   let nat = measure(body)
   let fill = calc.round(nat.width / size.width * 100.0, digits: 1)
   let t = repr(body)
   [#metadata((
+    id: kind + "-" + str(n),
     kind: kind,
     fill: fill,
     text: t.slice(0, calc.min(80, t.len())),
@@ -19,10 +24,18 @@
 #let bold(body) = text(weight: "bold")[#body]
 #let italic(body) = text(style: "italic")[#body]
 #let bold-italic(body) = text(weight: "bold", style: "italic")[#body]
-#let muted-italic(body, muted-color: rgb("#444444")) = text(style: "italic", fill: muted-color)[#body]
+#let muted-italic(body, muted-color: rgb("#444444")) = text(
+  style: "italic",
+  fill: muted-color,
+)[#body]
 
 // Structural layout helpers
-#let section(title, sec-size: 13pt, accent-color: rgb("#2a2a2a"), rule-thick: 0.5pt) = {
+#let section(
+  title,
+  sec-size: 13pt,
+  accent-color: rgb("#2a2a2a"),
+  rule-thick: 0.5pt,
+) = {
   block(above: SEC_ABOVE, below: RULE_BELOW)[
     #text(size: sec-size, weight: "semibold", tracking: 0.08em)[#upper(title)]
     #v(-1.00em)
@@ -42,6 +55,11 @@
 }
 
 #let bullets(items) = {
-  set list(marker: text(size: 0.85em)[•], indent: 0.30em, body-indent: 0.40em, spacing: BULLET_GAP)
+  set list(
+    marker: text(size: 0.85em)[•],
+    indent: 0.30em,
+    body-indent: 0.40em,
+    spacing: BULLET_GAP,
+  )
   block(above: 0em, below: 0em, list(..items.map(b => guard([#b]))))
 }

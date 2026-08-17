@@ -54,6 +54,37 @@ fn test_cli_init_and_schema_export() {
 }
 
 #[test]
+fn test_cli_init_then_build_succeeds_end_to_end() {
+  // Regression test: the default `init` scaffold must actually compile.
+  // Earlier versions emitted <bulletinfo> probes without a required `id`
+  // field, which made `build`/`check` fail on every real resume (i.e. any
+  // content with bullets) despite `init` and schema export succeeding in
+  // isolation.
+  let temp = TempDir::new().unwrap();
+  let content_file = temp.path().join("content.yaml");
+
+  Command::cargo_bin("resumake")
+    .unwrap()
+    .arg("init")
+    .arg("--name")
+    .arg("Jane Doe")
+    .arg("--output")
+    .arg(&content_file)
+    .assert()
+    .success();
+
+  Command::cargo_bin("resumake")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("check")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("SUCCESS"));
+}
+
+#[test]
 fn test_cli_check_detects_invalid_yaml() {
   let temp = TempDir::new().unwrap();
   let invalid_file = temp.path().join("invalid.yaml");
@@ -67,4 +98,37 @@ fn test_cli_check_detects_invalid_yaml() {
     .assert()
     .failure()
     .stderr(predicate::str::contains("[FAIL]"));
+}
+
+#[test]
+fn test_cli_check_fails_on_unrecognized_meta_field() {
+  // Regression test for the exact bug that motivated
+  // `#[serde(deny_unknown_fields)]` on the model structs: an old
+  // `meta.role` (the model now expects `meta.title`) must fail loudly
+  // instead of silently vanishing.
+  let temp = TempDir::new().unwrap();
+  let content_file = temp.path().join("content.yaml");
+  fs::write(
+    &content_file,
+    r#"
+meta:
+  name: "Jane Doe"
+  version: "1.0.0"
+  role: "Staff Engineer"
+  contact:
+    - name: "jane@example.com"
+sections: []
+"#,
+  )
+  .unwrap();
+
+  Command::cargo_bin("resumake")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("check")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("role"));
 }

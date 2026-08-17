@@ -56,10 +56,12 @@ impl PageInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BulletInfo {
   /// Probe identifier tag.
+  #[serde(default)]
   pub id: String,
   /// Kind of content item (e.g. "bullet", "header").
   pub kind: String,
-  /// Measured text fill ratio percentage ($width / available\_width \times 100$).
+  /// Measured text fill ratio percentage
+  /// ($width / available\_width \times 100$).
   pub fill: f64,
   /// Associated text snippet or description.
   pub text: String,

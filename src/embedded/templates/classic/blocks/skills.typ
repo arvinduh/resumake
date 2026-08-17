@@ -12,7 +12,9 @@
   } else if type(skills) == array {
     for s in skills {
       if type(s) == dictionary {
-        let cat = if "category" in s { s.category } else if "name" in s { s.name } else { "" }
+        let cat = if "category" in s { s.category } else if "name" in s {
+          s.name
+        } else { "" }
         let items = if "items" in s {
           if type(s.items) == array { s.items.join(", ") } else { s.items }
         } else { "" }

@@ -1,5 +1,6 @@
 //! Command-line argument parsing and subcommand definitions.
 
+use crate::engine::DEFAULT_TEMPLATE;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -9,7 +10,9 @@ use std::path::PathBuf;
   name = "resumake",
   version,
   about = "Modular résumé compiler and telemetry engine",
-  long_about = "Resumake is a high-performance native Rust CLI for compiling and verifying single-page résumés with strict layout telemetry."
+  long_about = "Resumake is a high-performance native Rust CLI for \
+    compiling and verifying single-page résumés with strict layout \
+    telemetry."
 )]
 pub struct Cli {
   /// Suppress non-essential terminal output
@@ -30,20 +33,22 @@ pub enum Commands {
     #[arg(short = 'c', long = "content", default_value = "content.yaml")]
     content: PathBuf,
 
-    /// Path to custom Typst template (falls back to embedded engine if omitted)
-    #[arg(
-      short = 's',
-      long = "source",
-      visible_alias = "template",
-      short_alias = 't'
-    )]
-    template: Option<PathBuf>,
+    /// Named built-in layout to render with (currently only `classic` is
+    /// bundled; the registry exists so more layouts can be added later)
+    #[arg(short = 't', long = "template", default_value = DEFAULT_TEMPLATE)]
+    template_name: String,
+
+    /// Path to a custom Typst template file, bypassing the built-in
+    /// registry entirely
+    #[arg(short = 's', long = "source")]
+    source: Option<PathBuf>,
 
     /// Custom output PDF path (defaults to `<name>_resume.pdf`)
     #[arg(short = 'o', long = "output")]
     output: Option<PathBuf>,
 
-    /// Path to custom JSON schema file (falls back to built-in schema if omitted)
+    /// Path to custom JSON schema file (falls back to built-in schema if
+    /// omitted)
     #[arg(long = "schema")]
     schema: Option<PathBuf>,
 
@@ -57,16 +62,17 @@ pub enum Commands {
     #[arg(short = 'c', long = "content", default_value = "content.yaml")]
     content: PathBuf,
 
-    /// Path to custom Typst template (falls back to embedded engine if omitted)
-    #[arg(
-      short = 's',
-      long = "source",
-      visible_alias = "template",
-      short_alias = 't'
-    )]
-    template: Option<PathBuf>,
+    /// Named built-in layout to validate against
+    #[arg(short = 't', long = "template", default_value = DEFAULT_TEMPLATE)]
+    template_name: String,
 
-    /// Path to custom JSON schema file (falls back to built-in schema if omitted)
+    /// Path to a custom Typst template file, bypassing the built-in
+    /// registry entirely
+    #[arg(short = 's', long = "source")]
+    source: Option<PathBuf>,
+
+    /// Path to custom JSON schema file (falls back to built-in schema if
+    /// omitted)
     #[arg(long = "schema")]
     schema: Option<PathBuf>,
 
@@ -80,14 +86,14 @@ pub enum Commands {
     #[arg(short = 'c', long = "content", default_value = "content.yaml")]
     content: PathBuf,
 
-    /// Path to custom Typst template (falls back to embedded engine if omitted)
-    #[arg(
-      short = 's',
-      long = "source",
-      visible_alias = "template",
-      short_alias = 't'
-    )]
-    template: Option<PathBuf>,
+    /// Named built-in layout to render with
+    #[arg(short = 't', long = "template", default_value = DEFAULT_TEMPLATE)]
+    template_name: String,
+
+    /// Path to a custom Typst template file, bypassing the built-in
+    /// registry entirely
+    #[arg(short = 's', long = "source")]
+    source: Option<PathBuf>,
 
     /// Custom output PDF path
     #[arg(short = 'o', long = "output")]
@@ -97,13 +103,14 @@ pub enum Commands {
     #[arg(long = "font-path")]
     font_path: Option<PathBuf>,
   },
-  /// Export or inspect the canonical JSON schema (Draft 2020-12)
+  /// Export or inspect the canonical JSON schema (Draft-07)
   Schema {
     /// Path to export the JSON schema file to (prints to stdout if omitted)
     #[arg(short = 'e', long = "export")]
     export: Option<PathBuf>,
   },
-  /// Scaffold a new résumé content YAML with rich examples and schema directives
+  /// Scaffold a new résumé content YAML with rich examples and schema
+  /// directives
   Init {
     /// Candidate display name
     #[arg(short = 'n', long = "name")]
@@ -123,7 +130,8 @@ impl Default for Commands {
   fn default() -> Self {
     Commands::Build {
       content: PathBuf::from("content.yaml"),
-      template: None,
+      template_name: DEFAULT_TEMPLATE.to_string(),
+      source: None,
       output: None,
       schema: None,
       font_path: None,
@@ -157,13 +165,26 @@ mod tests {
     match cli.command.unwrap() {
       Commands::Build {
         content,
-        template,
+        source,
         output,
+        template_name,
         ..
       } => {
         assert_eq!(content, PathBuf::from("alt.yaml"));
-        assert_eq!(template, Some(PathBuf::from("alt.typ")));
+        assert_eq!(source, Some(PathBuf::from("alt.typ")));
         assert_eq!(output, Some(PathBuf::from("out.pdf")));
+        assert_eq!(template_name, DEFAULT_TEMPLATE);
+      }
+      _ => panic!("Expected Build command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_build_template_name_flag() {
+    let cli = Cli::parse_from(["resumake", "build", "--template", "classic"]);
+    match cli.command.unwrap() {
+      Commands::Build { template_name, .. } => {
+        assert_eq!(template_name, "classic");
       }
       _ => panic!("Expected Build command"),
     }
