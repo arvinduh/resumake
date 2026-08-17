@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/arvinduh/resumake/main/schema/resume.schema.json
+meta:
+  name: "CANDIDATE_NAME"
+  version: "1.0.0"
+  role: "Software Engineer"
+  contact:
+    - name: "(555) 019-2834"
+    - name: "janedoe@example.com"
+      link: "mailto:janedoe@example.com"
+    - name: "linkedin.com/in/janedoe"
+      link: "https://linkedin.com/in/janedoe"
+    - name: "github.com/janedoe"
+      link: "https://github.com/janedoe"
+  theme:
+    font_family: "Linux Libertine"
+    paper_size: "us-letter"
+    margin: "0.5in"
+    accent_color: "#2a2a2a"
+
+sections:
+  - title: "Education"
+    type: "education"
+    items:
+      - institution: "University Name"
+        location: "City, State"
+        degree: "B.S. in Computer Science"
+        gpa: "3.90 / 4.00"
+        dates: "Sep 2018 - Jun 2022"
+        honors: "Dean's Honor List"
+        coursework: "Data Structures, Algorithms, Operating Systems, Distributed Systems"
+
+  - title: "Technical Skills"
+    type: "skills"
+    items:
+      Languages: "Rust, Python, C++, TypeScript, SQL, Bash"
+      Frameworks & Tools: "Git, Docker, Kubernetes, GitHub Actions, Linux / POSIX"
+
+  - title: "Experience"
+    type: "experience"
+    items:
+      - org: "Organization Name"
+        location: "City, State"
+        roles:
+          - title: "Software Engineer"
+            dates: "Jul 2022 - Present"
+            bullets:
+              - "Designed and implemented automated data validation pipeline, reducing processing latency by 35%."
+              - "Developed modular backend microservices in Rust handling over 10,000 requests per second."
+              - "Collaborated with cross-functional engineering teams to deploy containerized services on Kubernetes."
+
+  - title: "Projects"
+    type: "projects"
+    items:
+      - name: "Open Source Project Name"
+        stack: "Rust / WebAssembly"
+        date: "Jan 2023"
+        link: "https://github.com/janedoe/project"
+        bullets:
+          - "Built high-performance CLI utility for validating and formatting structured data schemas."
+          - "Implemented comprehensive automated test suite achieving 95% branch coverage."
