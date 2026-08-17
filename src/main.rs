@@ -1,5 +1,264 @@
-//! Resumake CLI entrypoint.
+//! Resumake CLI entry point and command router.
 
-fn main() {
-    println!("Resumake v0.1.0");
+use clap::Parser;
+use resumake::cli::{Cli, Commands};
+use resumake::engine::TypstEngine;
+use resumake::schema::{
+  derive_output_filename, export_builtin_schema, generate_init_template,
+  load_content_name, load_content_version, validate_schema_auto,
+};
+use resumake::telemetry::evaluate_telemetry;
+use resumake::ui::{
+  print_error, print_info, print_success, print_telemetry_table,
+};
+use std::fs;
+use std::path::Path;
+use std::process::ExitCode;
+
+fn main() -> ExitCode {
+  let cli = Cli::parse();
+  let command = cli.command.unwrap_or_default();
+
+  match execute_command(command, cli.quiet) {
+    Ok(()) => ExitCode::SUCCESS,
+    Err(err) => {
+      print_error(&err);
+      ExitCode::FAILURE
+    }
+  }
+}
+
+fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
+  match command {
+    Commands::Build {
+      content,
+      template,
+      output,
+      schema,
+      font_path,
+    } => run_build(
+      &content,
+      template.as_deref(),
+      output.as_deref(),
+      schema.as_deref(),
+      font_path.as_deref(),
+      quiet,
+    ),
+    Commands::Check {
+      content,
+      template,
+      schema,
+      font_path,
+    } => run_check(
+      &content,
+      template.as_deref(),
+      schema.as_deref(),
+      font_path.as_deref(),
+      quiet,
+    ),
+    Commands::Watch {
+      content,
+      template,
+      output,
+      font_path,
+    } => run_watch(
+      &content,
+      template.as_deref(),
+      output.as_deref(),
+      font_path.as_deref(),
+    ),
+    Commands::Schema { export } => run_schema(export.as_deref()),
+    Commands::Init {
+      name,
+      output,
+      force,
+    } => run_init(name.as_deref(), &output, force),
+  }
+}
+
+fn run_build(
+  content: &Path,
+  template: Option<&Path>,
+  output: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+  quiet: bool,
+) -> Result<(), String> {
+  if !content.exists() {
+    return Err(format!(
+      "Content file not found: '{}'. Run 'resumake init' to create one.",
+      content.display()
+    ));
+  }
+
+  // 1. Validate schema
+  if let Err(errors) = validate_schema_auto(content, schema) {
+    let mut msg =
+      format!("Schema validation failed ({} error(s)):\n", errors.len());
+    for e in errors {
+      msg.push_str(&format!("  - {e}\n"));
+    }
+    return Err(msg);
+  }
+
+  // 2. Resolve paths
+  let engine = TypstEngine::new(font_path)?;
+  let resolved_template = engine.resolve_template(template)?;
+  let output_pdf = match output {
+    Some(out) => out.to_path_buf(),
+    None => derive_output_filename(content),
+  };
+
+  // 3. Compile document
+  engine.compile(&resolved_template, content, &output_pdf)?;
+
+  // 4. Query telemetry
+  let page_json =
+    engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
+  let bullets_json =
+    engine.query_metadata(&resolved_template, content, "<bulletinfo>")?;
+  let report = evaluate_telemetry(&page_json, &bullets_json)?;
+
+  let name =
+    load_content_name(content).unwrap_or_else(|_| "Candidate".to_string());
+  let version =
+    load_content_version(content).unwrap_or_else(|_| "1.0.0".to_string());
+
+  if !quiet {
+    print_telemetry_table(
+      &report,
+      &name,
+      &output_pdf.to_string_lossy(),
+      &version,
+    );
+  }
+
+  if !report.is_pass() {
+    return Err(
+      "Document failed strict single-page geometry constraints.".to_string(),
+    );
+  }
+
+  Ok(())
+}
+
+fn run_check(
+  content: &Path,
+  template: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+  quiet: bool,
+) -> Result<(), String> {
+  if !content.exists() {
+    return Err(format!("Content file not found: '{}'", content.display()));
+  }
+
+  // 1. Schema check
+  validate_schema_auto(content, schema).map_err(|errors| {
+    format!(
+      "Schema validation failed:\n{}",
+      errors
+        .iter()
+        .map(|e| format!("  - {e}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+    )
+  })?;
+
+  // 2. Layout telemetry check
+  let engine = TypstEngine::new(font_path)?;
+  let resolved_template = engine.resolve_template(template)?;
+  let page_json =
+    engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
+  let bullets_json =
+    engine.query_metadata(&resolved_template, content, "<bulletinfo>")?;
+  let report = evaluate_telemetry(&page_json, &bullets_json)?;
+
+  let name =
+    load_content_name(content).unwrap_or_else(|_| "Candidate".to_string());
+  let version =
+    load_content_version(content).unwrap_or_else(|_| "1.0.0".to_string());
+
+  if !quiet {
+    print_telemetry_table(
+      &report,
+      &name,
+      "[dry-run: no PDF written]",
+      &version,
+    );
+  }
+
+  if !report.is_pass() {
+    return Err(
+      "Dry-run check failed strict single-page layout constraints.".to_string(),
+    );
+  }
+
+  if !quiet {
+    print_success("Dry-run check passed: schema & single-page layout valid.");
+  }
+  Ok(())
+}
+
+fn run_watch(
+  content: &Path,
+  template: Option<&Path>,
+  output: Option<&Path>,
+  font_path: Option<&Path>,
+) -> Result<(), String> {
+  if !content.exists() {
+    return Err(format!("Content file not found: '{}'", content.display()));
+  }
+
+  let engine = TypstEngine::new(font_path)?;
+  let resolved_template = engine.resolve_template(template)?;
+  let output_pdf = match output {
+    Some(out) => out.to_path_buf(),
+    None => derive_output_filename(content),
+  };
+
+  print_info(&format!(
+    "Watching '{}' -> '{}'. Press Ctrl+C to stop.",
+    content.display(),
+    output_pdf.display()
+  ));
+
+  engine.watch(&resolved_template, content, &output_pdf)
+}
+
+fn run_schema(export: Option<&Path>) -> Result<(), String> {
+  let schema_str = export_builtin_schema(export)?;
+  if export.is_none() {
+    println!("{schema_str}");
+  } else if let Some(path) = export {
+    print_success(&format!("Exported JSON schema to '{}'", path.display()));
+  }
+  Ok(())
+}
+
+fn run_init(
+  name: Option<&str>,
+  output: &Path,
+  force: bool,
+) -> Result<(), String> {
+  if output.exists() && !force {
+    return Err(format!(
+      "File '{}' already exists. Use --force to overwrite.",
+      output.display()
+    ));
+  }
+
+  let candidate_name = name.unwrap_or("Jane Doe");
+  let template_content = generate_init_template(candidate_name);
+
+  if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+  }
+
+  fs::write(output, template_content).map_err(|e| e.to_string())?;
+  print_success(&format!(
+    "Initialized new résumé content scaffold at '{}'",
+    output.display()
+  ));
+  Ok(())
 }
