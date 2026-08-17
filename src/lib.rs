@@ -6,3 +6,5 @@
 pub mod engine;
 pub mod models;
 pub mod schema;
+pub mod telemetry;
+pub mod ui;
