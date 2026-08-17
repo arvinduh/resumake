@@ -3,5 +3,6 @@
 #![deny(dead_code, unused_imports, unused_variables)]
 #![warn(missing_docs)]
 
+pub mod engine;
 pub mod models;
 pub mod schema;
