@@ -1,0 +1,27 @@
+#!/bin/sh
+# Resumake Pre-Commit Verification Hook
+set -e
+
+echo "[PRE-COMMIT 1/5] Checking Rust formatting (cargo fmt)..."
+cargo fmt --check
+
+echo "[PRE-COMMIT 2/5] Running Rust linter (cargo clippy)..."
+cargo clippy --all-targets -- -D warnings
+
+if command -v markdownlint-cli2 >/dev/null 2>&1; then
+    echo "[PRE-COMMIT 3/5] Linting Markdown files (markdownlint-cli2)..."
+    markdownlint-cli2 "README.md" "docs/**/*.md"
+elif command -v npx >/dev/null 2>&1; then
+    echo "[PRE-COMMIT 3/5] Linting Markdown files (npx markdownlint-cli2)..."
+    npx -y markdownlint-cli2 "README.md" "docs/**/*.md"
+else
+    echo "[PRE-COMMIT 3/5] (Notice: markdownlint-cli2 not installed locally; Markdown check will run in CI)"
+fi
+
+echo "[PRE-COMMIT 4/5] Running test suite (cargo test)..."
+cargo test --all-targets
+
+echo "[PRE-COMMIT 5/5] Verifying documentation build (cargo doc)..."
+cargo doc --no-deps
+
+echo "[PRE-COMMIT] All local checks PASSED! Creating commit."

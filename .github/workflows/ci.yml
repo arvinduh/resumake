@@ -1,0 +1,64 @@
+name: CI Matrix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint & Formatting Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Check Rust formatting (cargo fmt)
+        run: cargo fmt --check
+
+      - name: Run Rust linter (cargo clippy)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Lint Markdown files (markdownlint)
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: |
+            README.md
+            docs/**/*.md
+
+  test:
+    name: Test on ${{ matrix.os }}
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Setup Typst compiler
+        uses: typst-community/setup-typst@v3
+
+      - name: Run test suite
+        run: cargo test --all-targets
+
+      - name: Build documentation
+        run: cargo doc --no-deps

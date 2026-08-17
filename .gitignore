@@ -1,0 +1,46 @@
+# --- Build & Compiler Outputs ---
+/target/
+**/*.rs.bk
+*.pdb
+
+# --- Resumake & Typst Generated Artifacts ---
+.resumake/
+*.pdf
+output/
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.iml
+.fleet/
+.zed/
+*.sublime-project
+*.sublime-workspace
+
+# --- Operating System Files ---
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux / Unix
+*~
+.directory
+
+# --- Environment & Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Logs & Profiling ---
+*.log
+*.profraw
+*.profdata
+crash.dump

@@ -1,0 +1,75 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build release binary on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: resumake-linux-x86_64.tar.gz
+            bin: resumake
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: resumake-macos-arm64.tar.gz
+            bin: resumake
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: resumake-macos-x86_64.tar.gz
+            bin: resumake
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: resumake-windows-x86_64.zip
+            bin: resumake.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package Linux/macOS archive
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czf ../../../${{ matrix.artifact }} ${{ matrix.bin }}
+
+      - name: Package Windows archive
+        if: runner.os == 'Windows'
+        run: |
+          Compress-Archive -Path target/${{ matrix.target }}/release/${{ matrix.bin }} -DestinationPath ${{ matrix.artifact }}
+
+      - name: Generate SHA-256 Checksum
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            shasum -a 256 ${{ matrix.artifact }} > ${{ matrix.artifact }}.sha256
+          else
+            sha256sum ${{ matrix.artifact }} > ${{ matrix.artifact }}.sha256
+          fi
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ${{ matrix.artifact }}
+            ${{ matrix.artifact }}.sha256
