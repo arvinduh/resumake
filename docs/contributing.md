@@ -22,16 +22,24 @@ improvements, and feature contributions.
 
 ### Toolchain Installation by OS
 
-| Tool                   | Windows (`winget` / `cargo`)                                    | macOS (`brew`)                                                  | Linux (`apt` / `curl`)                                                                                                    |
-| :--------------------- | :-------------------------------------------------------------- | :-------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------ |
-| **Formality (`fml`)**  | `cargo install --git https://github.com/arvinduh/formality fml` | `cargo install --git https://github.com/arvinduh/formality fml` | `curl -sSL https://github.com/arvinduh/formality/releases/latest/download/fml-x86_64-unknown-linux-gnu.tar.gz \| tar -xz` |
-| **Rust & Cargo**       | `winget install Rustlang.Rustup`                                | `brew install rustup-init && rustup-init`                       | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh`                                                         |
-| **Typst Compiler**     | `winget install Typst.Typst`                                    | `brew install typst`                                            | `cargo install --locked typst-cli`                                                                                        |
-| **Jujutsu (Optional)** | `winget install jj-vcs.jj`                                      | `brew install jj`                                               | `cargo install --locked jj-cli`                                                                                           |
+| Tool                   | Windows (`winget` / `cargo`)                                                       | macOS (`brew`)                                                                          | Linux (`apt` / `curl`)                                                                  |
+| :--------------------- | :--------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
+| **Formality (`fml`)**  | `irm https://raw.githubusercontent.com/arvinduh/formality/main/install.ps1 \| iex` | `curl -fsSL https://raw.githubusercontent.com/arvinduh/formality/main/install.sh \| sh` | `curl -fsSL https://raw.githubusercontent.com/arvinduh/formality/main/install.sh \| sh` |
+| **Rust & Cargo**       | `winget install Rustlang.Rustup`                                                   | `brew install rustup-init && rustup-init`                                               | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh`                       |
+| **Typst Compiler**     | `winget install Typst.Typst`                                                       | `brew install typst`                                                                    | `cargo install --locked typst-cli`                                                      |
+| **Jujutsu (Optional)** | `winget install jj-vcs.jj`                                                         | `brew install jj`                                                                       | `cargo install --locked jj-cli`                                                         |
 
-Once `fml` is installed, run `fml doctor` or `fml install` to automatically
-detect and configure all formatters and linters (Prettier, Markdownlint,
-Rustfmt, Clippy, Taplo, Typstyle).
+These install scripts fetch a prebuilt binary. `cargo binstall fml` works too;
+prefer either over `cargo install`, which compiles from source.
+
+Once `fml` is installed, run `fml install` to detect and set up all formatters
+and linters (Prettier, Markdownlint, Rustfmt, Clippy, Taplo, Typstyle).
+`fml doctor` reports the same status without changing anything.
+
+CI pins the `fml` version it runs (`FML_VERSION` in `.github/workflows/ci.yml`).
+Local formatting can differ from the gate if your `fml` is a different version
+-- check `fml --version` against that pin before assuming a CI formatting
+failure is spurious.
 
 ### Clone & Hook Setup
 

@@ -10,6 +10,9 @@ env:
   CARGO_TERM_COLOR: always
   CLICOLOR_FORCE: "1"
   FORCE_COLOR: "1"
+  # Pinned deliberately: `latest` silently re-floats the whole lint gate onto
+  # a new formatter fleet the moment upstream tags a release.
+  FML_VERSION: v0.2.1
 
 jobs:
   lint:
@@ -34,12 +37,13 @@ jobs:
 
       - name: Install Formality (fml)
         run: |
-          FML_URL="https://github.com/arvinduh/formality/releases/latest/download/fml-x86_64-unknown-linux-gnu.tar.gz"
-          curl -sSL "$FML_URL" | tar -xz
+          FML_URL="https://github.com/arvinduh/formality/releases/download/${FML_VERSION}/fml-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL "$FML_URL" | tar -xz
           sudo mv fml /usr/local/bin/
+          fml --version
 
-      - name: Verify toolchains & install missing surfaces
-        run: fml doctor || fml install
+      - name: Install missing surface toolchains
+        run: fml install
 
       - name: Check polyglot formatting (fml fmt)
         run: fml fmt --check
