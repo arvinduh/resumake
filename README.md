@@ -1,7 +1,6 @@
 # Resumake
 
 [![CI](https://github.com/arvinduh/resumake/actions/workflows/ci.yml/badge.svg)](https://github.com/arvinduh/resumake/actions/workflows/ci.yml)
-[![Docs](https://github.com/arvinduh/resumake/actions/workflows/docs.yml/badge.svg)](https://arvinduh.github.io/resumake/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > High-performance native Rust résumé compiler, in-process schema validator, and
@@ -151,7 +150,6 @@ We welcome contributions from the community!
 2. Ensure all formatting, linter, and test checks pass:
 
    ```bash
-   fml sync --check
    fml fmt --check
    fml lint
    cargo test --all-targets
