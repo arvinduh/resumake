@@ -6,8 +6,17 @@ authors = ["Resumake Authors"]
 description = "Modular, golden-ratio résumé compiler and layout telemetry engine."
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/arvinduh/resumake"
 keywords = ["resume", "typst", "compiler", "telemetry", "cli"]
 categories = ["command-line-utilities", "text-processing"]
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }.{ archive-format }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "cargo"] }

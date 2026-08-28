@@ -1,0 +1,80 @@
+# resumake installer for Windows
+# https://github.com/arvinduh/resumake
+
+$ErrorActionPreference = 'Stop'
+
+function Write-Info {
+    param([string]$Message)
+    Write-Host "info: " -ForegroundColor Cyan -NoNewline
+    Write-Host $Message
+}
+
+function Write-Success {
+    param([string]$Message)
+    Write-Host "success: " -ForegroundColor Green -NoNewline
+    Write-Host $Message
+}
+
+function Write-Warn {
+    param([string]$Message)
+    Write-Host "warning: " -ForegroundColor Yellow -NoNewline
+    Write-Host $Message
+}
+
+function Write-Err {
+    param([string]$Message)
+    Write-Host "error: " -ForegroundColor Red -NoNewline
+    Write-Host $Message
+    exit 1
+}
+
+$target = "x86_64-pc-windows-msvc"
+$assetName = "resumake-$target.zip"
+$downloadUrl = "https://github.com/arvinduh/resumake/releases/latest/download/$assetName"
+
+$installDir = if ($env:RESUMAKE_INSTALL_DIR) {
+    $env:RESUMAKE_INSTALL_DIR
+} else {
+    Join-Path $HOME "bin"
+}
+
+Write-Info "Detected platform: $target"
+Write-Info "Installing resumake into $installDir..."
+
+if (-not (Test-Path -Path $installDir)) {
+    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+}
+
+$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+
+try {
+    $zipPath = Join-Path $tempDir $assetName
+    Write-Info "Downloading $downloadUrl..."
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
+
+    Write-Info "Extracting binary..."
+    Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
+
+    $binarySource = Join-Path $tempDir "resumake.exe"
+    $binaryDest = Join-Path $installDir "resumake.exe"
+
+    Copy-Item -Path $binarySource -Destination $binaryDest -Force
+    Write-Success "resumake installed successfully to $binaryDest"
+
+    # Check PATH
+    $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($currentPath -notlike "*$installDir*") {
+        Write-Warn "$installDir is not currently in your User PATH."
+        Write-Warn "To add it automatically, run:"
+        Write-Warn "  [Environment]::SetEnvironmentVariable('Path', `"`$currentPath;$installDir`", 'User')"
+    }
+
+    & $binaryDest --version
+}
+catch {
+    Write-Err "Installation failed: $_"
+}
+finally {
+    Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+}
