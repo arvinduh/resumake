@@ -46,12 +46,9 @@ sections:
           - title: "Software Engineer"
             dates: "Jul 2022 - Present"
             bullets:
-              - "Designed and implemented automated data validation pipeline,
-                reducing processing latency by 35%."
-              - "Developed modular backend microservices in Rust handling over
-                10,000 requests per second."
-              - "Collaborated with cross-functional engineering teams to deploy
-                containerized services on Kubernetes."
+              - "Built data validation pipeline, cutting latency by 35%."
+              - "Developed modular Rust microservices handling 10,000+ RPS."
+              - "Collaborated with teams to deploy containerized microservices."
 
   - title: "Projects"
     type: "projects"
@@ -61,7 +58,5 @@ sections:
         date: "Jan 2023"
         link: "https://github.com/janedoe/project"
         bullets:
-          - "Built high-performance CLI utility for validating and formatting
-            structured data schemas."
-          - "Implemented comprehensive automated test suite achieving 95% branch
-            coverage."
+          - "Built high-performance CLI for validating structured schemas."
+          - "Implemented automated test suite achieving 95% branch coverage."
