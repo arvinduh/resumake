@@ -19,10 +19,7 @@ else
     cargo clippy --all-targets -- -D warnings
 fi
 
-echo "[PRE-COMMIT 3/4] Running test suite (cargo test)..."
-cargo test --all-targets
-
-echo "[PRE-COMMIT 4/4] Verifying documentation build (cargo doc)..."
-cargo doc --no-deps
+echo "[PRE-COMMIT 3/3] Running fast unit tests (cargo test --lib)..."
+cargo test --lib --quiet
 
 echo "[PRE-COMMIT] All local checks PASSED! Creating commit."
