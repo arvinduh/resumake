@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -28,7 +28,7 @@ jobs:
         uses: swatinem/rust-cache@v2
 
       - name: Install Node (for Prettier & Markdownlint)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "lts/*"
 
@@ -55,7 +55,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run cargo audit
         uses: rustsec/audit-check@v2.0.0
@@ -73,7 +73,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -82,7 +82,7 @@ jobs:
         uses: swatinem/rust-cache@v2
 
       - name: Setup Typst compiler
-        uses: typst-community/setup-typst@v3
+        uses: typst-community/setup-typst@v5
 
       - name: Run test suite
         run: cargo test --all-targets
