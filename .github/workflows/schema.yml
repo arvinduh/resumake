@@ -1,0 +1,34 @@
+name: Schema Release
+
+on:
+  push:
+    tags:
+      - "s*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  schema:
+    name: Publish Schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Export schema
+        run: cargo run --release -- schema --export resume.schema.json
+
+      - name: Publish schema release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: resume.schema.json
+          make_latest: false
+          body: |
+            Canonical JSON Schema (Draft-07) for Resumake documents.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
