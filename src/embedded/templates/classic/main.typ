@@ -28,13 +28,24 @@
   eval(str(theme.rule_thickness))
 } else { 0.5pt }
 
-// Font configuration with universal fallbacks
+// Font configuration. The fallback chain leads with families that Typst
+// embeds in the binary itself (Libertinus Serif on 0.13+, Linux Libertine
+// on older builds, New Computer Modern on every build) so that a document
+// resolves to identical metrics on any machine, with or without system
+// fonts installed. System serifs trail the chain purely as a last resort.
+#let FONT_FALLBACKS = (
+  "Libertinus Serif",
+  "Linux Libertine",
+  "New Computer Modern",
+  "Times New Roman",
+  "DejaVu Serif",
+)
 #let FONT = if "font_family" in theme {
   if type(theme.font_family) == array { theme.font_family } else {
-    (theme.font_family, "Linux Libertine", "Times New Roman", "DejaVu Serif")
+    (theme.font_family,) + FONT_FALLBACKS
   }
 } else {
-  ("Linux Libertine", "Times New Roman", "DejaVu Serif")
+  FONT_FALLBACKS
 }
 
 #let PAPER = if "paper_size" in theme { theme.paper_size } else { "us-letter" }

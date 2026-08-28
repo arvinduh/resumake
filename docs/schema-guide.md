@@ -75,7 +75,7 @@ All fields are optional and fall back to sensible defaults.
 
 | Field            | Type     | Default             | Description                      |
 | :--------------- | :------- | :------------------ | :------------------------------- |
-| `font_family`    | `string` | `"Linux Libertine"` | Body font family.                |
+| `font_family`    | `string` | `"Libertinus Serif"` | Body font family.               |
 | `font_size`      | `string` | `"11.5pt"`          | Base body typography size.       |
 | `name_size`      | `string` | `"25pt"`            | Candidate name heading size.     |
 | `section_size`   | `string` | `"13pt"`            | Section header font size.        |
@@ -90,7 +90,7 @@ All fields are optional and fall back to sensible defaults.
 ```yaml
 meta:
   theme:
-    font_family: "Linux Libertine"
+    font_family: "Libertinus Serif"
     paper_size: "us-letter"
     margin: "0.5in"
     accent_color: "#2a2a2a"
