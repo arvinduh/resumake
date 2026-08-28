@@ -2,26 +2,27 @@
 # Resumake Pre-Commit Verification Hook
 set -e
 
-echo "[PRE-COMMIT 1/5] Checking Rust formatting (cargo fmt)..."
-cargo fmt --check
+if command -v fml >/dev/null 2>&1; then
+    echo "[PRE-COMMIT 1/4] Checking config synchronization (fml sync --check)..."
+    fml sync --check
 
-echo "[PRE-COMMIT 2/5] Running Rust linter (cargo clippy)..."
-cargo clippy --all-targets -- -D warnings
-
-if command -v markdownlint-cli2 >/dev/null 2>&1; then
-    echo "[PRE-COMMIT 3/5] Linting Markdown files (markdownlint-cli2)..."
-    markdownlint-cli2 "README.md" "docs/**/*.md"
-elif command -v npx >/dev/null 2>&1; then
-    echo "[PRE-COMMIT 3/5] Linting Markdown files (npx markdownlint-cli2)..."
-    npx -y markdownlint-cli2 "README.md" "docs/**/*.md"
+    echo "[PRE-COMMIT 2/4] Formatting & linting staged files (fml)..."
+    fml fmt --staged
+    fml lint
 else
-    echo "[PRE-COMMIT 3/5] (Notice: markdownlint-cli2 not installed locally; Markdown check will run in CI)"
+    echo "[PRE-COMMIT 1/4] (Notice: 'fml' not found in PATH; falling back to cargo fmt / clippy)"
+    echo "                 Tip: Install Formality from https://github.com/arvinduh/formality"
+    echo "[PRE-COMMIT 1/4] Checking Rust formatting (cargo fmt)..."
+    cargo fmt --check
+
+    echo "[PRE-COMMIT 2/4] Running Rust linter (cargo clippy)..."
+    cargo clippy --all-targets -- -D warnings
 fi
 
-echo "[PRE-COMMIT 4/5] Running test suite (cargo test)..."
+echo "[PRE-COMMIT 3/4] Running test suite (cargo test)..."
 cargo test --all-targets
 
-echo "[PRE-COMMIT 5/5] Verifying documentation build (cargo doc)..."
+echo "[PRE-COMMIT 4/4] Verifying documentation build (cargo doc)..."
 cargo doc --no-deps
 
 echo "[PRE-COMMIT] All local checks PASSED! Creating commit."

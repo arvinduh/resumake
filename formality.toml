@@ -1,0 +1,14 @@
+#:schema https://github.com/arvinduh/formality/releases/download/s1.1/formality.schema.json
+
+[global]
+languages = ["rust", "typst", "markdown", "yaml", "toml", "json"]
+indent_size = 2
+line_length = 80
+end_of_line = "lf"
+charset = "utf-8"
+insert_final_newline = true
+trim_trailing_whitespace = true
+use_tabs = false
+
+[lang.markdown]
+prose_wrap = "always"

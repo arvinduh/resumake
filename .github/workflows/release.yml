@@ -10,6 +10,25 @@ permissions:
   contents: write
 
 jobs:
+  schema:
+    name: Publish canonical JSON Schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Export schema derived from this tag's src/models.rs
+        run: cargo run --release -- schema --export resume.schema.json
+
+      - name: Upload schema as a release asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: resume.schema.json
+
   build:
     name: Build release binary on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -49,13 +68,15 @@ jobs:
       - name: Package Linux/macOS archive
         if: runner.os != 'Windows'
         run: |
-          cd target/${{ matrix.target }}/release
-          tar -czf ../../../${{ matrix.artifact }} ${{ matrix.bin }}
+          tar -czf ${{ matrix.artifact }} \
+            -C target/${{ matrix.target }}/release ${{ matrix.bin }}
 
       - name: Package Windows archive
         if: runner.os == 'Windows'
         run: |
-          Compress-Archive -Path target/${{ matrix.target }}/release/${{ matrix.bin }} -DestinationPath ${{ matrix.artifact }}
+          Compress-Archive `
+            -Path target/${{ matrix.target }}/release/${{ matrix.bin }} `
+            -DestinationPath ${{ matrix.artifact }}
 
       - name: Generate SHA-256 Checksum
         shell: bash

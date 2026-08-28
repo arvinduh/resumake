@@ -8,6 +8,13 @@
 *.pdf
 output/
 
+# The canonical JSON Schema is derived from src/models.rs at build time
+# (`resumake schema --export`) and published as a GitHub Release asset by
+# .github/workflows/release.yml. A committed copy here would drift from
+# the Rust types the moment either one changes without the other — see
+# docs/schema-guide.md#schema-stability--versioning.
+/schema/resume.schema.json
+
 # --- IDEs & Editors ---
 .vscode/
 .idea/

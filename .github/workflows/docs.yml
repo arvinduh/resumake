@@ -40,7 +40,8 @@ jobs:
             <title>Redirecting to resumake documentation...</title>
           </head>
           <body>
-            <p>Redirecting to <a href="resumake/index.html">resumake documentation</a>...</p>
+            <p>Redirecting to
+              <a href="resumake/index.html">resumake documentation</a>...</p>
           </body>
           </html>
           EOF
