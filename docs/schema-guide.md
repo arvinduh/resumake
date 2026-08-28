@@ -73,19 +73,19 @@ meta:
 
 All fields are optional and fall back to sensible defaults.
 
-| Field            | Type     | Default             | Description                      |
-| :--------------- | :------- | :------------------ | :------------------------------- |
-| `font_family`    | `string` | `"Libertinus Serif"` | Body font family.               |
-| `font_size`      | `string` | `"11.5pt"`          | Base body typography size.       |
-| `name_size`      | `string` | `"25pt"`            | Candidate name heading size.     |
-| `section_size`   | `string` | `"13pt"`            | Section header font size.        |
-| `org_size`       | `string` | `"12pt"`            | Organization / institution size. |
-| `rule_thickness` | `string` | `"0.5pt"`           | Section divider rule thickness.  |
-| `paper_size`     | `string` | `"us-letter"`       | `"us-letter"` or `"a4"`.         |
-| `margin`         | `string` | `"0.5in"`           | Uniform page margin.             |
-| `ink_color`      | `string` | `"#111111"`         | Primary text color (hex).        |
-| `accent_color`   | `string` | `"#2a2a2a"`         | Rule / accent color (hex).       |
-| `muted_color`    | `string` | `"#444444"`         | Secondary metadata color (hex).  |
+| Field            | Type     | Default              | Description                      |
+| :--------------- | :------- | :------------------- | :------------------------------- |
+| `font_family`    | `string` | `"Libertinus Serif"` | Body font family.                |
+| `font_size`      | `string` | `"11.5pt"`           | Base body typography size.       |
+| `name_size`      | `string` | `"25pt"`             | Candidate name heading size.     |
+| `section_size`   | `string` | `"13pt"`             | Section header font size.        |
+| `org_size`       | `string` | `"12pt"`             | Organization / institution size. |
+| `rule_thickness` | `string` | `"0.5pt"`            | Section divider rule thickness.  |
+| `paper_size`     | `string` | `"us-letter"`        | `"us-letter"` or `"a4"`.         |
+| `margin`         | `string` | `"0.5in"`            | Uniform page margin.             |
+| `ink_color`      | `string` | `"#111111"`          | Primary text color (hex).        |
+| `accent_color`   | `string` | `"#2a2a2a"`          | Rule / accent color (hex).       |
+| `muted_color`    | `string` | `"#444444"`          | Secondary metadata color (hex).  |
 
 ```yaml
 meta:
