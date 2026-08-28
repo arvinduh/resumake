@@ -1,18 +1,25 @@
 # Getting Started with Resumake
 
-[← Documentation Hub](README.md) • **Getting Started** • [Schema Reference](schema-guide.md) • [Layout Telemetry](telemetry-guide.md) • [Architecture](architecture.md) • [Contributing](contributing.md)
+[← Documentation Hub](README.md) • **Getting Started** •
+[Schema Reference](schema-guide.md) • [Layout Telemetry](telemetry-guide.md) •
+[Architecture](architecture.md) • [Contributing](contributing.md)
 
 ---
 
-This tutorial guides you through installing Resumake, scaffolding a structured résumé project, customizing your content, and compiling your first single-page PDF with layout telemetry.
+This tutorial guides you through installing Resumake, scaffolding a structured
+résumé project, customizing your content, and compiling your first single-page
+PDF with layout telemetry.
 
 ---
 
 ## 1. Prerequisites
 
 Resumake is distributed as a standalone, zero-dependency native binary.
-* **Rust Toolchain (for source build):** Rust 1.75+ (`cargo`)
-* **Prebuilt Binary (alternative):** Download from the [GitHub Releases](https://github.com/arvinduh/resumake/releases) page for Windows, macOS, or Linux.
+
+- **Rust Toolchain (for source build):** Rust 1.75+ (`cargo`)
+- **Prebuilt Binary (alternative):** Download from the
+  [GitHub Releases](https://github.com/arvinduh/resumake/releases) page for
+  Windows, macOS, or Linux.
 
 ---
 
@@ -30,6 +37,7 @@ cargo install --path .
 ```
 
 Verify the installation:
+
 ```bash
 resumake --help
 ```
@@ -48,7 +56,8 @@ cd my-resume
 resumake init --name "Jane Doe"
 ```
 
-This generates `content.yaml` populated with standard sections (Education, Experience, Skills, Projects, Publications, and References).
+This generates `content.yaml` populated with standard sections (Education,
+Technical Skills, Experience, and Projects).
 
 ---
 
@@ -60,7 +69,8 @@ Compile your résumé to a high-fidelity PDF:
 resumake build
 ```
 
-Resumake compiles the Typst template and performs real-time layout telemetry analysis, outputting a terminal summary:
+Resumake compiles the Typst template and performs real-time layout telemetry
+analysis, outputting a terminal summary:
 
 ```text
 ────────────────────────────────────────────────────────────────
@@ -79,9 +89,30 @@ Resumake compiles the Typst template and performs real-time layout telemetry ana
 
 ---
 
+### Picking a Template
+
+`resumake build`/`check`/`watch` render `content.yaml` through a named, built-in
+layout — the same YAML works under any of them, since the content model has no
+idea which template is drawing it. Today the registry only ships `classic` (the
+layout above), which is also the default, so this is a no-op unless you pass it
+explicitly:
+
+```bash
+resumake build --template classic
+```
+
+More built-in layouts (e.g. a two-column sidebar résumé) can be added to the
+registry over time without any changes to your `content.yaml` — see
+[System Architecture](architecture.md#4-key-design-decisions). If you'd rather
+supply your own Typst file entirely, bypassing the registry, use
+`--source <path.typ>` instead.
+
+---
+
 ### Step 3: Fast Dry-Run Validation
 
-If you want to validate your YAML schema and check layout geometry without writing a PDF to disk, use the `check` command:
+If you want to validate your YAML schema and check layout geometry without
+writing a PDF to disk, use the `check` command:
 
 ```bash
 resumake check
@@ -97,11 +128,14 @@ Enable real-time recompilation whenever you modify `content.yaml`:
 resumake watch
 ```
 
-Keep your PDF viewer open side-by-side to see instant visual updates in under 100 milliseconds.
+Keep your PDF viewer open side-by-side to see instant visual updates in under
+100 milliseconds.
 
 ---
 
 ## 4. Next Steps
 
-* **[YAML Schema Reference](schema-guide.md):** Customize sections, order, margin sizes, and colors.
-* **[Layout Telemetry Guide](telemetry-guide.md):** Understand the math behind single-page geometry optimization.
+- **[YAML Schema Reference](schema-guide.md):** Customize sections, contact
+  links, and theme tokens.
+- **[Layout Telemetry Guide](telemetry-guide.md):** Understand the math behind
+  single-page geometry optimization.

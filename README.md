@@ -4,17 +4,23 @@
 [![Docs](https://github.com/arvinduh/resumake/actions/workflows/docs.yml/badge.svg)](https://arvinduh.github.io/resumake/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> High-performance native Rust résumé compiler, in-process schema validator, and layout telemetry engine.
+> High-performance native Rust résumé compiler, in-process schema validator, and
+> layout telemetry engine.
 
 ---
 
 ## Features
 
-- **Blazing Fast**: Native Rust binary compiling single-page résumés in under 100ms.
-- **In-Process Schema Validation**: Validates YAML schemas before spawning any compiler process.
-- **Strict Layout Telemetry**: Zero-emoji terminal badges measuring page count, vertical space fill percentage, and bullet wrapping.
-- **Zero-Dependency Engine**: Built-in modular Typst engine and design tokens embedded directly in the binary.
-- **Live Watch Mode**: Real-time document recompilation on file change (`resumake watch`).
+- **Blazing Fast**: Native Rust binary compiling single-page résumés in under
+  100ms.
+- **In-Process Schema Validation**: Validates YAML schemas before spawning any
+  compiler process.
+- **Strict Layout Telemetry**: Zero-emoji terminal badges measuring page count,
+  vertical space fill percentage, and bullet wrapping.
+- **Zero-Dependency Engine**: Built-in modular Typst engine and design tokens
+  embedded directly in the binary.
+- **Live Watch Mode**: Real-time document recompilation on file change
+  (`resumake watch`).
 
 ---
 
@@ -42,7 +48,7 @@ resumake build
 
 ## Telemetry Terminal Output
 
-```
+```txt
 ────────────────────────────────────────────────────────────────
  Candidate:       Jane Doe
  Output:          janedoe_resume.pdf
@@ -63,11 +69,24 @@ resumake build
 
 ```bash
 resumake build              # Compile resume to PDF and evaluate layout
-resumake check              # Dry-run validation without writing a PDF
-resumake watch              # Real-time auto-recompile on file change
-resumake schema --export    # Export canonical JSON Schema (Draft 2020-12)
-resumake init --name <NAME> # Scaffold new content.yaml with directives
+resumake check               # Dry-run validation without writing a PDF
+resumake watch               # Real-time auto-recompile on file change
+resumake schema              # Print canonical JSON Schema (Draft-07) to stdout
+resumake schema --export out.json  # ...or write it to a file
+resumake init --name <NAME>  # Scaffold new content.yaml with directives
 ```
+
+`build`, `check`, and `watch` also accept:
+
+```bash
+resumake build --template <name>   # Pick a built-in layout (default: classic)
+resumake build --source <path.typ> # Bypass the registry with your own Typst file
+```
+
+The same `content.yaml` renders under any registered template — see
+[System Architecture](docs/architecture.md#4-key-design-decisions) for how the
+template registry works and [Contributing](docs/contributing.md) for how to add
+a new one.
 
 ---
 
@@ -75,13 +94,13 @@ resumake init --name <NAME> # Scaffold new content.yaml with directives
 
 Explore the complete documentation in the [`docs/`](docs/README.md) directory:
 
-| Guide | Description |
-| :--- | :--- |
-| **[Getting Started Guide](docs/getting-started.md)** | Step-by-step tutorial from installation to your first single-page PDF. |
-| **[YAML Schema Reference](docs/schema-guide.md)** | Full specification for layout directives, tokens, metadata, and block sections. |
+| Guide                                                 | Description                                                                        |
+| :---------------------------------------------------- | :--------------------------------------------------------------------------------- |
+| **[Getting Started Guide](docs/getting-started.md)**  | Step-by-step tutorial from installation to your first single-page PDF.             |
+| **[YAML Schema Reference](docs/schema-guide.md)**     | Full specification for layout directives, tokens, metadata, and block sections.    |
 | **[Layout Telemetry Guide](docs/telemetry-guide.md)** | Deep dive into page count verification, vertical fill percentage, and wrap checks. |
-| **[System Architecture](docs/architecture.md)** | Modular design, embedded Typst orchestrator, and compiler pipeline. |
-| **[Contributing Guide](docs/contributing.md)** | Development environment setup, coding conventions, testing, and PR checklist. |
+| **[System Architecture](docs/architecture.md)**       | Modular design, embedded Typst orchestrator, and compiler pipeline.                |
+| **[Contributing Guide](docs/contributing.md)**        | Development environment setup, coding conventions, testing, and PR checklist.      |
 
 ---
 
@@ -90,27 +109,36 @@ Explore the complete documentation in the [`docs/`](docs/README.md) directory:
 We welcome contributions from the community!
 
 1. Fork the repository and create your branch from `main`:
+
    ```bash
    git checkout -b feat/my-improvement
    ```
+
 2. Ensure all formatting, linter, and test checks pass:
+
    ```bash
-   cargo fmt --check
-   cargo clippy --all-targets -- -D warnings
+   fml sync --check
+   fml fmt --check
+   fml lint
    cargo test --all-targets
    cargo doc --no-deps
    ```
-3. Open a Pull Request on GitHub. For comprehensive contribution guidelines, see [docs/contributing.md](docs/contributing.md).
+
+3. Open a Pull Request on GitHub. For comprehensive contribution guidelines, see
+   [docs/contributing.md](docs/contributing.md).
 
 ---
 
 ## Release Process
 
 Releases are automated via GitHub Actions:
+
 1. Update `version` in `Cargo.toml`.
 2. Tag the release commit: `git tag vX.Y.Z`.
 3. Push the tag: `git push origin vX.Y.Z`.
-4. GitHub Actions automatically compiles cross-platform binaries (Linux x86_64, macOS ARM64/Intel, Windows x86_64), generates SHA-256 checksums, and publishes the GitHub Release.
+4. GitHub Actions automatically compiles cross-platform binaries (Linux x86_64,
+   macOS ARM64/Intel, Windows x86_64), generates SHA-256 checksums, and
+   publishes the GitHub Release.
 
 ---
 
