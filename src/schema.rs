@@ -86,7 +86,7 @@ pub fn validate_schema_auto(
 
   let mut errors = Vec::new();
   for error in validator.iter_errors(&content_json) {
-    let instance_path = error.instance_path.to_string();
+    let instance_path = error.instance_path().to_string();
     let location = if instance_path.is_empty() {
       "root".to_string()
     } else {
