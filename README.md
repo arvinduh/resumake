@@ -24,15 +24,48 @@
 
 ---
 
-## Quickstart
+## Installation
 
-### 1. Installation
+### 1-Line Quick Install
+
+#### Linux & macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | sh
+```
+
+#### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
+```
+
+### Package Managers / Cargo
+
+#### Fast install via `cargo-binstall` (zero compilation)
+
+```bash
+cargo binstall resumake
+```
+
+#### Build from source via `cargo`
 
 ```bash
 cargo install --path .
+# or from the git repository:
+cargo install --git https://github.com/arvinduh/resumake
 ```
 
-### 2. Scaffold a New Résumé
+### Direct Prebuilt Binaries
+
+Prebuilt standalone binaries are attached to every
+[GitHub Release](https://github.com/arvinduh/resumake/releases/latest).
+
+---
+
+## Quickstart
+
+### 1. Scaffold a New Résumé
 
 ```bash
 resumake init --name "Jane Doe"
@@ -101,6 +134,7 @@ Explore the complete documentation in the [`docs/`](docs/README.md) directory:
 | **[Layout Telemetry Guide](docs/telemetry-guide.md)** | Deep dive into page count verification, vertical fill percentage, and wrap checks. |
 | **[System Architecture](docs/architecture.md)**       | Modular design, embedded Typst orchestrator, and compiler pipeline.                |
 | **[Contributing Guide](docs/contributing.md)**        | Development environment setup, coding conventions, testing, and PR checklist.      |
+| **[Release Procedure](docs/release.md)**              | Version tagging, git-cliff changelogs, and binary distribution workflow.           |
 
 ---
 
@@ -131,14 +165,17 @@ We welcome contributions from the community!
 
 ## Release Process
 
-Releases are automated via GitHub Actions:
+Releases are driven by Conventional Commits and automated via GitHub Actions:
 
 1. Update `version` in `Cargo.toml`.
-2. Tag the release commit: `git tag vX.Y.Z`.
-3. Push the tag: `git push origin vX.Y.Z`.
-4. GitHub Actions automatically compiles cross-platform binaries (Linux x86_64,
-   macOS ARM64/Intel, Windows x86_64), generates SHA-256 checksums, and
-   publishes the GitHub Release.
+2. Generate changelog with `git-cliff` and commit.
+3. Tag the release commit: `git tag -a vX.Y.Z -m "vX.Y.Z"`.
+4. Push the tag: `git push origin vX.Y.Z`.
+5. GitHub Actions automatically compiles cross-platform binaries (Linux x86_64,
+   macOS ARM64/Intel, Windows x86_64), generates SHA-256 checksums, publishes
+   `resume.schema.json`, and attaches release notes via `git-cliff`.
+
+For the complete maintainer walkthrough, see [docs/release.md](docs/release.md).
 
 ---
 

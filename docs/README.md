@@ -15,6 +15,7 @@ instructions for the Resumake résumé compiler.
 | **[Layout Telemetry Guide](telemetry-guide.md)** | Learn how strict 1-page geometry, fill percentage, and wrap checks work.       | Authors & Designers      |
 | **[System Architecture](architecture.md)**       | Deep dive into the native Rust engine, embedded Typst compiler, and pipeline.  | Developers & Integrators |
 | **[Contributing Guide](contributing.md)**        | Code standards, local test suite, pre-commit setup, and Pull Request workflow. | Contributors             |
+| **[Release Procedure](release.md)**              | Version tagging, git-cliff changelogs, and binary distribution workflow.       | Maintainers              |
 
 ---
 
@@ -29,7 +30,8 @@ resumake/
     ├── schema-guide.md       # Full Schema Directives & Blocks
     ├── telemetry-guide.md    # Layout Geometry & Optimization
     ├── architecture.md       # Rust Engine Architecture
-    └── contributing.md       # Contribution & PR Workflow
+    ├── contributing.md       # Contribution & PR Workflow
+    └── release.md            # Release & Distribution Procedure
 ```
 
 ---
