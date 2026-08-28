@@ -3,10 +3,7 @@
 set -e
 
 if command -v fml >/dev/null 2>&1; then
-    echo "[PRE-COMMIT 1/4] Checking config synchronization (fml sync --check)..."
-    fml sync --check
-
-    echo "[PRE-COMMIT 2/4] Formatting & linting staged files (fml)..."
+    echo "[PRE-COMMIT 1/2] Formatting & linting staged files (fml)..."
     fml fmt --staged
     fml lint
 else

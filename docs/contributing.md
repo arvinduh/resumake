@@ -54,10 +54,7 @@ Before submitting a Pull Request, verify that all local checks pass:
 # 1. Auto-verify toolchains
 fml doctor
 
-# 2. Check native config synchronization
-fml sync --check
-
-# 3. Polyglot format verification (Rust, Typst, YAML, TOML, JSON, Markdown)
+# 2. Polyglot format verification (Rust, Typst, YAML, TOML, JSON, Markdown)
 fml fmt --check
 
 # 4. Strict polyglot linter (Clippy, Markdownlint, Typstyle)
@@ -161,7 +158,6 @@ for the registry's design rationale.
 
 Before marking your PR as ready for review:
 
-- [ ] Configs are synchronized via `fml sync --check`.
 - [ ] Code passes `fml fmt --check`.
 - [ ] Code passes `fml lint`.
 - [ ] All unit and integration tests pass via `cargo test --all-targets`.

@@ -39,7 +39,6 @@ commit messages.
 Ensure all formatters, linters, tests, and documentation builds pass:
 
 ```sh
-fml sync --check
 fml fmt --check
 fml lint
 cargo test --all-targets
