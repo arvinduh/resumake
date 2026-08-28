@@ -1,9 +1,11 @@
-//! Terminal user interface, zero-emoji status badges, and 64-column summary tables.
+//! Terminal user interface, zero-emoji status badges, and telemetry tables.
 
 use crate::telemetry::TelemetryReport;
 use colored::Colorize;
+use comfy_table::presets::NOTHING;
+use comfy_table::{Cell, CellAlignment, ContentArrangement, Row, Table};
 
-/// Prints the formatted 64-column layout telemetry report table to terminal.
+/// Prints the formatted layout telemetry report table to terminal using `comfy-table`.
 pub fn print_telemetry_table(
   report: &TelemetryReport,
   candidate_name: &str,
@@ -15,80 +17,97 @@ pub fn print_telemetry_table(
       .truecolor(60, 60, 60);
 
   println!("{divider}");
-  println!(
-    " {:<16} {:<45}",
-    "Candidate:".truecolor(120, 120, 120),
-    candidate_name.white().bold()
-  );
-  println!(
-    " {:<16} {:<45}",
-    "Output:".truecolor(120, 120, 120),
-    output_pdf.cyan()
-  );
-  println!(
-    " {:<16} {:<45}",
-    "Version:".truecolor(120, 120, 120),
-    version.truecolor(160, 160, 160)
-  );
+
+  let mut meta_table = Table::new();
+  meta_table
+    .load_style(NOTHING)
+    .set_content_arrangement(ContentArrangement::Dynamic);
+
+  meta_table.add_row(Row::from(vec![
+    Cell::new("Candidate:").fg(comfy_table::Color::DarkGrey),
+    Cell::new(candidate_name).add_attribute(comfy_table::Attribute::Bold),
+  ]));
+  meta_table.add_row(Row::from(vec![
+    Cell::new("Output:").fg(comfy_table::Color::DarkGrey),
+    Cell::new(output_pdf).fg(comfy_table::Color::Cyan),
+  ]));
+  meta_table.add_row(Row::from(vec![
+    Cell::new("Version:").fg(comfy_table::Color::DarkGrey),
+    Cell::new(version).fg(comfy_table::Color::Grey),
+  ]));
+
+  println!("{meta_table}");
   println!("{divider}");
 
   // Page count badge
   let page_badge = if report.page_count == 1 {
-    "[PASS 1/1]".green().bold()
+    "[PASS 1/1]".green().bold().to_string()
   } else {
-    format!("[FAIL {}/1]", report.page_count).red().bold()
+    format!("[FAIL {}/1]", report.page_count)
+      .red()
+      .bold()
+      .to_string()
   };
-  println!(
-    " {:<16} {:<30} {:>15}",
-    "Page Count:".truecolor(120, 120, 120),
-    format!("{} page(s)", report.page_count).white(),
-    page_badge
-  );
 
   // Vertical space fill badge
   let fill_badge = if report.fill_pct >= 90.0 && report.fill_pct <= 99.0 {
-    "[OPTIMAL]".green().bold()
+    "[OPTIMAL]".green().bold().to_string()
   } else if report.fill_pct > 99.0 {
-    "[OVERFLOW]".red().bold()
+    "[OVERFLOW]".red().bold().to_string()
   } else {
-    "[ROOM]".yellow().bold()
+    "[ROOM]".yellow().bold().to_string()
   };
-  println!(
-    " {:<16} {:<30} {:>15}",
-    "Vertical Fill:".truecolor(120, 120, 120),
-    format!("{:.1}% (spare: {:.2} in)", report.fill_pct, report.spare_in)
-      .white(),
-    fill_badge
-  );
 
   // Line wraps badge
   let wrap_badge = if report.line_wraps.is_empty() {
-    "[0 WRAPS]".green().bold()
+    "[0 WRAPS]".green().bold().to_string()
   } else {
-    format!("[{} WRAPS]", report.line_wraps.len()).red().bold()
+    format!("[{} WRAPS]", report.line_wraps.len())
+      .red()
+      .bold()
+      .to_string()
   };
-  println!(
-    " {:<16} {:<30} {:>15}",
-    "Line Wraps:".truecolor(120, 120, 120),
-    format!("{} wrapped items", report.line_wraps.len()).white(),
-    wrap_badge
-  );
 
   // Underfills badge
   let under_badge = if report.underfills.is_empty() {
-    "[0 UNDER]".green().bold()
+    "[0 UNDER]".green().bold().to_string()
   } else {
     format!("[{} UNDER]", report.underfills.len())
       .yellow()
       .bold()
+      .to_string()
   };
-  println!(
-    " {:<16} {:<30} {:>15}",
-    "Underfills:".truecolor(120, 120, 120),
-    format!("{} items (<86%)", report.underfills.len()).white(),
-    under_badge
-  );
 
+  let mut metrics_table = Table::new();
+  metrics_table
+    .load_style(NOTHING)
+    .set_content_arrangement(ContentArrangement::Dynamic);
+
+  metrics_table.add_row(Row::from(vec![
+    Cell::new("Page Count:").fg(comfy_table::Color::DarkGrey),
+    Cell::new(format!("{} page(s)", report.page_count)),
+    Cell::new(page_badge).set_alignment(CellAlignment::Right),
+  ]));
+  metrics_table.add_row(Row::from(vec![
+    Cell::new("Vertical Fill:").fg(comfy_table::Color::DarkGrey),
+    Cell::new(format!(
+      "{:.1}% (spare: {:.2} in)",
+      report.fill_pct, report.spare_in
+    )),
+    Cell::new(fill_badge).set_alignment(CellAlignment::Right),
+  ]));
+  metrics_table.add_row(Row::from(vec![
+    Cell::new("Line Wraps:").fg(comfy_table::Color::DarkGrey),
+    Cell::new(format!("{} wrapped items", report.line_wraps.len())),
+    Cell::new(wrap_badge).set_alignment(CellAlignment::Right),
+  ]));
+  metrics_table.add_row(Row::from(vec![
+    Cell::new("Underfills:").fg(comfy_table::Color::DarkGrey),
+    Cell::new(format!("{} items (<86%)", report.underfills.len())),
+    Cell::new(under_badge).set_alignment(CellAlignment::Right),
+  ]));
+
+  println!("{metrics_table}");
   println!("{divider}");
 
   // Print warnings for wrapped bullets

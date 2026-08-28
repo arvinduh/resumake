@@ -18,6 +18,7 @@ schemars = "0.8"
 jsonschema = "0.29"
 which = "7.0"
 colored = "3.0"
+comfy-table = { version = "8.0", features = ["custom_styling"] }
 
 [dev-dependencies]
 assert_cmd = "2.0"
