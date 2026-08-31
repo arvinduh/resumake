@@ -214,12 +214,6 @@ jobs:
       - name: Cleanup
         run: |
           rm -f artifacts/*-dist-manifest.json
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Generate canonical JSON Schema
-        run: |
-          cargo run --release --example generate-schema
-          cp resume.schema.json artifacts/
       - name: Create GitHub Release
         env:
           PRERELEASE_FLAG:
