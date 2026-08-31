@@ -249,17 +249,18 @@ only one of them is a stable pointer:
   This is what a `# yaml-language-server: $schema=` directive, a downstream
   linter, or any pin in `content.yaml` should point at. The canonical form is:
 
-  ```
+  ```text
   https://github.com/arvinduh/resumake/releases/download/s<major>.<minor>/resume.schema.json
   ```
 
   `resumake init` writes this form (currently `s1.0`) into every scaffolded
   file. Schema releases set `make_latest: false`, so they never displace the
   binary release from `/releases/latest` or confuse update checkers.
+
 - **The copy attached to a binary release (`v*`, e.g. `v0.1.1`) is for
   inspection only.** It lets you read the exact schema a given `resumake` binary
   was built against — useful when diagnosing why a `content.yaml` validates
-  under one binary but not another. It is *not* a stable pointer: do not put a
+  under one binary but not another. It is _not_ a stable pointer: do not put a
   `v*` asset URL in a `$schema` directive or any downstream pin.
 
 ### Schema versioning
