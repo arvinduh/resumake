@@ -12,6 +12,9 @@ runs:
       uses: typst-community/setup-typst@v5
     - name: Install rsmk
       shell: bash
+      env:
+        RESUMAKE_VERSION: "${{ inputs.version }}"
       run: |
-        curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | RESUMAKE_VERSION="${{ inputs.version }}" sh
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        INSTALL_URL="https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh"
+        curl -fsSL "$INSTALL_URL" | sh
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
