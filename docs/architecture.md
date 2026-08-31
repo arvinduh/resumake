@@ -31,16 +31,16 @@ graph TD
 
 ## 2. Module Responsibilities
 
-| Module          | Source File                               | Purpose                                                                                                            |
-| :-------------- | :---------------------------------------- | :----------------------------------------------------------------------------------------------------------------- |
-| **`models`**    | [`src/models.rs`](../src/models.rs)       | Serde data models, JSON Schema generation (`schemars`), extensible `meta.extra` map, and default value derivations. |
-| **`schema`**    | [`src/schema.rs`](../src/schema.rs)       | In-process schema validation, JSON Schema export, and workflow template generators.                                |
-| **`engine`**    | [`src/engine.rs`](../src/engine.rs)       | Named template registry, template ejection, resolution, and Typst compiler process orchestration.                  |
-| **`init`**      | [`src/init.rs`](../src/init.rs)           | Interactive scaffolding wizard, git config management, SHA-256 workflow provenance stamping and refresh.          |
-| **`release`**   | [`src/release.rs`](../src/release.rs)     | Automated pre-flight git assertions, SemVer 2.0 monotonicity checks, and atomic tag creation & push.             |
-| **`telemetry`** | [`src/telemetry.rs`](../src/telemetry.rs) | Queries `<pageinfo>`/`<bulletinfo>` metadata and evaluates fill ratio and wrap heuristics.                         |
-| **`ui`**        | [`src/ui.rs`](../src/ui.rs)               | Zero-dependency terminal formatting, ANSI boxed badges, and error diagnostics.                                     |
-| **`cli`**       | [`src/cli.rs`](../src/cli.rs)             | Clap command parsing, dispatching, and file-watching event loops.                                                  |
+| Module          | Source File                               | Purpose                                                                                                              |
+| :-------------- | :---------------------------------------- | :------------------------------------------------------------------------------------------------------------------- |
+| **`models`**    | [`src/models.rs`](../src/models.rs)       | Serde data models, JSON Schema generation (`schemars`), extensible `meta.extra` map, and default value derivations.  |
+| **`schema`**    | [`src/schema.rs`](../src/schema.rs)       | In-process schema validation, JSON Schema export, and workflow template generators.                                 |
+| **`engine`**    | [`src/engine.rs`](../src/engine.rs)       | Named template registry, template ejection, resolution, and Typst compiler process orchestration.                   |
+| **`init`**      | [`src/init.rs`](../src/init.rs)           | Interactive scaffolding wizard, git config management, SHA-256 workflow provenance stamping and refresh.            |
+| **`release`**   | [`src/release.rs`](../src/release.rs)     | Automated pre-flight git assertions, SemVer 2.0 monotonicity checks, and atomic tag creation & push.                |
+| **`telemetry`** | [`src/telemetry.rs`](../src/telemetry.rs) | Queries `<pageinfo>`/`<bulletinfo>` metadata and evaluates fill ratio and wrap heuristics.                          |
+| **`ui`**        | [`src/ui.rs`](../src/ui.rs)               | Zero-dependency terminal formatting, ANSI boxed badges, and error diagnostics.                                      |
+| **`cli`**       | [`src/cli.rs`](../src/cli.rs)             | Clap command parsing, dispatching, and file-watching event loops.                                                   |
 
 ---
 
@@ -82,6 +82,6 @@ graph TD
   cryptic compiler tracebacks when invalid YAML properties are supplied.
 - **Zero Decorative Dependencies:** Avoids heavy UI frameworks or emoji bloat in
   favor of fast, clean ANSI terminal boxes.
-- **GitHub Actions Composite Action:** The repository ships `setup/action.yml` so
-  downstream users can easily pin `rsmk` and `typst` in CI using
+- **GitHub Actions Composite Action:** The repository ships `setup/action.yml`
+  so downstream users can easily pin `rsmk` and `typst` in CI using
   `uses: arvinduh/resumake/setup@v1`.
