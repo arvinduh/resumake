@@ -40,7 +40,7 @@ graph TD
 
 ---
 
-## 3. Execution Lifecycle (`resumake build`)
+## 3. Execution Lifecycle (`rsmk build`)
 
 1. **Schema Ingestion & Validation** — reads and checks `content.yaml`:
    - Reads `content.yaml`.

@@ -25,7 +25,7 @@ struct TemplateFile {
 ///
 /// # Template contract
 ///
-/// To stay compatible with `resumake check`/`build` telemetry, a
+/// To stay compatible with `rsmk check`/`build` telemetry, a
 /// template's `main.typ` must still emit the `<pageinfo>` metadata tag
 /// (see `templates/classic/main.typ`) and route bullet-like content
 /// through the `guard()` primitive to emit `<bulletinfo>` tags. Layout is
@@ -197,7 +197,7 @@ impl fmt::Display for EngineError {
         write!(
           f,
           "`{}` is outside the project root (`{}`).\n\
-           Run resumake from the directory containing your résumé, or pass \
+           Run rsmk from the directory containing your résumé, or pass \
            `--source` for a template elsewhere.",
           display_path(content),
           display_path(root)

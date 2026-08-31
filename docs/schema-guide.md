@@ -10,7 +10,7 @@ Resumake uses a strictly validated YAML schema to define résumé structure,
 contact metadata, theme tokens, and modular content sections. This document
 details every configurable property as actually implemented in
 [`src/models.rs`](../src/models.rs) and enforced by
-[`resumake schema`](../src/schema.rs).
+[`rsmk schema`](../src/schema.rs).
 
 ---
 
@@ -32,7 +32,7 @@ skills, and so on) is one entry in the `sections` list.
 
 Unrecognized fields are rejected, not silently ignored: every field listed below
 is closed to typos and renames by the schema itself
-(`"additionalProperties": false`), so `resumake check`/`build` fails with the
+(`"additionalProperties": false`), so `rsmk check`/`build` fails with the
 offending field name instead of quietly dropping its value. This applies to
 `meta` and to a section's strongly-typed shorthand keys (`education`,
 `experience`, ...); the generic `items:` form used alongside an explicit `type:`
@@ -202,20 +202,20 @@ Print the live schema — derived directly from the Rust types, so it can never
 drift from this document — to stdout:
 
 ```bash
-resumake schema
+rsmk schema
 ```
 
 Or write it to a file:
 
 ```bash
-resumake schema --export resume.schema.json
+rsmk schema --export resume.schema.json
 ```
 
 This is not a file you need to generate yourself for day-to-day use: the
-`# yaml-language-server: $schema=...` comment `resumake init` writes at the top
+`# yaml-language-server: $schema=...` comment `rsmk init` writes at the top
 of `content.yaml` already points at the stable schema-release URL (see section 6
 below), so VS Code and JetBrains YAML plugins pick it up automatically.
-`resumake schema --export` is for local tooling that wants a schema file
+`rsmk schema --export` is for local tooling that wants a schema file
 directly (custom linters, a different editor plugin, CI in a downstream
 project).
 
@@ -232,7 +232,7 @@ never silently drift from what the running binary actually accepts (see
   MINOR releases only ever add optional fields or aliases — they never rename or
   remove one required by an earlier release in the same major line. Only a MAJOR
   version bump may break an existing `content.yaml`. In practice: if
-  `resumake check` passes on one release in a major line, it will keep passing
+  `rsmk check` passes on one release in a major line, it will keep passing
   on later releases in that same major line.
 - **A schema published under one release stays exactly as it was.** A tagged
   release asset is never rewritten in place, so a `$schema` URL that resolves
@@ -253,12 +253,12 @@ only one of them is a stable pointer:
   https://github.com/arvinduh/resumake/releases/download/s<major>.<minor>/resume.schema.json
   ```
 
-  `resumake init` writes this form (currently `s1.0`) into every scaffolded
+  `rsmk init` writes this form (currently `s1.0`) into every scaffolded
   file. Schema releases set `make_latest: false`, so they never displace the
   binary release from `/releases/latest` or confuse update checkers.
 
 - **The copy attached to a binary release (`v*`, e.g. `v0.1.1`) is for
-  inspection only.** It lets you read the exact schema a given `resumake` binary
+  inspection only.** It lets you read the exact schema a given `rsmk` binary
   was built against — useful when diagnosing why a `content.yaml` validates
   under one binary but not another. It is _not_ a stable pointer: do not put a
   `v*` asset URL in a `$schema` directive or any downstream pin.
@@ -277,7 +277,7 @@ semver behaviour of the `resumake` crate described above:
   fine too, you just won't get completion for the newer fields.
 - **Breaking changes bump the major: `s1.x` → `s2.0`.** Renaming or removing a
   field, tightening a type, or making an optional field required — anything that
-  can make an existing `content.yaml` fail `resumake check`. Treat a new
+  can make an existing `content.yaml` fail `rsmk check`. Treat a new
   `s<major>` as the point to re-read this guide before moving your URL.
 
 If you're pinning for a team or CI pipeline, make sure everyone's editors

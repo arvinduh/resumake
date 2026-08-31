@@ -39,7 +39,7 @@ cargo install --path .
 Verify the installation:
 
 ```bash
-resumake --help
+rsmk --help
 ```
 
 ---
@@ -53,7 +53,7 @@ Create a new directory and scaffold the initial configuration and template:
 ```bash
 mkdir my-resume
 cd my-resume
-resumake init --name "Jane Doe"
+rsmk init --name "Jane Doe"
 ```
 
 This generates `content.yaml` populated with standard sections (Education,
@@ -66,7 +66,7 @@ Technical Skills, Experience, and Projects).
 Compile your résumé to a high-fidelity PDF:
 
 ```bash
-resumake build
+rsmk build
 ```
 
 Resumake compiles the Typst template and performs real-time layout telemetry
@@ -91,14 +91,14 @@ analysis, outputting a terminal summary:
 
 ### Picking a Template
 
-`resumake build`/`check`/`watch` render `content.yaml` through a named, built-in
+`rsmk build`/`check`/`watch` render `content.yaml` through a named, built-in
 layout — the same YAML works under any of them, since the content model has no
 idea which template is drawing it. Today the registry only ships `classic` (the
 layout above), which is also the default, so this is a no-op unless you pass it
 explicitly:
 
 ```bash
-resumake build --template classic
+rsmk build --template classic
 ```
 
 More built-in layouts (e.g. a two-column sidebar résumé) can be added to the
@@ -115,7 +115,7 @@ If you want to validate your YAML schema and check layout geometry without
 writing a PDF to disk, use the `check` command:
 
 ```bash
-resumake check
+rsmk check
 ```
 
 ---
@@ -125,7 +125,7 @@ resumake check
 Enable real-time recompilation whenever you modify `content.yaml`:
 
 ```bash
-resumake watch
+rsmk watch
 ```
 
 Keep your PDF viewer open side-by-side to see instant visual updates in under
