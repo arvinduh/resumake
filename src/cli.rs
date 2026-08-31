@@ -1,6 +1,5 @@
 //! Command-line argument parsing and subcommand definitions.
 
-use crate::engine::DEFAULT_TEMPLATE;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -30,13 +29,20 @@ pub enum Commands {
   /// Compile résumé to PDF and verify layout telemetry
   Build {
     /// Path to content YAML file
-    #[arg(short = 'c', long = "content", default_value = "content.yaml")]
+    #[arg(long = "content", default_value = "content.yaml")]
     content: PathBuf,
 
-    /// Named built-in layout to render with (currently only `classic` is
-    /// bundled; the registry exists so more layouts can be added later)
-    #[arg(short = 't', long = "template", default_value = DEFAULT_TEMPLATE)]
-    template_name: String,
+    /// Dry-run verification mode (evaluates schema + telemetry without generating a PDF output)
+    #[arg(short, long)]
+    check: bool,
+
+    /// Live file watcher mode
+    #[arg(short, long)]
+    watch: bool,
+
+    /// Named built-in layout to render with or path to template
+    #[arg(short, long)]
+    template: Option<String>,
 
     /// Path to a custom Typst template file, bypassing the built-in
     /// registry entirely
@@ -59,12 +65,16 @@ pub enum Commands {
   /// Dry-run schema and layout validation without writing a PDF
   Check {
     /// Path to content YAML file
-    #[arg(short = 'c', long = "content", default_value = "content.yaml")]
+    #[arg(long = "content", default_value = "content.yaml")]
     content: PathBuf,
 
+    /// Live file watcher mode
+    #[arg(short, long)]
+    watch: bool,
+
     /// Named built-in layout to validate against
-    #[arg(short = 't', long = "template", default_value = DEFAULT_TEMPLATE)]
-    template_name: String,
+    #[arg(short, long)]
+    template: Option<String>,
 
     /// Path to a custom Typst template file, bypassing the built-in
     /// registry entirely
@@ -83,12 +93,16 @@ pub enum Commands {
   /// Watch content and template for live re-compilation
   Watch {
     /// Path to content YAML file
-    #[arg(short = 'c', long = "content", default_value = "content.yaml")]
+    #[arg(long = "content", default_value = "content.yaml")]
     content: PathBuf,
 
+    /// Dry-run verification mode (evaluates schema + telemetry without generating a PDF output)
+    #[arg(short, long)]
+    check: bool,
+
     /// Named built-in layout to render with
-    #[arg(short = 't', long = "template", default_value = DEFAULT_TEMPLATE)]
-    template_name: String,
+    #[arg(short, long)]
+    template: Option<String>,
 
     /// Path to a custom Typst template file, bypassing the built-in
     /// registry entirely
@@ -98,6 +112,11 @@ pub enum Commands {
     /// Custom output PDF path
     #[arg(short = 'o', long = "output")]
     output: Option<PathBuf>,
+
+    /// Path to custom JSON schema file (falls back to built-in schema if
+    /// omitted)
+    #[arg(long = "schema")]
+    schema: Option<PathBuf>,
 
     /// Custom font directory
     #[arg(long = "font-path")]
@@ -130,7 +149,9 @@ impl Default for Commands {
   fn default() -> Self {
     Commands::Build {
       content: PathBuf::from("content.yaml"),
-      template_name: DEFAULT_TEMPLATE.to_string(),
+      check: false,
+      watch: false,
+      template: None,
       source: None,
       output: None,
       schema: None,
@@ -167,13 +188,17 @@ mod tests {
         content,
         source,
         output,
-        template_name,
+        template,
+        check,
+        watch,
         ..
       } => {
         assert_eq!(content, PathBuf::from("alt.yaml"));
         assert_eq!(source, Some(PathBuf::from("alt.typ")));
         assert_eq!(output, Some(PathBuf::from("out.pdf")));
-        assert_eq!(template_name, DEFAULT_TEMPLATE);
+        assert_eq!(template, None);
+        assert!(!check);
+        assert!(!watch);
       }
       _ => panic!("Expected Build command"),
     }
@@ -183,8 +208,50 @@ mod tests {
   fn test_cli_build_template_name_flag() {
     let cli = Cli::parse_from(["rsmk", "build", "--template", "classic"]);
     match cli.command.unwrap() {
-      Commands::Build { template_name, .. } => {
-        assert_eq!(template_name, "classic");
+      Commands::Build { template, .. } => {
+        assert_eq!(template, Some("classic".to_string()));
+      }
+      _ => panic!("Expected Build command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_build_check_flag() {
+    let cli = Cli::parse_from(["rsmk", "build", "--check"]);
+    match cli.command.unwrap() {
+      Commands::Build { check, watch, .. } => {
+        assert!(check);
+        assert!(!watch);
+      }
+      _ => panic!("Expected Build command"),
+    }
+
+    let cli_short = Cli::parse_from(["rsmk", "build", "-c"]);
+    match cli_short.command.unwrap() {
+      Commands::Build { check, watch, .. } => {
+        assert!(check);
+        assert!(!watch);
+      }
+      _ => panic!("Expected Build command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_build_watch_flag() {
+    let cli = Cli::parse_from(["rsmk", "build", "--watch"]);
+    match cli.command.unwrap() {
+      Commands::Build { check, watch, .. } => {
+        assert!(!check);
+        assert!(watch);
+      }
+      _ => panic!("Expected Build command"),
+    }
+
+    let cli_short = Cli::parse_from(["rsmk", "build", "-w"]);
+    match cli_short.command.unwrap() {
+      Commands::Build { check, watch, .. } => {
+        assert!(!check);
+        assert!(watch);
       }
       _ => panic!("Expected Build command"),
     }
