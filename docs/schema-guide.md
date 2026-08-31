@@ -9,8 +9,8 @@
 Resumake uses a strictly validated YAML schema to define résumé structure,
 contact metadata, theme tokens, and modular content sections. This document
 details every configurable property as actually implemented in
-[`src/models.rs`](../src/models.rs) and enforced by
-[`rsmk schema`](../src/schema.rs).
+[`src/models.rs`](../src/models.rs) and enforced by the `schema` module
+([`src/schema.rs`](../src/schema.rs)).
 
 ---
 
@@ -32,9 +32,9 @@ skills, and so on) is one entry in the `sections` list.
 
 Unrecognized fields are rejected, not silently ignored: every field listed below
 is closed to typos and renames by the schema itself
-(`"additionalProperties": false`), so `rsmk check`/`build` fails with the
-offending field name instead of quietly dropping its value. This applies to
-`meta` and to a section's strongly-typed shorthand keys (`education`,
+(`"additionalProperties": false`), so `rsmk build` (and `rsmk build --check`)
+fails with the offending field name instead of quietly dropping its value. This
+applies to `meta` and to a section's strongly-typed shorthand keys (`education`,
 `experience`, ...); the generic `items:` form used alongside an explicit `type:`
 is intentionally open-ended, so a typo inside `items:` is not caught.
 
@@ -196,43 +196,42 @@ single-role shorthand fields (`title`, `dates`, `bullets`) directly.
 
 ---
 
-## 5. Exporting the Canonical JSON Schema
+## 5. The Canonical JSON Schema
 
-Print the live schema — derived directly from the Rust types, so it can never
-drift from this document — to stdout:
+The schema is derived directly from the Rust types in
+[`src/models.rs`](../src/models.rs), so it can never drift from this document or
+from what the running binary accepts. You do not normally need to produce it
+yourself; it reaches you two ways:
 
-```bash
-rsmk schema
-```
-
-Or write it to a file:
-
-```bash
-rsmk schema --export resume.schema.json
-```
-
-This is not a file you need to generate yourself for day-to-day use: the
-`# yaml-language-server: $schema=...` comment `rsmk init` writes at the top of
-`content.yaml` already points at the stable schema-release URL (see section 6
-below), so VS Code and JetBrains YAML plugins pick it up automatically.
-`rsmk schema --export` is for local tooling that wants a schema file directly
-(custom linters, a different editor plugin, CI in a downstream project).
+- **For editors, as a release asset.** Every schema release (`s*`) and binary
+  release attaches `resume.schema.json` as a download. The
+  `# yaml-language-server: $schema=<release URL>` comment `rsmk init` writes at
+  the top of `content.yaml` points at the stable schema-release URL (see section
+  6 below), so VS Code and JetBrains YAML plugins fetch and cache it
+  automatically.
+- **For inspection and diffing, as a committed file.** A copy lives at the
+  repository root as [`resume.schema.json`](../resume.schema.json). Contributors
+  regenerate it with `cargo run --example generate-schema`; a drift test in
+  [`src/schema.rs`](../src/schema.rs) fails CI if the committed copy falls out
+  of sync with the models.
 
 ---
 
 ## 6. Schema Stability & Versioning
 
 The schema is derived at compile time from `src/models.rs`; it is not a
-separately-versioned artifact and not committed to the repository, so it can
-never silently drift from what the running binary actually accepts (see
+separately-versioned artifact. The `resume.schema.json` committed at the
+repository root is a convenience copy for inspection and diffing, held in sync
+with the models by a drift test — the schema still can never silently drift from
+what the running binary actually accepts (see
 [System Architecture](architecture.md) for why). Two things follow from that:
 
 - **Compatibility tracks the `resumake` crate version, via semver.** PATCH and
   MINOR releases only ever add optional fields or aliases — they never rename or
   remove one required by an earlier release in the same major line. Only a MAJOR
   version bump may break an existing `content.yaml`. In practice: if
-  `rsmk check` passes on one release in a major line, it will keep passing on
-  later releases in that same major line.
+  `rsmk build --check` passes on one release in a major line, it will keep
+  passing on later releases in that same major line.
 - **A schema published under one release stays exactly as it was.** A tagged
   release asset is never rewritten in place, so a `$schema` URL that resolves
   today keeps resolving to the same bytes — not a branch-tracking URL that would
@@ -276,8 +275,8 @@ semver behaviour of the `resumake` crate described above:
   fine too, you just won't get completion for the newer fields.
 - **Breaking changes bump the major: `s1.x` → `s2.0`.** Renaming or removing a
   field, tightening a type, or making an optional field required — anything that
-  can make an existing `content.yaml` fail `rsmk check`. Treat a new `s<major>`
-  as the point to re-read this guide before moving your URL.
+  can make an existing `content.yaml` fail `rsmk build --check`. Treat a new
+  `s<major>` as the point to re-read this guide before moving your URL.
 
 If you're pinning for a team or CI pipeline, make sure everyone's editors
 resolve `$schema` against the same `s<major>.<minor>` URL, and treat an

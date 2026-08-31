@@ -88,12 +88,6 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Export schema derived from this tag
-        run: cargo run --release -- schema --export resume.schema.json
-
       - name: Upload schema release asset
         uses: softprops/action-gh-release@v3
         with:

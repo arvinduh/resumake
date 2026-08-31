@@ -27,9 +27,9 @@ struct TemplateFile {
 ///
 /// # Template contract
 ///
-/// To stay compatible with `rsmk check`/`build` telemetry, a
-/// template's `main.typ` must still emit the `<pageinfo>` metadata tag
-/// (see `templates/classic/main.typ`) and route bullet-like content
+/// To stay compatible with `rsmk build` (and `rsmk build --check`)
+/// telemetry, a template's `main.typ` must still emit the `<pageinfo>`
+/// metadata tag (see `templates/classic/main.typ`) and route bullet-like content
 /// through the `guard()` primitive to emit `<bulletinfo>` tags. Layout is
 /// otherwise entirely up to the template.
 struct EmbeddedTemplate {

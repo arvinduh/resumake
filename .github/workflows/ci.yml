@@ -85,6 +85,9 @@ jobs:
       - name: Setup Typst compiler
         uses: typst-community/setup-typst@v5
 
+      - name: Schema drift check
+        run: cargo test --lib schema
+
       - name: Run test suite
         run: cargo test --all-targets
 

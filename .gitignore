@@ -8,11 +8,10 @@
 *.pdf
 output/
 
-# The canonical JSON Schema is derived from src/models.rs at build time
-# (`resumake schema --export`) and published as a GitHub Release asset by
-# .github/workflows/release.yml. A committed copy here would drift from
-# the Rust types the moment either one changes without the other — see
-# docs/schema-guide.md#schema-stability--versioning.
+# The canonical JSON Schema is committed at the repo root as
+# resume.schema.json (regenerate with `cargo run --example generate-schema`;
+# a drift test keeps it in sync with src/models.rs). Ignore stray copies
+# written elsewhere.
 /schema/resume.schema.json
 
 # --- IDEs & Editors ---

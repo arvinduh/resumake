@@ -17,12 +17,10 @@ fn test_cli_help() {
 }
 
 #[test]
-fn test_cli_init_and_schema_export() {
+fn test_cli_init_scaffolds_content() {
   let temp = TempDir::new().unwrap();
   let content_file = temp.path().join("content.yaml");
-  let schema_file = temp.path().join("schema.json");
 
-  // 1. Test init
   let mut cmd_init = Command::cargo_bin("rsmk").unwrap();
   cmd_init
     .arg("init")
@@ -39,20 +37,6 @@ fn test_cli_init_and_schema_export() {
   assert!(content.contains("Jane Doe"));
   assert!(content.contains("Libertinus Serif"));
   assert!(!content.contains("Linux Libertine"));
-
-  // 2. Test schema export
-  let mut cmd_schema = Command::cargo_bin("rsmk").unwrap();
-  cmd_schema
-    .arg("schema")
-    .arg("--export")
-    .arg(&schema_file)
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("[PASS]"));
-
-  assert!(schema_file.exists());
-  let schema = fs::read_to_string(&schema_file).unwrap();
-  assert!(schema.contains("ResumeDocument"));
 }
 
 #[test]
@@ -309,7 +293,7 @@ fn test_cli_init_refuses_non_empty_directory() {
 
 #[test]
 fn test_cli_init_then_build_succeeds_end_to_end() {
-  // This test shells out to `typst` via `rsmk check`. On a machine
+  // This test shells out to `typst` via `rsmk build --check`. On a machine
   // without the Typst compiler on PATH, skip loudly rather than failing so
   // `cargo test --all-targets` stays green on a fresh clone. CI installs
   // typst and still exercises the real path.
@@ -322,9 +306,8 @@ fn test_cli_init_then_build_succeeds_end_to_end() {
 
   // Regression test: the default `init` scaffold must actually compile.
   // Earlier versions emitted <bulletinfo> probes without a required `id`
-  // field, which made `build`/`check` fail on every real resume (i.e. any
-  // content with bullets) despite `init` and schema export succeeding in
-  // isolation.
+  // field, which made `build`/`build --check` fail on every real resume
+  // (i.e. any content with bullets) despite `init` succeeding in isolation.
   let temp = TempDir::new().unwrap();
   let content_file = temp.path().join("content.yaml");
 
@@ -341,7 +324,8 @@ fn test_cli_init_then_build_succeeds_end_to_end() {
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
-    .arg("check")
+    .arg("build")
+    .arg("--check")
     .arg("--content")
     .arg(&content_file)
     .assert()
@@ -357,7 +341,8 @@ fn test_cli_check_detects_invalid_yaml() {
 
   let mut cmd = Command::cargo_bin("rsmk").unwrap();
   cmd
-    .arg("check")
+    .arg("build")
+    .arg("--check")
     .arg("--content")
     .arg(&invalid_file)
     .assert()
@@ -390,7 +375,8 @@ sections: []
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
-    .arg("check")
+    .arg("build")
+    .arg("--check")
     .arg("--content")
     .arg(&content_file)
     .assert()
@@ -430,7 +416,8 @@ sections: []
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
-    .arg("check")
+    .arg("build")
+    .arg("--check")
     .arg("--content")
     .arg(&content_file)
     .assert()
@@ -629,19 +616,7 @@ fn test_cli_build_and_check_flags_integration() {
     .success()
     .stdout(predicate::str::contains("SUCCESS"));
 
-  // 6. Legacy rsmk check
-  Command::cargo_bin("rsmk")
-    .unwrap()
-    .current_dir(temp.path())
-    .arg("check")
-    .arg("--content")
-    .arg(&content_file)
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("[dry-run: no PDF written]"))
-    .stdout(predicate::str::contains("Dry-run check passed"));
-
-  // 7. Bare rsmk with no subcommand defaults to build
+  // 6. Bare rsmk with no subcommand defaults to build
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())

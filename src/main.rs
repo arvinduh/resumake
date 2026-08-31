@@ -8,8 +8,8 @@ use resumake::engine::{
 use resumake::init::{resolve_init_output, run_init, InitOptions};
 use resumake::release::run_release;
 use resumake::schema::{
-  derive_output_filename, export_builtin_schema, load_content_name,
-  load_content_version, validate_schema_auto,
+  derive_output_filename, load_content_name, load_content_version,
+  validate_schema_auto,
 };
 use resumake::telemetry::evaluate_telemetry;
 use resumake::ui::{
@@ -85,48 +85,6 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
         )
       }
     }
-    Commands::Check {
-      content,
-      watch,
-      template,
-      source,
-      schema,
-      font_path,
-    } => execute_command(
-      Commands::Build {
-        content,
-        check: true,
-        watch,
-        template,
-        source,
-        output: None,
-        schema,
-        font_path,
-      },
-      quiet,
-    ),
-    Commands::Watch {
-      content,
-      check,
-      template,
-      source,
-      output,
-      schema,
-      font_path,
-    } => execute_command(
-      Commands::Build {
-        content,
-        check,
-        watch: true,
-        template,
-        source,
-        output,
-        schema,
-        font_path,
-      },
-      quiet,
-    ),
-    Commands::Schema { export } => run_schema(export.as_deref()),
     Commands::Init {
       dest,
       name,
@@ -371,16 +329,6 @@ fn run_check_watch(
       }
     }
   }
-}
-
-fn run_schema(export: Option<&Path>) -> Result<(), String> {
-  let schema_str = export_builtin_schema(export)?;
-  if export.is_none() {
-    println!("{schema_str}");
-  } else if let Some(path) = export {
-    print_success(&format!("Exported JSON schema to '{}'", path.display()));
-  }
-  Ok(())
 }
 
 fn run_template_list() -> Result<(), String> {
