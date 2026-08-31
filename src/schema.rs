@@ -304,6 +304,8 @@ meta:
     assert!(tmpl.contains("Jane Doe"));
     assert!(tmpl.contains("yaml-language-server"));
     assert!(tmpl.contains("sections:"));
+    assert!(tmpl.contains("Libertinus Serif"));
+    assert!(!tmpl.contains("Linux Libertine"));
     // The schema URL placeholder must be substituted with a concrete,
     // schema-pinned release-asset URL, not left dangling.
     assert!(!tmpl.contains("RESUMAKE_SCHEMA_URL"));
