@@ -1,0 +1,19 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arvinduh/resumake/setup@v1
+        with:
+          version: "RSMK_VERSION"
+      - run: rsmk build
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: "*.pdf"
