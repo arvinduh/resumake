@@ -55,12 +55,12 @@ jobs:
   security-audit:
     name: Security Audit (cargo audit)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Install cargo-audit
+      - name: Install prebuilt cargo-audit
         uses: taiki-e/install-action@cargo-audit
 
       - name: Run cargo audit
