@@ -12,7 +12,10 @@ use std::path::Path;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-  let target = Path::new("resume.schema.json");
+  // Anchor to the crate root so the file always lands at the repo root
+  // regardless of the working directory — the same anchor the drift test in
+  // `src/schema.rs` reads from.
+  let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("resume.schema.json");
 
   let schema = match export_builtin_schema(None) {
     Ok(schema) => schema,
@@ -26,7 +29,7 @@ fn main() -> ExitCode {
   // stable across platforms and editors.
   let normalized = format!("{}\n", schema.trim_end());
 
-  if let Err(err) = fs::write(target, normalized.as_bytes()) {
+  if let Err(err) = fs::write(&target, normalized.as_bytes()) {
     eprintln!("error: failed to write {}: {err}", target.display());
     return ExitCode::FAILURE;
   }

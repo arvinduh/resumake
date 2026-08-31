@@ -85,7 +85,7 @@ jobs:
       - name: Setup Typst compiler
         uses: typst-community/setup-typst@v5
 
-      - name: Check committed schema is not stale
+      - name: Schema drift check
         run: cargo test --lib schema
 
       - name: Run test suite
