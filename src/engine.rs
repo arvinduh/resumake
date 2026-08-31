@@ -3,6 +3,7 @@
 
 use crate::schema::validate_schema_auto;
 use crate::telemetry::{evaluate_telemetry, TelemetryReport};
+use include_dir::{include_dir, Dir};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,11 +13,12 @@ use which::which;
 /// A single Typst source file belonging to an embedded template, keyed by
 /// its path relative to the template's root directory (e.g.
 /// `"blocks/experience.typ"`).
-struct TemplateFile {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateFile {
   /// Path relative to the template root, using forward slashes.
-  rel_path: &'static str,
+  pub rel_path: String,
   /// Embedded file contents.
-  contents: &'static str,
+  pub contents: &'static str,
 }
 
 /// A complete named résumé template bundled into the binary. Every
@@ -32,86 +34,104 @@ struct TemplateFile {
 /// metadata tag (see `templates/classic/main.typ`) and route bullet-like content
 /// through the `guard()` primitive to emit `<bulletinfo>` tags. Layout is
 /// otherwise entirely up to the template.
-struct EmbeddedTemplate {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmbeddedTemplate {
   /// Registry name selected via `--template <name>` (e.g. `"classic"`).
-  name: &'static str,
+  pub name: String,
   /// Entry point file, always extracted as `main.typ`.
-  entry: &'static str,
+  pub entry: &'static str,
   /// All other files in the template tree (tokens, primitives, blocks/*).
-  files: &'static [TemplateFile],
+  pub files: Vec<TemplateFile>,
 }
 
-const CLASSIC_TEMPLATE: EmbeddedTemplate = EmbeddedTemplate {
-  name: "classic",
-  entry: include_str!("embedded/templates/classic/main.typ"),
-  files: &[
-    TemplateFile {
-      rel_path: "tokens.typ",
-      contents: include_str!("embedded/templates/classic/tokens.typ"),
-    },
-    TemplateFile {
-      rel_path: "primitives.typ",
-      contents: include_str!("embedded/templates/classic/primitives.typ"),
-    },
-    TemplateFile {
-      rel_path: "blocks/education.typ",
-      contents: include_str!("embedded/templates/classic/blocks/education.typ"),
-    },
-    TemplateFile {
-      rel_path: "blocks/experience.typ",
-      contents: include_str!(
-        "embedded/templates/classic/blocks/experience.typ"
-      ),
-    },
-    TemplateFile {
-      rel_path: "blocks/projects.typ",
-      contents: include_str!("embedded/templates/classic/blocks/projects.typ"),
-    },
-    TemplateFile {
-      rel_path: "blocks/skills.typ",
-      contents: include_str!("embedded/templates/classic/blocks/skills.typ"),
-    },
-    TemplateFile {
-      rel_path: "blocks/publications.typ",
-      contents: include_str!(
-        "embedded/templates/classic/blocks/publications.typ"
-      ),
-    },
-    TemplateFile {
-      rel_path: "blocks/split_line.typ",
-      contents: include_str!(
-        "embedded/templates/classic/blocks/split_line.typ"
-      ),
-    },
-    TemplateFile {
-      rel_path: "blocks/references.typ",
-      contents: include_str!(
-        "embedded/templates/classic/blocks/references.typ"
-      ),
-    },
-    TemplateFile {
-      rel_path: "blocks/lines.typ",
-      contents: include_str!("embedded/templates/classic/blocks/lines.typ"),
-    },
-  ],
-};
+/// Embedded directory containing all built-in résumé templates.
+/// To add a new built-in template, simply drop a directory under
+/// `src/embedded/templates/<name>/` containing `main.typ` and any supporting files;
+/// it will be automatically discovered and registered at compile time.
+static TEMPLATES_DIR: Dir<'_> =
+  include_dir!("$CARGO_MANIFEST_DIR/src/embedded/templates");
 
-/// Registry of all templates bundled into the binary. Add a new entry
-/// here (and a matching `embedded/templates/<name>/` tree) to register
-/// another built-in layout.
-const TEMPLATE_REGISTRY: &[&EmbeddedTemplate] = &[&CLASSIC_TEMPLATE];
+fn relative_posix_path(path: &Path, root: &Path) -> String {
+  if let Ok(rel) = path.strip_prefix(root) {
+    let s = rel.to_string_lossy().replace('\\', "/");
+    let trimmed = s.trim_start_matches('/');
+    if !trimmed.is_empty() {
+      return trimmed.to_string();
+    }
+  }
+  let path_str = path.to_string_lossy().replace('\\', "/");
+  let root_str = root.to_string_lossy().replace('\\', "/");
+  let trimmed_root = root_str.trim_matches('/');
+  if !trimmed_root.is_empty() {
+    if let Some(rest) = path_str.strip_prefix(&format!("{trimmed_root}/")) {
+      return rest.to_string();
+    }
+  }
+  path_str.trim_start_matches('/').to_string()
+}
+
+fn collect_template_files(
+  template_root: &Dir<'static>,
+  current_dir: &Dir<'static>,
+  files: &mut Vec<TemplateFile>,
+  entry: &mut Option<&'static str>,
+) {
+  for file in current_dir.files() {
+    let rel_path = relative_posix_path(file.path(), template_root.path());
+    let contents = file.contents_utf8().unwrap_or("");
+    if rel_path == "main.typ" {
+      *entry = Some(contents);
+    } else {
+      files.push(TemplateFile { rel_path, contents });
+    }
+  }
+
+  for sub_dir in current_dir.dirs() {
+    collect_template_files(template_root, sub_dir, files, entry);
+  }
+}
+
+/// Discovers all embedded templates compiled into the binary from `src/embedded/templates/`.
+pub fn embedded_templates() -> Vec<EmbeddedTemplate> {
+  let mut templates = Vec::new();
+  for dir in TEMPLATES_DIR.dirs() {
+    let name = dir
+      .path()
+      .file_name()
+      .and_then(|s| s.to_str())
+      .unwrap_or_else(|| dir.path().to_str().unwrap_or_default());
+    if name.is_empty() || name.starts_with('.') {
+      continue;
+    }
+
+    let mut files = Vec::new();
+    let mut entry = None;
+    collect_template_files(dir, dir, &mut files, &mut entry);
+
+    if let Some(entry) = entry {
+      files.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+      templates.push(EmbeddedTemplate {
+        name: name.to_string(),
+        entry,
+        files,
+      });
+    }
+  }
+  templates.sort_by(|a, b| a.name.cmp(&b.name));
+  templates
+}
 
 /// The default template name used when `--template` is not specified.
 pub const DEFAULT_TEMPLATE: &str = "classic";
 
 /// Looks up a bundled template by registry name.
-fn find_embedded_template(name: &str) -> Option<&'static EmbeddedTemplate> {
-  TEMPLATE_REGISTRY.iter().find(|t| t.name == name).copied()
+pub fn find_embedded_template(name: &str) -> Option<EmbeddedTemplate> {
+  embedded_templates().into_iter().find(|t| t.name == name)
 }
 
 /// Lists the names of all bundled templates, for error messages.
-fn known_template_names() -> Vec<&'static str> {
-  TEMPLATE_REGISTRY.iter().map(|t| t.name).collect()
+pub fn known_template_names() -> Vec<String> {
+  embedded_templates().into_iter().map(|t| t.name).collect()
 }
 
 /// Summary information about a template (built-in or discovered on disk).
@@ -151,11 +171,12 @@ pub fn list_templates() -> Vec<TemplateInfo> {
 pub fn list_templates_in(templates_dir: &Path) -> Vec<TemplateInfo> {
   let mut results = Vec::new();
 
-  for template in TEMPLATE_REGISTRY {
+  for template in embedded_templates() {
+    let is_default = template.name == DEFAULT_TEMPLATE;
     results.push(TemplateInfo {
-      name: template.name.to_string(),
+      name: template.name,
       is_builtin: true,
-      is_default: template.name == DEFAULT_TEMPLATE,
+      is_default,
       path: None,
     });
   }
@@ -234,12 +255,12 @@ pub fn eject_template(
   ejected_files.push("main.typ".to_string());
 
   for file in template.files {
-    let dest = target_dir.join(file.rel_path);
+    let dest = target_dir.join(&file.rel_path);
     if let Some(parent) = dest.parent() {
       fs::create_dir_all(parent)?;
     }
     fs::write(&dest, file.contents)?;
-    ejected_files.push(file.rel_path.to_string());
+    ejected_files.push(file.rel_path);
   }
 
   Ok(ejected_files)
@@ -263,7 +284,7 @@ pub enum EngineError {
     /// The requested template name.
     name: String,
     /// Names of templates actually bundled into the binary.
-    known: Vec<&'static str>,
+    known: Vec<String>,
   },
   /// `typst compile` exited with a non-zero status.
   CompilationFailed {
@@ -610,7 +631,7 @@ impl TypstEngine {
       }
     };
 
-    let cache_dir = self.root_path.join(".resumake").join(template.name);
+    let cache_dir = self.root_path.join(".resumake").join(&template.name);
     fs::create_dir_all(&cache_dir).map_err(|e| {
       format!(
         "Failed to create engine cache directory '{}': {}",
@@ -622,8 +643,8 @@ impl TypstEngine {
     fs::write(cache_dir.join("main.typ"), template.entry)
       .map_err(|e| e.to_string())?;
 
-    for file in template.files {
-      let dest = cache_dir.join(file.rel_path);
+    for file in &template.files {
+      let dest = cache_dir.join(&file.rel_path);
       if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
       }
@@ -827,6 +848,24 @@ mod tests {
   }
 
   #[test]
+  fn test_embedded_templates_discovery() {
+    let templates = embedded_templates();
+    assert!(!templates.is_empty());
+    let classic = templates
+      .iter()
+      .find(|t| t.name == "classic")
+      .expect("classic template must be found");
+    assert_eq!(classic.name, "classic");
+    assert!(!classic.entry.is_empty());
+    assert!(classic.files.iter().any(|f| f.rel_path == "tokens.typ"));
+    assert!(classic.files.iter().any(|f| f.rel_path == "primitives.typ"));
+    assert!(classic
+      .files
+      .iter()
+      .any(|f| f.rel_path == "blocks/experience.typ"));
+  }
+
+  #[test]
   fn test_all_block_files_are_registered_in_main_typ() {
     let blocks = [
       "education",
@@ -839,11 +878,11 @@ mod tests {
       "lines",
     ];
 
+    let classic =
+      find_embedded_template("classic").expect("classic template must exist");
     for block in blocks {
       assert!(
-        CLASSIC_TEMPLATE
-          .entry
-          .contains(&format!("blocks/{block}.typ")),
+        classic.entry.contains(&format!("blocks/{block}.typ")),
         "Block '{block}' is missing an #import in main.typ!"
       );
     }
