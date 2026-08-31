@@ -5,7 +5,7 @@ use resumake::cli::{Cli, Commands, TemplateCommands};
 use resumake::engine::{
   eject_template, list_templates, TypstEngine, DEFAULT_TEMPLATE,
 };
-use resumake::init::{run_init, InitOptions};
+use resumake::init::{resolve_init_output, run_init, InitOptions};
 use resumake::release::run_release;
 use resumake::schema::{
   derive_output_filename, export_builtin_schema, load_content_name,
@@ -128,21 +128,26 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
     ),
     Commands::Schema { export } => run_schema(export.as_deref()),
     Commands::Init {
+      dest,
       name,
       output,
       force,
       no_git,
       no_workflows,
       update,
-    } => run_init(InitOptions {
-      name: name.as_deref(),
-      output: &output,
-      force,
-      no_git,
-      no_workflows,
-      update,
-      quiet,
-    }),
+    } => {
+      let resolved_output =
+        resolve_init_output(dest.as_deref(), output.as_deref());
+      run_init(InitOptions {
+        name: name.as_deref(),
+        output: &resolved_output,
+        force,
+        no_git,
+        no_workflows,
+        update,
+        quiet,
+      })
+    }
     Commands::Release {
       content,
       message,

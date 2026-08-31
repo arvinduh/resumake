@@ -7,7 +7,7 @@ use crate::schema::{
 use crate::ui::{print_error, print_info, print_success};
 use std::fs;
 use std::io::IsTerminal;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Options configuring the workspace initialization process.
 #[derive(Debug, Clone)]
@@ -278,6 +278,51 @@ pub fn generate_unified_diff(
   }
 
   out
+}
+
+/// Returns true when `path` should be treated as an explicit content-file
+/// target rather than a directory to scaffold inside.
+///
+/// An existing directory is never a file; an existing regular file always is.
+/// For a path that does not yet exist, only a `.yaml`/`.yml` extension marks it
+/// as a file — bare names like `arvin_resume` are treated as directories.
+fn looks_like_file(path: &Path) -> bool {
+  if path.is_dir() {
+    return false;
+  }
+  if path.is_file() {
+    return true;
+  }
+  matches!(
+    path
+      .extension()
+      .and_then(|e| e.to_str())
+      .map(str::to_ascii_lowercase)
+      .as_deref(),
+    Some("yaml") | Some("yml")
+  )
+}
+
+/// Resolves the effective content-file path for `rsmk init` from the optional
+/// positional destination and the optional `--output` flag (which are mutually
+/// exclusive at the CLI layer).
+///
+/// - Neither given: `content.yaml` in the current directory.
+/// - `--output <path>`: used verbatim.
+/// - positional `<dest>`: a directory-like value scaffolds `<dest>/content.yaml`;
+///   a `*.yaml` value is used verbatim as the file path.
+pub fn resolve_init_output(
+  dest: Option<&Path>,
+  output: Option<&Path>,
+) -> PathBuf {
+  if let Some(output) = output {
+    return output.to_path_buf();
+  }
+  match dest {
+    None => PathBuf::from("content.yaml"),
+    Some(dest) if looks_like_file(dest) => dest.to_path_buf(),
+    Some(dest) => dest.join("content.yaml"),
+  }
 }
 
 /// Resolves candidate name from CLI arguments or prompts interactively.

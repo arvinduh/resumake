@@ -202,6 +202,43 @@ fn test_cli_init_force_and_collision() {
 }
 
 #[test]
+fn test_cli_init_positional_directory_destination() {
+  let temp = TempDir::new().unwrap();
+
+  // `rsmk init <dir>` scaffolds content.yaml inside <dir>, creating it.
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("arvin_resume")
+    .arg("--name")
+    .arg("Arvin Duh")
+    .arg("--no-git")
+    .arg("--no-workflows")
+    .assert()
+    .success();
+
+  let scaffold = temp.path().join("arvin_resume").join("content.yaml");
+  assert!(scaffold.exists());
+  assert!(fs::read_to_string(&scaffold).unwrap().contains("Arvin Duh"));
+}
+
+#[test]
+fn test_cli_init_positional_and_output_conflict() {
+  let temp = TempDir::new().unwrap();
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("some_dir")
+    .arg("--output")
+    .arg("content.yaml")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
 fn test_cli_init_then_build_succeeds_end_to_end() {
   // This test shells out to `typst` via `rsmk check`. On a machine
   // without the Typst compiler on PATH, skip loudly rather than failing so
