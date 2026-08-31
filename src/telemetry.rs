@@ -2,6 +2,20 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Errors originating from layout telemetry evaluation.
+#[derive(thiserror::Error, Debug)]
+pub enum TelemetryError {
+  /// Failed to parse page info JSON query result.
+  #[error("Failed to parse page info JSON: {0}")]
+  PageInfoParse(#[source] serde_json::Error),
+  /// Page info query result was empty.
+  #[error("Empty page info query")]
+  EmptyPageInfoQuery,
+  /// Failed to parse bullet info JSON query result.
+  #[error("Failed to parse bullet info query JSON: {0}")]
+  BulletInfoParse(#[source] serde_json::Error),
+}
+
 /// Document geometry info queried from `<pageinfo>`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PageInfo {
@@ -22,15 +36,13 @@ impl PageInfo {
   ///
   /// # Errors
   ///
-  /// Returns an error string if the JSON is malformed or missing fields.
-  pub fn parse(json_str: &str) -> Result<Self, String> {
-    let val: serde_json::Value = serde_json::from_str(json_str)
-      .map_err(|e| format!("Failed to parse page info JSON: {e}"))?;
+  /// Returns a [`TelemetryError`] if the JSON is malformed or missing fields.
+  pub fn parse(json_str: &str) -> Result<Self, TelemetryError> {
+    let val: serde_json::Value =
+      serde_json::from_str(json_str).map_err(TelemetryError::PageInfoParse)?;
 
     let item = if val.is_array() {
-      val
-        .get(0)
-        .ok_or_else(|| "Empty page info query".to_string())?
+      val.get(0).ok_or(TelemetryError::EmptyPageInfoQuery)?
     } else {
       &val
     };
@@ -72,14 +84,13 @@ impl BulletInfo {
   ///
   /// # Errors
   ///
-  /// Returns an error string if JSON array parsing fails.
-  pub fn parse_list(json_str: &str) -> Result<Vec<Self>, String> {
+  /// Returns a [`TelemetryError`] if JSON array parsing fails.
+  pub fn parse_list(json_str: &str) -> Result<Vec<Self>, TelemetryError> {
     if json_str.trim().is_empty() || json_str.trim() == "[]" {
       return Ok(Vec::new());
     }
 
-    serde_json::from_str(json_str)
-      .map_err(|e| format!("Failed to parse bullet info query JSON: {e}"))
+    serde_json::from_str(json_str).map_err(TelemetryError::BulletInfoParse)
   }
 }
 
@@ -130,11 +141,11 @@ impl TelemetryReport {
 ///
 /// # Errors
 ///
-/// Returns an error string if parsing JSON queries fails.
+/// Returns a [`TelemetryError`] if parsing JSON queries fails.
 pub fn evaluate_telemetry(
   page_json: &str,
   bullets_json: &str,
-) -> Result<TelemetryReport, String> {
+) -> Result<TelemetryReport, TelemetryError> {
   let page_info = PageInfo::parse(page_json)?;
   let bullets = BulletInfo::parse_list(bullets_json)?;
 

@@ -28,13 +28,13 @@ fn main() -> ExitCode {
   match execute_command(command, cli.quiet) {
     Ok(()) => ExitCode::SUCCESS,
     Err(err) => {
-      print_error(&err);
+      print_error(&format!("{err}"));
       ExitCode::FAILURE
     }
   }
 }
 
-fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
+fn execute_command(command: Commands, quiet: bool) -> anyhow::Result<()> {
   match command {
     Commands::Build {
       content,
@@ -109,13 +109,15 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
         update,
         quiet,
       })
+      .map_err(Into::into)
     }
     Commands::Release {
       content,
       message,
       dry_run,
       skip_build,
-    } => run_release(&content, message.as_deref(), dry_run, skip_build, quiet),
+    } => run_release(&content, message.as_deref(), dry_run, skip_build, quiet)
+      .map_err(Into::into),
     Commands::Template(args) => match args.command {
       TemplateCommands::List => run_template_list(),
       TemplateCommands::Eject { name, force } => {
@@ -123,7 +125,7 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
       }
     },
     Commands::Update { check, force } => {
-      resumake::update::run_update(check, force, quiet)
+      resumake::update::run_update(check, force, quiet).map_err(Into::into)
     }
   }
 }
@@ -136,23 +138,16 @@ fn run_build(
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
   if !content.exists() {
-    return Err(format!(
+    anyhow::bail!(
       "Content file not found: '{}'. Run 'rsmk init' to create one.",
       content.display()
-    ));
+    );
   }
 
   // 1. Validate schema
-  if let Err(errors) = validate_schema_auto(content, schema) {
-    let mut msg =
-      format!("Schema validation failed ({} error(s)):\n", errors.len());
-    for e in errors {
-      msg.push_str(&format!("  - {e}\n"));
-    }
-    return Err(msg);
-  }
+  validate_schema_auto(content, schema)?;
 
   // 2. Resolve paths
   let engine = TypstEngine::new(font_path)?;
@@ -187,9 +182,7 @@ fn run_build(
   }
 
   if !report.is_pass() {
-    return Err(
-      "Document failed strict single-page geometry constraints.".to_string(),
-    );
+    anyhow::bail!("Document failed strict single-page geometry constraints.");
   }
 
   Ok(())
@@ -202,22 +195,13 @@ fn run_check(
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
   if !content.exists() {
-    return Err(format!("Content file not found: '{}'", content.display()));
+    anyhow::bail!("Content file not found: '{}'", content.display());
   }
 
   // 1. Schema check
-  validate_schema_auto(content, schema).map_err(|errors| {
-    format!(
-      "Schema validation failed:\n{}",
-      errors
-        .iter()
-        .map(|e| format!("  - {e}"))
-        .collect::<Vec<_>>()
-        .join("\n")
-    )
-  })?;
+  validate_schema_auto(content, schema)?;
 
   // 2. Layout telemetry check
   let engine = TypstEngine::new(font_path)?;
@@ -243,8 +227,8 @@ fn run_check(
   }
 
   if !report.is_pass() {
-    return Err(
-      "Dry-run check failed strict single-page layout constraints.".to_string(),
+    anyhow::bail!(
+      "Dry-run check failed strict single-page layout constraints."
     );
   }
 
@@ -260,24 +244,24 @@ fn setup_watcher(
   source: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
-) -> Result<
-  (
-    notify_debouncer_mini::Debouncer<
-      notify_debouncer_mini::notify::RecommendedWatcher,
-    >,
-    std::sync::mpsc::Receiver<DebounceEventResult>,
-  ),
-  String,
-> {
+) -> anyhow::Result<(
+  notify_debouncer_mini::Debouncer<
+    notify_debouncer_mini::notify::RecommendedWatcher,
+  >,
+  std::sync::mpsc::Receiver<DebounceEventResult>,
+)> {
   let (tx, rx) = std::sync::mpsc::channel();
   let mut debouncer = new_debouncer(std::time::Duration::from_millis(200), tx)
-    .map_err(|e| format!("Failed to initialize file watcher: {e}"))?;
+    .map_err(|e| anyhow::anyhow!("Failed to initialize file watcher: {e}"))?;
 
   debouncer
     .watcher()
     .watch(content, RecursiveMode::NonRecursive)
     .map_err(|e| {
-      format!("Failed to watch content file '{}': {e}", content.display())
+      anyhow::anyhow!(
+        "Failed to watch content file '{}': {e}",
+        content.display()
+      )
     })?;
 
   let root = resumake::engine::find_project_root();
@@ -355,9 +339,9 @@ fn run_watch(
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
   if !content.exists() {
-    return Err(format!("Content file not found: '{}'", content.display()));
+    anyhow::bail!("Content file not found: '{}'", content.display());
   }
 
   let output_pdf = match output {
@@ -383,7 +367,7 @@ fn run_watch(
     font_path,
     quiet,
   ) {
-    print_error(&err);
+    print_error(&format!("{err}"));
   }
 
   let canonical_output = output_pdf.canonicalize().ok();
@@ -415,7 +399,7 @@ fn run_watch(
             font_path,
             quiet,
           ) {
-            print_error(&err);
+            print_error(&format!("{err}"));
           }
         }
       }
@@ -435,9 +419,9 @@ fn run_check_watch(
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
   if !content.exists() {
-    return Err(format!("Content file not found: '{}'", content.display()));
+    anyhow::bail!("Content file not found: '{}'", content.display());
   }
 
   print_info(&format!(
@@ -451,7 +435,7 @@ fn run_check_watch(
   if let Err(err) =
     run_check(content, template_name, source, schema, font_path, quiet)
   {
-    print_error(&err);
+    print_error(&format!("{err}"));
   }
 
   for events_res in rx {
@@ -460,7 +444,7 @@ fn run_check_watch(
         if let Err(err) =
           run_check(content, template_name, source, schema, font_path, quiet)
         {
-          print_error(&err);
+          print_error(&format!("{err}"));
         }
       }
       Err(err) => {
@@ -472,7 +456,7 @@ fn run_check_watch(
   Ok(())
 }
 
-fn run_template_list() -> Result<(), String> {
+fn run_template_list() -> anyhow::Result<()> {
   let templates = list_templates();
   println!("Available templates:");
   for tpl in templates {
@@ -485,10 +469,9 @@ fn run_template_eject(
   name: &str,
   force: bool,
   quiet: bool,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
   let target_dir = Path::new("templates").join(name);
-  let ejected_files =
-    eject_template(name, &target_dir, force).map_err(|e| e.to_string())?;
+  let ejected_files = eject_template(name, &target_dir, force)?;
 
   if !quiet {
     println!("✓ Ejected template '{name}' to ./templates/{name}/");

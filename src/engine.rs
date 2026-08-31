@@ -267,19 +267,22 @@ pub fn eject_template(
 }
 
 /// Errors originating from the Typst execution engine.
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum EngineError {
   /// The `typst` binary could not be located on `PATH`.
+  #[error("typst executable not found on PATH.\n{instructions}")]
   TypstNotFound {
     /// Platform-specific installation instructions shown to the user.
     instructions: String,
   },
   /// A user-specified font directory was not found.
+  #[error("No valid font directory found. Searched locations:\n{}", .searched.iter().map(|p| format!("  - {}", p.display())).collect::<Vec<_>>().join("\n"))]
   FontDirNotFound {
     /// Searched locations.
     searched: Vec<PathBuf>,
   },
   /// The requested `--template <name>` is not registered.
+  #[error("Unknown template '{name}'. Available templates: {}", .known.join(", "))]
   TemplateNotFound {
     /// The requested template name.
     name: String,
@@ -287,16 +290,19 @@ pub enum EngineError {
     known: Vec<String>,
   },
   /// `typst compile` exited with a non-zero status.
+  #[error("Typst compilation failed:\n{stderr}")]
   CompilationFailed {
     /// Captured stderr or stdout from the subprocess.
     stderr: String,
   },
   /// `typst query` exited with a non-zero status.
+  #[error("Typst query failed:\n{stderr}")]
   QueryFailed {
     /// Captured stderr or stdout from the subprocess.
     stderr: String,
   },
   /// `typst watch` exited with a non-zero status.
+  #[error("Typst watch process failed:\n{stderr}")]
   WatchFailed {
     /// Captured stderr or stdout from the subprocess.
     stderr: String,
@@ -304,6 +310,13 @@ pub enum EngineError {
   /// The resolved `--content` file lies outside the discovered project
   /// root. Typst can only read files under `--root`, so no spelling of
   /// the path would let it load the file.
+  #[error(
+    "`{}` is outside the project root (`{}`).\n\
+     Run rsmk from the directory containing your résumé, or pass \
+     `--source` for a template elsewhere.",
+    display_path(content),
+    display_path(root)
+  )]
   ContentOutsideRoot {
     /// The content file, canonicalized where possible.
     content: PathBuf,
@@ -311,88 +324,41 @@ pub enum EngineError {
     root: PathBuf,
   },
   /// Destination directory already exists and `--force` was not specified.
+  #[error(
+    "Destination directory '{}' already exists. Use --force to overwrite.",
+    display_path(path)
+  )]
   DestinationAlreadyExists {
     /// Destination directory path.
     path: PathBuf,
   },
+  /// Content file was not found.
+  #[error("Content file not found: '{}'", display_path(path))]
+  ContentNotFound {
+    /// Path to content file.
+    path: PathBuf,
+  },
+  /// Failed to create cache directory.
+  #[error("Failed to create engine cache directory '{}': {source}", path.display())]
+  CacheDirCreation {
+    /// Cache directory path.
+    path: PathBuf,
+    /// Underlying I/O error.
+    #[source]
+    source: std::io::Error,
+  },
+  /// Document failed strict single-page layout geometry constraints.
+  #[error("Dry-run check failed strict single-page layout constraints.")]
+  LayoutConstraintViolation,
+  /// Schema validation error.
+  #[error(transparent)]
+  Schema(#[from] crate::schema::SchemaError),
+  /// Telemetry error.
+  #[error(transparent)]
+  Telemetry(#[from] crate::telemetry::TelemetryError),
   /// The subprocess could not be spawned or its output could not be read.
-  Io(std::io::Error),
-}
-
-impl fmt::Display for EngineError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      EngineError::TypstNotFound { instructions } => {
-        write!(f, "typst executable not found on PATH.\n{instructions}")
-      }
-      EngineError::FontDirNotFound { searched } => {
-        write!(
-          f,
-          "No valid font directory found. Searched locations:\n{}",
-          searched
-            .iter()
-            .map(|p| format!("  - {}", p.display()))
-            .collect::<Vec<_>>()
-            .join("\n")
-        )
-      }
-      EngineError::TemplateNotFound { name, known } => {
-        write!(
-          f,
-          "Unknown template '{name}'. Available templates: {}",
-          known.join(", ")
-        )
-      }
-      EngineError::CompilationFailed { stderr } => {
-        write!(f, "Typst compilation failed:\n{stderr}")
-      }
-      EngineError::QueryFailed { stderr } => {
-        write!(f, "Typst query failed:\n{stderr}")
-      }
-      EngineError::WatchFailed { stderr } => {
-        write!(f, "Typst watch process failed:\n{stderr}")
-      }
-      EngineError::ContentOutsideRoot { content, root } => {
-        write!(
-          f,
-          "`{}` is outside the project root (`{}`).\n\
-           Run rsmk from the directory containing your résumé, or pass \
-           `--source` for a template elsewhere.",
-          display_path(content),
-          display_path(root)
-        )
-      }
-      EngineError::DestinationAlreadyExists { path } => {
-        write!(
-          f,
-          "Destination directory '{}' already exists. Use --force to overwrite.",
-          display_path(path)
-        )
-      }
-      EngineError::Io(err) => write!(f, "I/O error: {err}"),
-    }
-  }
-}
-
-impl std::error::Error for EngineError {
-  fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-    match self {
-      EngineError::Io(err) => Some(err),
-      _ => None,
-    }
-  }
-}
-
-impl From<std::io::Error> for EngineError {
-  fn from(err: std::io::Error) -> Self {
-    EngineError::Io(err)
-  }
-}
-
-impl From<EngineError> for String {
-  fn from(err: EngineError) -> Self {
-    err.to_string()
-  }
+  #[error("I/O error: {0}")]
+  Io(#[from] std::io::Error),
 }
 
 /// Locates the `typst` binary on the system PATH using the `which` crate.
@@ -567,13 +533,12 @@ impl TypstEngine {
   ///
   /// # Errors
   ///
-  /// Returns an error string if `typst` cannot be found on `PATH` or font
+  /// Returns an [`EngineError`] if `typst` cannot be found on `PATH` or font
   /// directory is invalid.
-  pub fn new(font_path_override: Option<&Path>) -> Result<Self, String> {
+  pub fn new(font_path_override: Option<&Path>) -> Result<Self, EngineError> {
     let root_path = find_project_root();
-    let typst_binary = find_typst_binary().map_err(|e| e.to_string())?;
-    let font_path = discover_font_dir(&root_path, font_path_override)
-      .map_err(|e| e.to_string())?;
+    let typst_binary = find_typst_binary()?;
+    let font_path = discover_font_dir(&root_path, font_path_override)?;
     Ok(Self {
       typst_binary,
       font_path,
@@ -589,13 +554,13 @@ impl TypstEngine {
   ///
   /// # Errors
   ///
-  /// Returns an error string if `template_name` is not a registered
+  /// Returns an [`EngineError`] if `template_name` is not a registered
   /// template, or if extracting embedded files to disk fails.
   pub fn resolve_template(
     &self,
     template_name: &str,
     custom_template: Option<&Path>,
-  ) -> Result<PathBuf, String> {
+  ) -> Result<PathBuf, EngineError> {
     if let Some(tpl) = custom_template.filter(|p| p.exists()) {
       return Ok(tpl.to_path_buf());
     }
@@ -621,34 +586,29 @@ impl TypstEngine {
           return Ok(custom_main);
         }
 
-        return Err(
-          EngineError::TemplateNotFound {
-            name: template_name.to_string(),
-            known: known_template_names(),
-          }
-          .to_string(),
-        );
+        return Err(EngineError::TemplateNotFound {
+          name: template_name.to_string(),
+          known: known_template_names(),
+        });
       }
     };
 
     let cache_dir = self.root_path.join(".resumake").join(&template.name);
-    fs::create_dir_all(&cache_dir).map_err(|e| {
-      format!(
-        "Failed to create engine cache directory '{}': {}",
-        cache_dir.display(),
-        e
-      )
+    fs::create_dir_all(&cache_dir).map_err(|source| {
+      EngineError::CacheDirCreation {
+        path: cache_dir.clone(),
+        source,
+      }
     })?;
 
-    fs::write(cache_dir.join("main.typ"), template.entry)
-      .map_err(|e| e.to_string())?;
+    fs::write(cache_dir.join("main.typ"), template.entry)?;
 
     for file in &template.files {
       let dest = cache_dir.join(&file.rel_path);
       if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        fs::create_dir_all(parent)?;
       }
-      fs::write(&dest, file.contents).map_err(|e| e.to_string())?;
+      fs::write(&dest, file.contents)?;
     }
 
     Ok(cache_dir.join("main.typ"))
@@ -658,13 +618,13 @@ impl TypstEngine {
   ///
   /// # Errors
   ///
-  /// Returns an error string if `typst compile` fails.
+  /// Returns an [`EngineError`] if `typst compile` fails.
   pub fn compile(
     &self,
     template: &Path,
     content: &Path,
     output: &Path,
-  ) -> Result<(), String> {
+  ) -> Result<(), EngineError> {
     let content_posix = normalize_posix_path(&self.root_path, content)?;
     let mut cmd = Command::new(&self.typst_binary);
     cmd.arg("compile").arg("--root").arg(&self.root_path);
@@ -679,12 +639,12 @@ impl TypstEngine {
       .arg(template)
       .arg(output);
 
-    let res = cmd.output().map_err(|e| e.to_string())?;
+    let res = cmd.output()?;
     if !res.status.success() {
       let stderr = String::from_utf8_lossy(&res.stderr).trim().to_string();
       let stdout = String::from_utf8_lossy(&res.stdout).trim().to_string();
       let err_msg = if stderr.is_empty() { stdout } else { stderr };
-      return Err(format!("Typst compilation failed:\n{err_msg}"));
+      return Err(EngineError::CompilationFailed { stderr: err_msg });
     }
     Ok(())
   }
@@ -694,13 +654,13 @@ impl TypstEngine {
   ///
   /// # Errors
   ///
-  /// Returns an error string if `typst query` fails.
+  /// Returns an [`EngineError`] if `typst query` fails.
   pub fn query_metadata(
     &self,
     template: &Path,
     content: &Path,
     selector: &str,
-  ) -> Result<String, String> {
+  ) -> Result<String, EngineError> {
     let content_posix = normalize_posix_path(&self.root_path, content)?;
     let mut cmd = Command::new(&self.typst_binary);
     cmd.arg("query").arg("--root").arg(&self.root_path);
@@ -717,12 +677,12 @@ impl TypstEngine {
       .arg("--field")
       .arg("value");
 
-    let res = cmd.output().map_err(|e| e.to_string())?;
+    let res = cmd.output()?;
     if !res.status.success() {
       let stderr = String::from_utf8_lossy(&res.stderr).trim().to_string();
       let stdout = String::from_utf8_lossy(&res.stdout).trim().to_string();
       let err_msg = if stderr.is_empty() { stdout } else { stderr };
-      return Err(format!("Typst query failed:\n{err_msg}"));
+      return Err(EngineError::QueryFailed { stderr: err_msg });
     }
 
     Ok(String::from_utf8_lossy(&res.stdout).trim().to_string())
@@ -732,13 +692,13 @@ impl TypstEngine {
   ///
   /// # Errors
   ///
-  /// Returns an error string if `typst watch` fails to start.
+  /// Returns an [`EngineError`] if `typst watch` fails to start.
   pub fn watch(
     &self,
     template: &Path,
     content: &Path,
     output: &Path,
-  ) -> Result<(), String> {
+  ) -> Result<(), EngineError> {
     let content_posix = normalize_posix_path(&self.root_path, content)?;
     let mut cmd = Command::new(&self.typst_binary);
     cmd.arg("watch").arg("--root").arg(&self.root_path);
@@ -756,7 +716,12 @@ impl TypstEngine {
       .stdout(Stdio::inherit())
       .stderr(Stdio::inherit());
 
-    cmd.status().map_err(|e| e.to_string())?;
+    let status = cmd.status()?;
+    if !status.success() {
+      return Err(EngineError::WatchFailed {
+        stderr: format!("exited with status {status}"),
+      });
+    }
     Ok(())
   }
 }
@@ -765,7 +730,7 @@ impl TypstEngine {
 ///
 /// # Errors
 ///
-/// Returns an error string if the content file does not exist, fails schema validation,
+/// Returns an [`EngineError`] if the content file does not exist, fails schema validation,
 /// fails Typst compilation/querying, or violates single-page geometry constraints.
 pub fn verify_content(
   content: &Path,
@@ -773,28 +738,19 @@ pub fn verify_content(
   source: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
-) -> Result<TelemetryReport, String> {
+) -> Result<TelemetryReport, EngineError> {
   if !content.exists() {
-    return Err(format!("Content file not found: '{}'", content.display()));
+    return Err(EngineError::ContentNotFound {
+      path: content.to_path_buf(),
+    });
   }
 
   // 1. Schema check
-  validate_schema_auto(content, schema).map_err(|errors| {
-    format!(
-      "Schema validation failed:\n{}",
-      errors
-        .iter()
-        .map(|e| format!("  - {e}"))
-        .collect::<Vec<_>>()
-        .join("\n")
-    )
-  })?;
+  validate_schema_auto(content, schema)?;
 
   // 2. Layout telemetry check
-  let engine = TypstEngine::new(font_path).map_err(|e| e.to_string())?;
-  let resolved_template = engine
-    .resolve_template(template_name, source)
-    .map_err(|e| e.to_string())?;
+  let engine = TypstEngine::new(font_path)?;
+  let resolved_template = engine.resolve_template(template_name, source)?;
   let page_json =
     engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
   let bullets_json =
@@ -802,9 +758,7 @@ pub fn verify_content(
   let report = evaluate_telemetry(&page_json, &bullets_json)?;
 
   if !report.is_pass() {
-    return Err(
-      "Dry-run check failed strict single-page layout constraints.".to_string(),
-    );
+    return Err(EngineError::LayoutConstraintViolation);
   }
 
   Ok(report)
@@ -843,8 +797,9 @@ mod tests {
     };
 
     let err = engine.resolve_template("does-not-exist", None).unwrap_err();
-    assert!(err.contains("does-not-exist"));
-    assert!(err.contains("classic"));
+    let msg = err.to_string();
+    assert!(msg.contains("does-not-exist"));
+    assert!(msg.contains("classic"));
   }
 
   #[test]

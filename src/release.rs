@@ -9,20 +9,109 @@ use semver::Version;
 use std::path::Path;
 use std::process::Command;
 
+/// Errors originating from release pipeline and semver verification.
+#[derive(thiserror::Error, Debug)]
+pub enum ReleaseError {
+  /// Version string was empty.
+  #[error("Version string cannot be empty")]
+  EmptyVersion,
+  /// Invalid semantic version string.
+  #[error("Invalid semver '{version}': {source}")]
+  InvalidSemver {
+    /// Provided version string.
+    version: String,
+    /// Underlying semver error.
+    #[source]
+    source: semver::Error,
+  },
+  /// Git working tree contains uncommitted changes.
+  #[error("Working tree contains uncommitted changes. Please commit or stash them before releasing.")]
+  UncommittedChanges,
+  /// Repository HEAD has no commit.
+  #[error("HEAD has no commit.")]
+  NoHeadCommit,
+  /// Current branch has no upstream tracking branch configured.
+  #[error("Branch has no upstream tracking branch configured. Set an upstream remote branch before releasing.")]
+  NoUpstreamBranch,
+  /// Current branch has unpushed commits.
+  #[error("Branch has {count} unpushed commit(s). Push your commits to upstream before releasing.")]
+  UnpushedCommits {
+    /// Number of unpushed commits.
+    count: u64,
+  },
+  /// Proposed version is not strictly newer than existing release tags.
+  #[error("Version v{target} is not strictly newer than existing tag v{latest} (semver monotonicity check failed).")]
+  NonMonotonicSemver {
+    /// Proposed version.
+    target: Version,
+    /// Highest existing tag version.
+    latest: Version,
+  },
+  /// Error querying git remote origin URL.
+  #[error("git remote get-url origin failed: {0}")]
+  RemoteError(String),
+  /// No URL configured for git remote origin.
+  #[error(
+    "git remote get-url origin failed: no URL found for remote 'origin'"
+  )]
+  NoRemoteUrl,
+  /// Error interacting with git repository.
+  #[error("Git error: {0}")]
+  Git(String),
+  /// Failed to spawn `git tag`.
+  #[error("Failed to run git tag: {0}")]
+  GitTagSpawn(#[source] std::io::Error),
+  /// `git tag` command failed with non-zero exit status.
+  #[error("Failed to create git tag '{tag}': {stderr}")]
+  GitTagFailed {
+    /// Tag name attempted.
+    tag: String,
+    /// Stderr output.
+    stderr: String,
+  },
+  /// Failed to spawn `git push`.
+  #[error("Failed to run git push: {0}")]
+  GitPushSpawn(#[source] std::io::Error),
+  /// `git push` command failed with non-zero exit status.
+  #[error("Failed to push tag '{tag}' to origin: {stderr}")]
+  GitPushFailed {
+    /// Tag name attempted.
+    tag: String,
+    /// Stderr output.
+    stderr: String,
+  },
+  /// Schema inspection error.
+  #[error(transparent)]
+  Schema(#[from] crate::schema::SchemaError),
+  /// Engine compilation or verification error.
+  #[error(transparent)]
+  Engine(#[from] crate::engine::EngineError),
+  /// Underlying I/O error.
+  #[error("I/O error: {0}")]
+  Io(#[from] std::io::Error),
+}
+
 /// Parses a version string into a [`Version`].
 ///
 /// Supports optional leading `'v'`/`'V'`.
-pub fn parse_version(s: &str) -> Result<Version, String> {
+///
+/// # Errors
+///
+/// Returns a [`ReleaseError`] if version string is empty or invalid semver.
+pub fn parse_version(s: &str) -> Result<Version, ReleaseError> {
   let s_trimmed = s.trim();
   let without_v = s_trimmed
     .strip_prefix('v')
     .or_else(|| s_trimmed.strip_prefix('V'))
     .unwrap_or(s_trimmed);
   if without_v.is_empty() {
-    return Err("Version string cannot be empty".to_string());
+    return Err(ReleaseError::EmptyVersion);
   }
 
-  Version::parse(without_v).map_err(|e| format!("Invalid semver '{s}': {e}"))
+  Version::parse(without_v).map_err(|source| ReleaseError::InvalidSemver {
+    version: s.to_string(),
+    source,
+  })
 }
 
 /// Derives the GitHub Actions URL from a git remote URL.
@@ -43,110 +132,125 @@ pub fn derive_actions_url(remote_url: &str) -> String {
 }
 
 /// Checks that the git working tree has no uncommitted or untracked changes.
-pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), String> {
-  let repo = gix::discover(repo_dir)
-    .map_err(|e| format!("Failed to open git repository: {e}"))?;
+///
+/// # Errors
+///
+/// Returns a [`ReleaseError`] if working tree is dirty or git inspection fails.
+pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
+  let repo = gix::discover(repo_dir).map_err(|e| {
+    ReleaseError::Git(format!("Failed to open git repository: {e}"))
+  })?;
 
-  let status = repo
-    .status(gix::progress::Discard)
-    .map_err(|e| format!("Failed to get repository status: {e}"))?;
+  let status = repo.status(gix::progress::Discard).map_err(|e| {
+    ReleaseError::Git(format!("Failed to get repository status: {e}"))
+  })?;
 
-  let mut iter = status
-    .into_iter(Vec::new())
-    .map_err(|e| format!("Failed to inspect repository status: {e}"))?;
+  let mut iter = status.into_iter(Vec::new()).map_err(|e| {
+    ReleaseError::Git(format!("Failed to inspect repository status: {e}"))
+  })?;
 
   if let Some(item) = iter.next() {
-    let _ = item.map_err(|e| format!("Error during git status: {e}"))?;
-    return Err(
-      "Working tree contains uncommitted changes. Please commit or stash them before releasing."
-        .to_string(),
-    );
+    let _ = item.map_err(|e| {
+      ReleaseError::Git(format!("Error during git status: {e}"))
+    })?;
+    return Err(ReleaseError::UncommittedChanges);
   }
 
   Ok(())
 }
 
 /// Verifies that the current branch tracks an upstream remote branch and has 0 unpushed commits.
-pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), String> {
-  let repo = gix::discover(repo_dir)
-    .map_err(|e| format!("Failed to open git repository: {e}"))?;
+///
+/// # Errors
+///
+/// Returns a [`ReleaseError`] if upstream branch is missing, commits are unpushed, or git fails.
+pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
+  let repo = gix::discover(repo_dir).map_err(|e| {
+    ReleaseError::Git(format!("Failed to open git repository: {e}"))
+  })?;
 
   let head = repo
     .head()
-    .map_err(|e| format!("Failed to resolve HEAD: {e}"))?;
+    .map_err(|e| ReleaseError::Git(format!("Failed to resolve HEAD: {e}")))?;
 
-  let head_id = head
-    .id()
-    .ok_or_else(|| "HEAD has no commit.".to_string())?
-    .detach();
+  let head_id = head.id().ok_or(ReleaseError::NoHeadCommit)?.detach();
 
-  let branch = head.try_into_referent().ok_or_else(|| {
-    "Branch has no upstream tracking branch configured. Set an upstream remote branch before releasing."
-      .to_string()
-  })?;
+  let branch = head
+    .try_into_referent()
+    .ok_or(ReleaseError::NoUpstreamBranch)?;
 
   let tracking_ref_name = branch
     .remote_tracking_ref_name(gix::remote::Direction::Fetch)
     .transpose()
-    .map_err(|e| format!("Failed to resolve upstream tracking branch: {e}"))?
-    .ok_or_else(|| {
-      "Branch has no upstream tracking branch configured. Set an upstream remote branch before releasing."
-        .to_string()
-    })?;
+    .map_err(|e| {
+      ReleaseError::Git(format!(
+        "Failed to resolve upstream tracking branch: {e}"
+      ))
+    })?
+    .ok_or(ReleaseError::NoUpstreamBranch)?;
 
   let upstream_ref = repo
     .try_find_reference(tracking_ref_name.as_ref())
-    .map_err(|e| format!("Failed to find upstream reference: {e}"))?
-    .ok_or_else(|| {
-      "Branch has no upstream tracking branch configured. Set an upstream remote branch before releasing."
-        .to_string()
-    })?;
+    .map_err(|e| {
+      ReleaseError::Git(format!("Failed to find upstream reference: {e}"))
+    })?
+    .ok_or(ReleaseError::NoUpstreamBranch)?;
 
   let upstream_id = upstream_ref
     .into_fully_peeled_id()
-    .map_err(|e| format!("Failed to peel upstream reference: {e}"))?
+    .map_err(|e| {
+      ReleaseError::Git(format!("Failed to peel upstream reference: {e}"))
+    })?
     .detach();
 
   let walk = repo
     .rev_walk([head_id])
     .with_boundary([upstream_id])
     .all()
-    .map_err(|e| format!("Failed to traverse commits: {e}"))?;
+    .map_err(|e| {
+      ReleaseError::Git(format!("Failed to traverse commits: {e}"))
+    })?;
 
   let mut count: u64 = 0;
   for item in walk {
-    let _ = item.map_err(|e| format!("Failed to walk commit: {e}"))?;
+    let _ = item
+      .map_err(|e| ReleaseError::Git(format!("Failed to walk commit: {e}")))?;
     count += 1;
   }
 
   if count > 0 {
-    return Err(format!(
-      "Branch has {count} unpushed commit(s). Push your commits to upstream before releasing."
-    ));
+    return Err(ReleaseError::UnpushedCommits { count });
   }
 
   Ok(())
 }
 
 /// Retrieves all existing semver git tags in the repository and returns the highest version, if any.
+///
+/// # Errors
+///
+/// Returns a [`ReleaseError`] if git tag inspection fails.
 pub fn get_latest_semver_tag(
   repo_dir: &Path,
-) -> Result<Option<Version>, String> {
-  let repo = gix::discover(repo_dir)
-    .map_err(|e| format!("Failed to open git repository: {e}"))?;
+) -> Result<Option<Version>, ReleaseError> {
+  let repo = gix::discover(repo_dir).map_err(|e| {
+    ReleaseError::Git(format!("Failed to open git repository: {e}"))
+  })?;
 
   let references = repo
     .references()
-    .map_err(|e| format!("Failed to get references: {e}"))?;
+    .map_err(|e| ReleaseError::Git(format!("Failed to get references: {e}")))?;
 
   let tags = references
     .tags()
-    .map_err(|e| format!("Failed to get tags: {e}"))?;
+    .map_err(|e| ReleaseError::Git(format!("Failed to get tags: {e}")))?;
 
   let mut highest: Option<Version> = None;
 
   for tag in tags {
-    let tag = tag.map_err(|e| format!("Failed to read tag reference: {e}"))?;
+    let tag = tag.map_err(|e| {
+      ReleaseError::Git(format!("Failed to read tag reference: {e}"))
+    })?;
     let tag_name = tag.name().shorten().to_str().unwrap_or("");
     if let Ok(ver) = parse_version(tag_name) {
       match &highest {
@@ -165,49 +269,60 @@ pub fn get_latest_semver_tag(
 }
 
 /// Validates that `target_ver` is strictly newer than any existing git semver tag.
+///
+/// # Errors
+///
+/// Returns a [`ReleaseError`] if `target_ver` is not strictly monotonic over existing tags.
 pub fn check_semver_monotonicity(
   target_ver: &Version,
   repo_dir: &Path,
-) -> Result<Option<Version>, String> {
+) -> Result<Option<Version>, ReleaseError> {
   let latest_tag = get_latest_semver_tag(repo_dir)?;
   if let Some(ref latest) = latest_tag {
     if target_ver <= latest {
-      return Err(format!(
-        "Version v{target_ver} is not strictly newer than existing tag v{latest} (semver monotonicity check failed)."
-      ));
+      return Err(ReleaseError::NonMonotonicSemver {
+        target: target_ver.clone(),
+        latest: latest.clone(),
+      });
     }
   }
   Ok(latest_tag)
 }
 
 /// Gets the remote origin URL from git config.
-pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, String> {
-  let repo = gix::discover(repo_dir)
-    .map_err(|e| format!("Failed to open git repository: {e}"))?;
+///
+/// # Errors
+///
+/// Returns a [`ReleaseError`] if git repository cannot be opened or origin URL is not set.
+pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, ReleaseError> {
+  let repo = gix::discover(repo_dir).map_err(|e| {
+    ReleaseError::Git(format!("Failed to open git repository: {e}"))
+  })?;
 
   let remote = repo
     .find_remote("origin")
-    .map_err(|e| format!("git remote get-url origin failed: {e}"))?;
+    .map_err(|e| ReleaseError::RemoteError(e.to_string()))?;
 
   let url = remote
     .url(gix::remote::Direction::Fetch)
     .or_else(|| remote.url(gix::remote::Direction::Push))
-    .ok_or_else(|| {
-      "git remote get-url origin failed: no URL found for remote 'origin'"
-        .to_string()
-    })?;
+    .ok_or(ReleaseError::NoRemoteUrl)?;
 
   Ok(url.to_bstring().to_string())
 }
 
 /// Runs the complete release pipeline: pre-flight checks, tag creation, and push.
+///
+/// # Errors
+///
+/// Returns a [`ReleaseError`] if any pre-flight verification, tagging, or pushing fails.
 pub fn run_release(
   content_path: &Path,
   message: Option<&str>,
   dry_run: bool,
   skip_build: bool,
   quiet: bool,
-) -> Result<(), String> {
+) -> Result<(), ReleaseError> {
   let repo_dir = if content_path.is_file() {
     content_path.parent().unwrap_or(Path::new("."))
   } else {
@@ -284,14 +399,14 @@ pub fn run_release(
     .arg(tag_msg)
     .current_dir(repo_dir)
     .output()
-    .map_err(|e| format!("Failed to run git tag: {e}"))?;
+    .map_err(ReleaseError::GitTagSpawn)?;
 
   if !tag_output.status.success() {
-    let stderr = String::from_utf8_lossy(&tag_output.stderr);
-    return Err(format!(
-      "Failed to create git tag '{tag_name}': {}",
-      stderr.trim()
-    ));
+    let stderr = String::from_utf8_lossy(&tag_output.stderr).to_string();
+    return Err(ReleaseError::GitTagFailed {
+      tag: tag_name,
+      stderr: stderr.trim().to_string(),
+    });
   }
 
   if !quiet {
@@ -304,20 +419,20 @@ pub fn run_release(
     .arg(&tag_name)
     .current_dir(repo_dir)
     .output()
-    .map_err(|e| format!("Failed to run git push: {e}"))?;
+    .map_err(ReleaseError::GitPushSpawn)?;
 
   if !push_output.status.success() {
-    let stderr = String::from_utf8_lossy(&push_output.stderr);
+    let stderr = String::from_utf8_lossy(&push_output.stderr).to_string();
     let _ = Command::new("git")
       .arg("tag")
       .arg("-d")
       .arg(&tag_name)
       .current_dir(repo_dir)
       .output();
-    return Err(format!(
-      "Failed to push tag '{tag_name}' to origin: {}",
-      stderr.trim()
-    ));
+    return Err(ReleaseError::GitPushFailed {
+      tag: tag_name,
+      stderr: stderr.trim().to_string(),
+    });
   }
 
   if !quiet {
@@ -607,6 +722,6 @@ mod tests {
 
     let res = check_upstream_synced(&work_dir);
     assert!(res.is_err());
-    assert!(res.unwrap_err().contains("1 unpushed commit"));
+    assert!(res.unwrap_err().to_string().contains("1 unpushed commit"));
   }
 }
