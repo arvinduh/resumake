@@ -51,6 +51,12 @@ pub fn asset_name_for_target(target: &str) -> Option<&'static str> {
 /// can replace it. On x86-64 Windows the `-gnu` and `-gnullvm` toolchains share
 /// the MSVC ABI, so the published `-msvc` archive runs there unchanged;
 /// everything else maps to itself.
+///
+/// Consequence: a user who self-built with the `x86_64-pc-windows-gnu`
+/// toolchain is moved onto the published `-msvc` `.zip` build the first time
+/// they run `rsmk update`. `rsmk` links no C runtime dependencies dynamically,
+/// so the swap is harmless — and intentional, since there is no `-gnu` release
+/// asset to update from.
 pub fn normalize_host_target(host: &str) -> &str {
   match host {
     "x86_64-pc-windows-gnu" | "x86_64-pc-windows-gnullvm" => {
@@ -252,5 +258,6 @@ mod tests {
   #[test]
   fn update_action_rejects_garbage_versions() {
     assert!(update_action("not-a-version", "0.2.0", false).is_err());
+    assert!(update_action("0.2.0", "not-a-version", false).is_err());
   }
 }
