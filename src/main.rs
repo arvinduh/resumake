@@ -5,10 +5,11 @@ use resumake::cli::{Cli, Commands, TemplateCommands};
 use resumake::engine::{
   eject_template, list_templates, TypstEngine, DEFAULT_TEMPLATE,
 };
+use resumake::init::{run_init, InitOptions};
 use resumake::release::run_release;
 use resumake::schema::{
-  derive_output_filename, export_builtin_schema, generate_init_template,
-  load_content_name, load_content_version, validate_schema_auto,
+  derive_output_filename, export_builtin_schema, load_content_name,
+  load_content_version, validate_schema_auto,
 };
 use resumake::telemetry::evaluate_telemetry;
 use resumake::ui::{
@@ -130,7 +131,16 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
       name,
       output,
       force,
-    } => run_init(name.as_deref(), &output, force),
+      no_git,
+      no_workflows,
+    } => run_init(InitOptions {
+      name: name.as_deref(),
+      output: &output,
+      force,
+      no_git,
+      no_workflows,
+      quiet,
+    }),
     Commands::Release {
       content,
       message,
@@ -363,33 +373,6 @@ fn run_schema(export: Option<&Path>) -> Result<(), String> {
   } else if let Some(path) = export {
     print_success(&format!("Exported JSON schema to '{}'", path.display()));
   }
-  Ok(())
-}
-
-fn run_init(
-  name: Option<&str>,
-  output: &Path,
-  force: bool,
-) -> Result<(), String> {
-  if output.exists() && !force {
-    return Err(format!(
-      "File '{}' already exists. Use --force to overwrite.",
-      output.display()
-    ));
-  }
-
-  let candidate_name = name.unwrap_or("Jane Doe");
-  let template_content = generate_init_template(candidate_name);
-
-  if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-  }
-
-  fs::write(output, template_content).map_err(|e| e.to_string())?;
-  print_success(&format!(
-    "Initialized new résumé content scaffold at '{}'",
-    output.display()
-  ));
   Ok(())
 }
 

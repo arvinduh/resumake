@@ -128,20 +128,27 @@ pub enum Commands {
     #[arg(short = 'e', long = "export")]
     export: Option<PathBuf>,
   },
-  /// Scaffold a new résumé content YAML with rich examples and schema
-  /// directives
+  /// Scaffold a new résumé workspace with rich examples, workflows, and git config
   Init {
     /// Candidate display name
-    #[arg(short = 'n', long = "name")]
+    #[arg(short, long)]
     name: Option<String>,
 
     /// Destination path for the new content file
-    #[arg(short = 'o', long = "output", default_value = "content.yaml")]
+    #[arg(short, long, default_value = "content.yaml")]
     output: PathBuf,
 
     /// Overwrite destination file if it already exists
-    #[arg(short = 'f', long = "force")]
+    #[arg(short, long)]
     force: bool,
+
+    /// Skip initializing a git repository and git config files
+    #[arg(long)]
+    no_git: bool,
+
+    /// Skip generating GitHub Actions CI and Release workflows
+    #[arg(long)]
+    no_workflows: bool,
   },
   /// Validate repository state, verify semver, and cut a new release tag
   Release {
@@ -423,6 +430,55 @@ mod tests {
         assert!(!skip_build);
       }
       _ => panic!("Expected Release command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_init_flags() {
+    let cli = Cli::parse_from(["rsmk", "init"]);
+    match cli.command.unwrap() {
+      Commands::Init {
+        name,
+        output,
+        force,
+        no_git,
+        no_workflows,
+      } => {
+        assert_eq!(name, None);
+        assert_eq!(output, PathBuf::from("content.yaml"));
+        assert!(!force);
+        assert!(!no_git);
+        assert!(!no_workflows);
+      }
+      _ => panic!("Expected Init command"),
+    }
+
+    let cli_custom = Cli::parse_from([
+      "rsmk",
+      "init",
+      "--name",
+      "John Smith",
+      "--output",
+      "custom.yaml",
+      "--force",
+      "--no-git",
+      "--no-workflows",
+    ]);
+    match cli_custom.command.unwrap() {
+      Commands::Init {
+        name,
+        output,
+        force,
+        no_git,
+        no_workflows,
+      } => {
+        assert_eq!(name, Some("John Smith".to_string()));
+        assert_eq!(output, PathBuf::from("custom.yaml"));
+        assert!(force);
+        assert!(no_git);
+        assert!(no_workflows);
+      }
+      _ => panic!("Expected Init command"),
     }
   }
 }
