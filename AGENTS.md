@@ -21,13 +21,18 @@ git config core.hooksPath .githooks
 - `src/cli.rs` — CLI subcommand options, arguments, and clap parser
 - `src/engine.rs` — Core compilation pipeline, template extraction, and Typst
   invocation
+- `src/init.rs` — Interactive project scaffolding, workflow provenance headers,
+  and refresh
 - `src/models.rs` — Canonical Resume data structures, metadata, and serde models
+- `src/release.rs` — Automated pre-flight git assertions, SemVer 2.0
+  monotonicity, and release tagging
 - `src/schema.rs` — JSON Schema generator, validation logic, and drift
   verification
 - `src/telemetry.rs` — Strict 1-page layout geometry calculations, overflow, and
   wrap checks
 - `src/ui.rs` — Visual terminal diagnostics, table formatting, and color output
-- `src/embedded/` — Built-in templates (`classic/`) and initialization assets
+- `src/embedded/` — Built-in templates (`classic/`), workflow templates, and
+  initialization assets
 - `docs/` — Architecture documentation, guides, and ADRs (see `docs/INDEX.md`)
 - `tests/` — CLI integration and end-to-end test suites
 

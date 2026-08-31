@@ -1,10 +1,10 @@
-# Resumake
+# Resumake (`rsmk`)
 
 [![CI](https://github.com/arvinduh/resumake/actions/workflows/ci.yml/badge.svg)](https://github.com/arvinduh/resumake/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > High-performance native Rust résumé compiler, in-process schema validator, and
-> layout telemetry engine.
+> strict golden-ratio layout telemetry engine.
 
 ---
 
@@ -14,12 +14,14 @@
   100ms.
 - **In-Process Schema Validation**: Validates YAML schemas before spawning any
   compiler process.
-- **Strict Layout Telemetry**: Zero-emoji terminal badges measuring page count,
-  vertical space fill percentage, and bullet wrapping.
+- **Strict Layout Telemetry**: Zero-emoji terminal diagnostics measuring page
+  count, vertical space fill percentage, and bullet wrapping.
+- **Standalone 4-Command Surface**: Complete lifecycle support via `build`,
+  `init`, `release`, and `template`.
 - **Zero-Dependency Engine**: Built-in modular Typst engine and design tokens
   embedded directly in the binary.
-- **Live Watch Mode**: Real-time document recompilation on file change
-  (`rsmk watch`).
+- **CI/CD Automation**: Embedded GitHub Actions workflows with automatic SHA-256
+  provenance tracking and release management.
 
 ---
 
@@ -59,22 +61,6 @@ curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh |
 $env:RESUMAKE_VERSION = '0.1.1'; irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
 ```
 
-### Package Managers / Cargo
-
-#### Fast install via `cargo-binstall` (zero compilation)
-
-```bash
-cargo binstall resumake
-```
-
-#### Build from source via `cargo`
-
-```bash
-cargo install --path .
-# or from the git repository:
-cargo install --git https://github.com/arvinduh/resumake
-```
-
 ### Direct Prebuilt Binaries
 
 Prebuilt standalone binaries are attached to every
@@ -84,17 +70,46 @@ Prebuilt standalone binaries are attached to every
 
 ## Quickstart
 
-### 1. Scaffold a New Résumé
+### 1. Initialize a New Résumé Repository
 
 ```bash
+mkdir my-resume && cd my-resume
 rsmk init --name "Jane Doe"
 ```
 
-### 3. Compile to PDF with Layout Telemetry
+This scaffolds:
+
+- `content.yaml` configured with `Libertinus Serif` font.
+- `.gitignore` (ignoring compiled PDFs and cache artifacts).
+- `.gitattributes` (`* text=auto eol=lf`).
+- `.github/workflows/ci.yml` & `release.yml` with SHA-256 provenance headers.
+
+### 2. Live Recompilation & Geometry Feedback
 
 ```bash
-rsmk build
+rsmk build --watch
 ```
+
+Keep your PDF viewer open side-by-side. Every time you save `content.yaml`,
+Resumake re-renders the document and evaluates single-page geometry in <100ms.
+
+### 3. Dry-Run Verification
+
+```bash
+rsmk build --check
+```
+
+Evaluates schema validity and layout constraints without writing a PDF to disk.
+
+### 4. Tag & Cut a Release
+
+```bash
+rsmk release
+```
+
+Runs 5 automated pre-flight assertions (clean working tree, upstream sync,
+SemVer monotonicity, in-memory layout check) before creating and pushing git tag
+`v<version>` to trigger the GitHub Actions release workflow.
 
 ---
 
@@ -117,28 +132,34 @@ rsmk build
 
 ---
 
-## CLI Reference
+## CLI Command Surface
 
 ```bash
-rsmk build              # Compile resume to PDF and evaluate layout
-rsmk check               # Dry-run validation without writing a PDF
-rsmk watch               # Real-time auto-recompile on file change
-rsmk schema              # Print canonical JSON Schema (Draft-07) to stdout
-rsmk schema --export out.json  # ...or write it to a file
-rsmk init --name <NAME>  # Scaffold new content.yaml with directives
+# Core Compilation & Telemetry
+rsmk build                      # Compile PDF and evaluate layout geometry
+rsmk build -c, --check          # Dry-run validation (0 files written)
+rsmk build -w, --watch          # Live file-watcher loop on YAML / Typst change
+rsmk build -t, --template <TPL> # Pick a template ('classic' or path to main.typ)
+
+# Project Scaffolding & Lifecycle
+rsmk init                       # Interactive wizard: git + workflows + gh setup
+rsmk init --name <NAME>         # Scaffold with specific candidate name
+rsmk init -u, --update          # Refresh workflow stubs using SHA-256 provenance
+rsmk init -f, --force           # Overwrite existing files
+
+# Release Engine
+rsmk release                    # Pre-flight assertions + tag meta.version + push
+rsmk release --dry-run          # Test pre-flight assertions without tagging
+rsmk release -m <MESSAGE>       # Custom annotated tag message
+
+# Template Management
+rsmk template list              # List built-in and local custom templates
+rsmk template eject classic     # Extract template tree to ./templates/classic/
+
+# Schema Tools
+rsmk schema                     # Print canonical JSON Schema (Draft-07) to stdout
+rsmk schema --export out.json   # Export JSON Schema to a file
 ```
-
-`build`, `check`, and `watch` also accept:
-
-```bash
-rsmk build --template <name>   # Pick a built-in layout (default: classic)
-rsmk build --source <path.typ> # Bypass the registry with your own Typst file
-```
-
-The same `content.yaml` renders under any registered template — see
-[System Architecture](docs/architecture.md#4-key-design-decisions) for how the
-template registry works and [Contributing](docs/contributing.md) for how to add
-a new one.
 
 ---
 
@@ -146,57 +167,18 @@ a new one.
 
 Explore the complete documentation in the [`docs/`](docs/README.md) directory:
 
-| Guide                                                 | Description                                                                        |
-| :---------------------------------------------------- | :--------------------------------------------------------------------------------- |
-| **[Getting Started Guide](docs/getting-started.md)**  | Step-by-step tutorial from installation to your first single-page PDF.             |
-| **[YAML Schema Reference](docs/schema-guide.md)**     | Full specification for layout directives, tokens, metadata, and block sections.    |
-| **[Layout Telemetry Guide](docs/telemetry-guide.md)** | Deep dive into page count verification, vertical fill percentage, and wrap checks. |
-| **[System Architecture](docs/architecture.md)**       | Modular design, embedded Typst orchestrator, and compiler pipeline.                |
-| **[Contributing Guide](docs/contributing.md)**        | Development environment setup, coding conventions, testing, and PR checklist.      |
-| **[Release Procedure](docs/release.md)**              | Version tagging, git-cliff changelogs, and binary distribution workflow.           |
-
----
-
-## Contributing
-
-We welcome contributions from the community!
-
-1. Fork the repository and create your branch from `main`:
-
-   ```bash
-   git checkout -b feat/my-improvement
-   ```
-
-2. Ensure all formatting, linter, and test checks pass:
-
-   ```bash
-   fml fmt --check
-   fml lint
-   cargo test --all-targets
-   cargo doc --no-deps
-   ```
-
-3. Open a Pull Request on GitHub. For comprehensive contribution guidelines, see
-   [docs/contributing.md](docs/contributing.md).
-
----
-
-## Release Process
-
-Releases are driven by Conventional Commits and automated via GitHub Actions:
-
-1. Update `version` in `Cargo.toml`.
-2. Generate changelog with `git-cliff` and commit.
-3. Tag the release commit: `git tag -a vX.Y.Z -m "vX.Y.Z"`.
-4. Push the tag: `git push origin vX.Y.Z`.
-5. GitHub Actions automatically compiles cross-platform binaries (Linux x86_64,
-   macOS ARM64/Intel, Windows x86_64), generates SHA-256 checksums, publishes
-   `resume.schema.json`, and attaches release notes via `git-cliff`.
-
-For the complete maintainer walkthrough, see [docs/release.md](docs/release.md).
+| Guide                                                 | Description                                                                    |
+| :---------------------------------------------------- | :----------------------------------------------------------------------------- |
+| **[Documentation Index](docs/INDEX.md)**              | Central sitemap for all documentation, specs, and orchestration files.         |
+| **[Getting Started](docs/getting-started.md)**        | Step-by-step tutorial from installation to cutting your first release.         |
+| **[YAML Schema Reference](docs/schema-guide.md)**     | Complete specification of all directives, metadata, and block sections.        |
+| **[Layout Telemetry Guide](docs/telemetry-guide.md)** | Learn how strict 1-page geometry, fill percentage, and wrap checks work.       |
+| **[System Architecture](docs/architecture.md)**       | Deep dive into the native Rust engine, embedded Typst compiler, and pipeline.  |
+| **[Release Procedure](docs/release.md)**              | Version tagging, git-cliff changelogs, and binary distribution workflow.       |
+| **[Contributing Guide](docs/contributing.md)**        | Code standards, local test suite, pre-commit setup, and Pull Request workflow. |
 
 ---
 
 ## License
 
-MIT License. Copyright (c) 2026 Resumake Authors.
+Licensed under the [MIT License](LICENSE).

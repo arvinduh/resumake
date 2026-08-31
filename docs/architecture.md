@@ -17,6 +17,8 @@ execution lifecycle of the **Resumake** engine.
 graph TD
     YAML["User Data (content.yaml)"] --> VAL["In-Process Schema Validator (src/schema.rs)"]
     VAL --> MOD["Strongly-Typed Rust AST (src/models.rs)"]
+    VAL --> INIT["Project Scaffolding Engine (src/init.rs)"]
+    VAL --> REL["Release & Pre-flight Engine (src/release.rs)"]
     MOD --> ENG["Typst Template Orchestrator (src/engine.rs)"]
     EMB["Embedded Typst Blocks (src/embedded/)"] --> ENG
     ENG --> COMP["Typst Headless Compiler"]
@@ -29,14 +31,16 @@ graph TD
 
 ## 2. Module Responsibilities
 
-| Module          | Source File                               | Purpose                                                                                                            |
-| :-------------- | :---------------------------------------- | :----------------------------------------------------------------------------------------------------------------- |
-| **`models`**    | [`src/models.rs`](../src/models.rs)       | Serde data models, JSON Schema generation (`schemars`), and default value derivations.                             |
-| **`schema`**    | [`src/schema.rs`](../src/schema.rs)       | In-process schema validation, JSON Schema export, and scaffolding generators.                                      |
-| **`engine`**    | [`src/engine.rs`](../src/engine.rs)       | Named template registry, template resolution, embedded asset extraction, and Typst compiler process orchestration. |
-| **`telemetry`** | [`src/telemetry.rs`](../src/telemetry.rs) | Queries `<pageinfo>`/`<bulletinfo>` metadata and evaluates fill ratio and wrap heuristics.                         |
-| **`ui`**        | [`src/ui.rs`](../src/ui.rs)               | Zero-dependency terminal formatting, ANSI boxed badges, and error diagnostics.                                     |
-| **`cli`**       | [`src/cli.rs`](../src/cli.rs)             | Clap command parsing, dispatching, and file-watching event loops.                                                  |
+| Module          | Source File                               | Purpose                                                                                                             |
+| :-------------- | :---------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
+| **`models`**    | [`src/models.rs`](../src/models.rs)       | Serde data models, JSON Schema generation (`schemars`), extensible `meta.extra` map, and default value derivations. |
+| **`schema`**    | [`src/schema.rs`](../src/schema.rs)       | In-process schema validation, JSON Schema export, and workflow template generators.                                 |
+| **`engine`**    | [`src/engine.rs`](../src/engine.rs)       | Named template registry, template ejection, resolution, and Typst compiler process orchestration.                   |
+| **`init`**      | [`src/init.rs`](../src/init.rs)           | Interactive scaffolding wizard, git config management, SHA-256 workflow provenance stamping and refresh.            |
+| **`release`**   | [`src/release.rs`](../src/release.rs)     | Automated pre-flight git assertions, SemVer 2.0 monotonicity checks, and atomic tag creation & push.                |
+| **`telemetry`** | [`src/telemetry.rs`](../src/telemetry.rs) | Queries `<pageinfo>`/`<bulletinfo>` metadata and evaluates fill ratio and wrap heuristics.                          |
+| **`ui`**        | [`src/ui.rs`](../src/ui.rs)               | Zero-dependency terminal formatting, ANSI boxed badges, and error diagnostics.                                      |
+| **`cli`**       | [`src/cli.rs`](../src/cli.rs)             | Clap command parsing, dispatching, and file-watching event loops.                                                   |
 
 ---
 
@@ -70,19 +74,14 @@ graph TD
 - **Embedded Assets:** All Typst template files, modular block definitions, and
   default schemas are embedded directly into the binary at compile time via
   `include_str!`. The user only needs a single binary executable.
-- **Template Registry:** Embedded templates live under
-  `src/embedded/templates/<name>/` (currently just `classic`) and are registered
-  in `src/engine.rs`'s `TEMPLATE_REGISTRY`. `--template <name>` picks a registry
-  entry; `resolve_template` extracts it into `.resumake/<name>/` so multiple
-  named layouts (e.g. a future two-column `sidebar` template) can be added
-  without touching `models.rs` or the content schema — every template renders
-  the same `ResumeDocument` data, it's free to lay the sections out however it
-  wants. The one contract a new template must honor is emitting the `<pageinfo>`
-  metadata tag (and routing bullet-like content through the `guard()` primitive
-  for `<bulletinfo>`) so layout telemetry keeps working. `--source` remains a
-  separate escape hatch for pointing at an arbitrary `.typ` file outside the
-  registry entirely.
+- **Template Registry & Ejection:** Embedded templates live under
+  `src/embedded/templates/<name>/` (currently `classic`) and are registered in
+  `src/engine.rs`. Users can eject the full source tree via
+  `rsmk template eject <name>` into `./templates/<name>/` for direct hacking.
 - **In-Process Validation:** Catching schema errors in Rust memory eliminates
   cryptic compiler tracebacks when invalid YAML properties are supplied.
 - **Zero Decorative Dependencies:** Avoids heavy UI frameworks or emoji bloat in
   favor of fast, clean ANSI terminal boxes.
+- **GitHub Actions Composite Action:** The repository ships `setup/action.yml`
+  so downstream users can easily pin `rsmk` and `typst` in CI using
+  `uses: arvinduh/resumake/setup@v1`.
