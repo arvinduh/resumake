@@ -16,8 +16,8 @@
   compiler process.
 - **Strict Layout Telemetry**: Zero-emoji terminal diagnostics measuring page
   count, vertical space fill percentage, and bullet wrapping.
-- **Standalone 4-Command Surface**: Complete lifecycle support via `build`,
-  `init`, `release`, and `template`.
+- **Standalone 5-Command Surface**: Complete lifecycle support via `build`,
+  `init`, `release`, `template`, and `update`.
 - **Zero-Dependency Engine**: Built-in modular Typst engine and design tokens
   embedded directly in the binary.
 - **CI/CD Automation**: Embedded GitHub Actions workflows with automatic SHA-256
@@ -157,6 +157,11 @@ rsmk release -m <MESSAGE>       # Custom annotated tag message
 # Template Management
 rsmk template list              # List built-in and local custom templates
 rsmk template eject classic     # Extract template tree to ./templates/classic/
+
+# Self-update
+rsmk update                     # Replace the binary with the latest release
+rsmk update --check             # Report whether a newer release exists
+rsmk update -f, --force         # Reinstall even if already up to date
 ```
 
 ---

@@ -43,6 +43,21 @@ Verify the installation:
 rsmk --help
 ```
 
+### Updating rsmk
+
+Once installed, upgrade in place from the latest GitHub release:
+
+```bash
+rsmk update             # download and install the latest release
+rsmk update --check      # only report whether a newer release exists
+rsmk update --force      # reinstall even if already on the latest version
+```
+
+`rsmk update` is the supported upgrade path: it fetches the release archive over
+HTTPS, verifies it against the published `.sha256` checksum, and atomically
+replaces the running binary. Re-running the install script (or the PowerShell
+`irm … | iex` line on Windows) still works too.
+
 ---
 
 ## 3. Project Walkthrough
