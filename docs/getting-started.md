@@ -29,12 +29,12 @@ Resumake is distributed as a standalone, zero-dependency native binary.
 
 ```bash
 # Linux & macOS
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
 ```
 
 Verify the installation:
@@ -65,6 +65,10 @@ This scaffolds:
 - `.github/workflows/ci.yml` & `release.yml` with SHA-256 provenance headers.
 - Git repository initialization (and optional GitHub repository creation via
   `gh`).
+
+Pass `--no-git` for a content-only scaffold: no repository, and no CI/Release
+workflows (they require a repo). Add the workflows later from the project
+directory with `rsmk init --update`.
 
 ---
 

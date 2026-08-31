@@ -32,13 +32,13 @@
 #### Linux & macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | sh
 ```
 
 #### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
 ```
 
 Both installers download the release archive over HTTPS, verify it against the
@@ -53,12 +53,12 @@ published `.sha256` checksum, and refuse to install on a mismatch.
 
 ```bash
 # Linux & macOS — install a pinned version
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | RESUMAKE_VERSION=0.1.1 sh
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | RESUMAKE_VERSION=0.1.1 sh
 ```
 
 ```powershell
 # Windows — install a pinned version
-$env:RESUMAKE_VERSION = '0.1.1'; irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
+$env:RESUMAKE_VERSION = '0.1.1'; irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
 ```
 
 ### Direct Prebuilt Binaries
@@ -143,9 +143,11 @@ rsmk build -t, --template <TPL> # Pick a template ('classic' or path to main.typ
 
 # Project Scaffolding & Lifecycle
 rsmk init                       # Interactive wizard: git + workflows + gh setup
+rsmk init <DEST>                # Scaffold into a directory (created if needed)
 rsmk init --name <NAME>         # Scaffold with specific candidate name
-rsmk init -u, --update          # Refresh workflow stubs using SHA-256 provenance
-rsmk init -f, --force           # Overwrite existing files
+rsmk init --no-git              # Content only — no repo, and no CI/Release workflows
+rsmk init -u, --update          # Add or refresh workflow stubs (SHA-256 provenance)
+rsmk init -f, --force           # Overwrite existing files; scaffold into a non-empty dir
 
 # Release Engine
 rsmk release                    # Pre-flight assertions + tag meta.version + push

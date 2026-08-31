@@ -124,13 +124,42 @@ fn test_cli_init_no_git() {
     .stdout(predicate::str::contains(
       "Initialized new résumé content scaffold",
     ))
-    .stdout(predicate::str::contains("Created GitHub Actions workflows"));
+    .stdout(predicate::str::contains(
+      "Skipping GitHub Actions workflows (--no-git)",
+    ));
 
   assert!(temp.path().join("content.yaml").exists());
   assert!(!temp.path().join(".git").exists());
   assert!(!temp.path().join(".gitignore").exists());
   assert!(!temp.path().join(".gitattributes").exists());
+  // Workflows require a git repo; --no-git skips them entirely.
+  assert!(!temp.path().join(".github").exists());
+}
+
+#[test]
+fn test_cli_init_no_git_then_add_workflows_via_update() {
+  let temp = TempDir::new().unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("--no-git")
+    .assert()
+    .success();
+  assert!(!temp.path().join(".github").exists());
+
+  // The workspace can opt into workflows later without re-scaffolding content.
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("--update")
+    .assert()
+    .success();
+
   assert!(temp.path().join(".github/workflows/ci.yml").exists());
+  assert!(temp.path().join(".github/workflows/release.yml").exists());
 }
 
 #[test]
@@ -199,6 +228,83 @@ fn test_cli_init_force_and_collision() {
   let content_updated = fs::read_to_string(&content_file).unwrap();
   assert!(content_updated.contains("New Name"));
   assert!(!content_updated.contains("Original Name"));
+}
+
+#[test]
+fn test_cli_init_positional_directory_destination() {
+  let temp = TempDir::new().unwrap();
+
+  // `rsmk init <dir>` scaffolds content.yaml inside <dir>, creating it.
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("arvin_resume")
+    .arg("--name")
+    .arg("Arvin Duh")
+    .arg("--no-git")
+    .arg("--no-workflows")
+    .assert()
+    .success();
+
+  let scaffold = temp.path().join("arvin_resume").join("content.yaml");
+  assert!(scaffold.exists());
+  assert!(fs::read_to_string(&scaffold).unwrap().contains("Arvin Duh"));
+}
+
+#[test]
+fn test_cli_init_positional_and_output_conflict() {
+  let temp = TempDir::new().unwrap();
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("some_dir")
+    .arg("--output")
+    .arg("content.yaml")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
+fn test_cli_init_refuses_non_empty_directory() {
+  let temp = TempDir::new().unwrap();
+  fs::write(temp.path().join("existing.txt"), "keep me").unwrap();
+
+  // A populated target directory is rejected and left untouched.
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("--name")
+    .arg("Jane Doe")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("not empty"))
+    .stderr(predicate::str::contains("--force"));
+
+  assert!(!temp.path().join("content.yaml").exists());
+  assert!(!temp.path().join(".github").exists());
+
+  // `--force` scaffolds alongside the existing files.
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("--name")
+    .arg("Jane Doe")
+    .arg("--no-git")
+    .arg("--no-workflows")
+    .arg("--force")
+    .assert()
+    .success();
+
+  assert!(temp.path().join("content.yaml").exists());
+  assert_eq!(
+    fs::read_to_string(temp.path().join("existing.txt")).unwrap(),
+    "keep me"
+  );
 }
 
 #[test]

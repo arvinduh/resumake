@@ -130,19 +130,27 @@ pub enum Commands {
   },
   /// Scaffold a new résumé workspace with rich examples, workflows, and git config
   Init {
+    /// Destination for the scaffold: a directory (creates it and writes
+    /// `content.yaml` inside) or an explicit `*.yaml` file path. Defaults to
+    /// `content.yaml` in the current directory. Conflicts with `--output`.
+    #[arg(value_name = "DEST", conflicts_with = "output")]
+    dest: Option<PathBuf>,
+
     /// Candidate display name
     #[arg(short, long)]
     name: Option<String>,
 
     /// Destination path for the new content file
-    #[arg(short, long, default_value = "content.yaml")]
-    output: PathBuf,
+    #[arg(short, long)]
+    output: Option<PathBuf>,
 
     /// Overwrite destination file if it already exists
     #[arg(short, long)]
     force: bool,
 
-    /// Skip initializing a git repository and git config files
+    /// Skip initializing a git repository and git config files (also skips
+    /// GitHub Actions workflows, which require a repo; add them later with
+    /// `rsmk init --update`)
     #[arg(long)]
     no_git: bool,
 
@@ -150,7 +158,7 @@ pub enum Commands {
     #[arg(long)]
     no_workflows: bool,
 
-    /// Refresh GitHub Actions workflow pins without modifying content.yaml
+    /// Create or refresh GitHub Actions workflows without modifying content.yaml
     #[arg(short, long)]
     update: bool,
   },
@@ -442,6 +450,7 @@ mod tests {
     let cli = Cli::parse_from(["rsmk", "init"]);
     match cli.command.unwrap() {
       Commands::Init {
+        dest,
         name,
         output,
         force,
@@ -449,8 +458,9 @@ mod tests {
         no_workflows,
         update,
       } => {
+        assert_eq!(dest, None);
         assert_eq!(name, None);
-        assert_eq!(output, PathBuf::from("content.yaml"));
+        assert_eq!(output, None);
         assert!(!force);
         assert!(!no_git);
         assert!(!no_workflows);
@@ -473,6 +483,7 @@ mod tests {
     ]);
     match cli_custom.command.unwrap() {
       Commands::Init {
+        dest,
         name,
         output,
         force,
@@ -480,8 +491,9 @@ mod tests {
         no_workflows,
         update,
       } => {
+        assert_eq!(dest, None);
         assert_eq!(name, Some("John Smith".to_string()));
-        assert_eq!(output, PathBuf::from("custom.yaml"));
+        assert_eq!(output, Some(PathBuf::from("custom.yaml")));
         assert!(force);
         assert!(no_git);
         assert!(no_workflows);
@@ -497,5 +509,20 @@ mod tests {
       }
       _ => panic!("Expected Init command"),
     }
+
+    let cli_positional = Cli::parse_from(["rsmk", "init", "./arvin_resume"]);
+    match cli_positional.command.unwrap() {
+      Commands::Init { dest, output, .. } => {
+        assert_eq!(dest, Some(PathBuf::from("./arvin_resume")));
+        assert_eq!(output, None);
+      }
+      _ => panic!("Expected Init command"),
+    }
+
+    // The positional destination and `--output` are mutually exclusive.
+    assert!(
+      Cli::try_parse_from(["rsmk", "init", "dir", "--output", "x.yaml"])
+        .is_err()
+    );
   }
 }
