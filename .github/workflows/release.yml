@@ -222,9 +222,8 @@ jobs:
             '--prerelease' || '' }}"
           ANNOUNCEMENT_TITLE:
             "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
-          RELEASE_COMMIT: "${{ github.sha }}"
         run: |
           gh release create "${{ needs.plan.outputs.tag }}" \
-            --target "$RELEASE_COMMIT" $PRERELEASE_FLAG \
+            $PRERELEASE_FLAG \
             --title "$ANNOUNCEMENT_TITLE" \
             --generate-notes artifacts/*
