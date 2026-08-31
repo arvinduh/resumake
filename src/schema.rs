@@ -247,7 +247,7 @@ pub fn generate_init_template(candidate_name: &str) -> String {
 /// Generates a starter GitHub Actions CI workflow stub for downstream repositories.
 ///
 /// Substitutes `RSMK_VERSION` with `version` if provided and non-empty,
-/// otherwise defaults to the current binary version ([`env!("CARGO_PKG_VERSION")`]).
+/// otherwise defaults to the current binary version (`env!("CARGO_PKG_VERSION")`).
 pub fn generate_ci_workflow(version: Option<&str>) -> String {
   let v = match version {
     Some(s) if !s.trim().is_empty() => s.trim(),
@@ -259,7 +259,7 @@ pub fn generate_ci_workflow(version: Option<&str>) -> String {
 /// Generates a starter GitHub Actions release workflow stub for downstream repositories.
 ///
 /// Substitutes `RSMK_VERSION` with `version` if provided and non-empty,
-/// otherwise defaults to the current binary version ([`env!("CARGO_PKG_VERSION")`]).
+/// otherwise defaults to the current binary version (`env!("CARGO_PKG_VERSION")`).
 pub fn generate_release_workflow(version: Option<&str>) -> String {
   let v = match version {
     Some(s) if !s.trim().is_empty() => s.trim(),

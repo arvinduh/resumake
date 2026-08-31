@@ -40,6 +40,7 @@ graph TD
 | **`release`**   | [`src/release.rs`](../src/release.rs)     | Automated pre-flight git assertions, SemVer 2.0 monotonicity checks, and atomic tag creation & push.                |
 | **`telemetry`** | [`src/telemetry.rs`](../src/telemetry.rs) | Queries `<pageinfo>`/`<bulletinfo>` metadata and evaluates fill ratio and wrap heuristics.                          |
 | **`ui`**        | [`src/ui.rs`](../src/ui.rs)               | Zero-dependency terminal formatting, ANSI boxed badges, and error diagnostics.                                      |
+| **`update`**    | [`src/update.rs`](../src/update.rs)       | In-place binary self-update via `axoupdater` and `cargo-dist` release receipts.                                     |
 | **`cli`**       | [`src/cli.rs`](../src/cli.rs)             | Clap command parsing, dispatching, and file-watching event loops.                                                   |
 
 ---
@@ -84,6 +85,11 @@ graph TD
   cryptic compiler tracebacks when invalid YAML properties are supplied.
 - **Zero Decorative Dependencies:** Avoids heavy UI frameworks or emoji bloat in
   favor of fast, clean ANSI terminal boxes.
+- **Automated Releases with `cargo-dist` & `axoupdater`:** Release packaging,
+  multi-platform cross-compilation, checksums, and installer scripts
+  (`resumake-installer.sh`, `resumake-installer.ps1`) are managed by
+  `cargo-dist`. Self-updates (`rsmk update`) are powered in-process by
+  `axoupdater`.
 - **GitHub Actions Composite Action:** The repository ships `setup/action.yml`
   so downstream users can easily pin `rsmk` and `typst` in CI using
   `uses: arvinduh/resumake/setup@v1`.

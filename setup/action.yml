@@ -15,6 +15,14 @@ runs:
       env:
         RESUMAKE_VERSION: "${{ inputs.version }}"
       run: |
-        INSTALL_URL="https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh"
-        curl -fsSL "$INSTALL_URL" | sh
+        BASE="https://github.com/arvinduh/resumake/releases"
+        if [ "$RESUMAKE_VERSION" = "latest" ] || \
+           [ -z "$RESUMAKE_VERSION" ]; then
+          INSTALL_URL="${BASE}/latest/download/resumake-installer.sh"
+        else
+          TAG="v${RESUMAKE_VERSION#v}"
+          INSTALL_URL="${BASE}/download/${TAG}/resumake-installer.sh"
+        fi
+        curl --proto '=https' --tlsv1.2 -LsSf "$INSTALL_URL" | sh
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
