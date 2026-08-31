@@ -146,7 +146,7 @@ rsmk init                       # Interactive wizard: git + workflows + gh setup
 rsmk init <DEST>                # Scaffold into a directory (created if needed)
 rsmk init --name <NAME>         # Scaffold with specific candidate name
 rsmk init -u, --update          # Refresh workflow stubs using SHA-256 provenance
-rsmk init -f, --force           # Overwrite existing files
+rsmk init -f, --force           # Overwrite existing files; scaffold into a non-empty dir
 
 # Release Engine
 rsmk release                    # Pre-flight assertions + tag meta.version + push

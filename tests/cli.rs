@@ -239,6 +239,46 @@ fn test_cli_init_positional_and_output_conflict() {
 }
 
 #[test]
+fn test_cli_init_refuses_non_empty_directory() {
+  let temp = TempDir::new().unwrap();
+  fs::write(temp.path().join("existing.txt"), "keep me").unwrap();
+
+  // A populated target directory is rejected and left untouched.
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("--name")
+    .arg("Jane Doe")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("not empty"))
+    .stderr(predicate::str::contains("--force"));
+
+  assert!(!temp.path().join("content.yaml").exists());
+  assert!(!temp.path().join(".github").exists());
+
+  // `--force` scaffolds alongside the existing files.
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("--name")
+    .arg("Jane Doe")
+    .arg("--no-git")
+    .arg("--no-workflows")
+    .arg("--force")
+    .assert()
+    .success();
+
+  assert!(temp.path().join("content.yaml").exists());
+  assert_eq!(
+    fs::read_to_string(temp.path().join("existing.txt")).unwrap(),
+    "keep me"
+  );
+}
+
+#[test]
 fn test_cli_init_then_build_succeeds_end_to_end() {
   // This test shells out to `typst` via `rsmk check`. On a machine
   // without the Typst compiler on PATH, skip loudly rather than failing so

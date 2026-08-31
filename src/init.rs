@@ -325,6 +325,14 @@ pub fn resolve_init_output(
   }
 }
 
+/// Returns true when `dir` exists and contains at least one entry.
+fn dir_has_entries(dir: &Path) -> bool {
+  match fs::read_dir(dir) {
+    Ok(mut entries) => entries.next().is_some(),
+    Err(_) => false,
+  }
+}
+
 /// Resolves candidate name from CLI arguments or prompts interactively.
 pub fn resolve_candidate_name(name_arg: Option<&str>) -> String {
   if let Some(name) = name_arg {
@@ -682,6 +690,15 @@ pub fn run_init(opts: InitOptions) -> Result<(), String> {
     return Err(format!(
       "File '{}' already exists. Use --force to overwrite.",
       opts.output.display()
+    ));
+  }
+
+  // Validate the target directory up front so a rejected init leaves the
+  // filesystem untouched (no directories created, no files written).
+  if !opts.force && dir_has_entries(base_dir) {
+    return Err(format!(
+      "Directory '{}' is not empty. Use --force to scaffold into it anyway.",
+      base_dir.display()
     ));
   }
 
