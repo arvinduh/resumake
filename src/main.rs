@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use resumake::cli::{Cli, Commands};
-use resumake::engine::TypstEngine;
+use resumake::engine::{TypstEngine, DEFAULT_TEMPLATE};
 use resumake::schema::{
   derive_output_filename, export_builtin_schema, generate_init_template,
   load_content_name, load_content_version, validate_schema_auto,
@@ -32,46 +32,95 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
   match command {
     Commands::Build {
       content,
-      template_name,
+      check,
+      watch,
+      template,
       source,
       output,
       schema,
       font_path,
-    } => run_build(
-      &content,
-      &template_name,
-      source.as_deref(),
-      output.as_deref(),
-      schema.as_deref(),
-      font_path.as_deref(),
-      quiet,
-    ),
+    } => {
+      let template_name = template.as_deref().unwrap_or(DEFAULT_TEMPLATE);
+      if watch {
+        if check {
+          run_check_watch(
+            &content,
+            template_name,
+            source.as_deref(),
+            schema.as_deref(),
+            font_path.as_deref(),
+            quiet,
+          )
+        } else {
+          run_watch(
+            &content,
+            template_name,
+            source.as_deref(),
+            output.as_deref(),
+            font_path.as_deref(),
+          )
+        }
+      } else if check {
+        run_check(
+          &content,
+          template_name,
+          source.as_deref(),
+          schema.as_deref(),
+          font_path.as_deref(),
+          quiet,
+        )
+      } else {
+        run_build(
+          &content,
+          template_name,
+          source.as_deref(),
+          output.as_deref(),
+          schema.as_deref(),
+          font_path.as_deref(),
+          quiet,
+        )
+      }
+    }
     Commands::Check {
       content,
-      template_name,
+      watch,
+      template,
       source,
       schema,
       font_path,
-    } => run_check(
-      &content,
-      &template_name,
-      source.as_deref(),
-      schema.as_deref(),
-      font_path.as_deref(),
+    } => execute_command(
+      Commands::Build {
+        content,
+        check: true,
+        watch,
+        template,
+        source,
+        output: None,
+        schema,
+        font_path,
+      },
       quiet,
     ),
     Commands::Watch {
       content,
-      template_name,
+      check,
+      template,
       source,
       output,
+      schema,
       font_path,
-    } => run_watch(
-      &content,
-      &template_name,
-      source.as_deref(),
-      output.as_deref(),
-      font_path.as_deref(),
+    } => execute_command(
+      Commands::Build {
+        content,
+        check,
+        watch: true,
+        template,
+        source,
+        output,
+        schema,
+        font_path,
+      },
+      quiet,
     ),
     Commands::Schema { export } => run_schema(export.as_deref()),
     Commands::Init {
@@ -233,6 +282,63 @@ fn run_watch(
   ));
 
   engine.watch(&resolved_template, content, &output_pdf)
+}
+
+fn run_check_watch(
+  content: &Path,
+  template_name: &str,
+  source: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+  quiet: bool,
+) -> Result<(), String> {
+  if !content.exists() {
+    return Err(format!("Content file not found: '{}'", content.display()));
+  }
+
+  print_info(&format!(
+    "Watching '{}' in check mode. Press Ctrl+C to stop.",
+    content.display()
+  ));
+
+  if let Err(err) =
+    run_check(content, template_name, source, schema, font_path, quiet)
+  {
+    print_error(&err);
+  }
+
+  let mut last_content_mtime =
+    fs::metadata(content).and_then(|m| m.modified()).ok();
+  let mut last_source_mtime =
+    source.and_then(|s| fs::metadata(s).and_then(|m| m.modified()).ok());
+  let mut last_schema_mtime =
+    schema.and_then(|s| fs::metadata(s).and_then(|m| m.modified()).ok());
+
+  loop {
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let cur_content_mtime =
+      fs::metadata(content).and_then(|m| m.modified()).ok();
+    let cur_source_mtime =
+      source.and_then(|s| fs::metadata(s).and_then(|m| m.modified()).ok());
+    let cur_schema_mtime =
+      schema.and_then(|s| fs::metadata(s).and_then(|m| m.modified()).ok());
+
+    if cur_content_mtime != last_content_mtime
+      || cur_source_mtime != last_source_mtime
+      || cur_schema_mtime != last_schema_mtime
+    {
+      last_content_mtime = cur_content_mtime;
+      last_source_mtime = cur_source_mtime;
+      last_schema_mtime = cur_schema_mtime;
+
+      if let Err(err) =
+        run_check(content, template_name, source, schema, font_path, quiet)
+      {
+        print_error(&err);
+      }
+    }
+  }
 }
 
 fn run_schema(export: Option<&Path>) -> Result<(), String> {

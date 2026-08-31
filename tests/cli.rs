@@ -185,3 +185,102 @@ sections: []
     .success()
     .stdout(predicate::str::contains("SUCCESS"));
 }
+
+#[test]
+fn test_cli_build_and_check_flags_integration() {
+  if which::which("typst").is_err() {
+    eprintln!(
+      "skipping test_cli_build_and_check_flags_integration: typst not on PATH"
+    );
+    return;
+  }
+
+  let temp = TempDir::new().unwrap();
+  let content_file = temp.path().join("content.yaml");
+  let output_pdf = temp.path().join("custom_resume.pdf");
+
+  // 1. Scaffold content
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .arg("init")
+    .arg("--name")
+    .arg("Jane Doe")
+    .arg("--output")
+    .arg(&content_file)
+    .assert()
+    .success();
+
+  // 2. rsmk build (standard compilation to custom output)
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("build")
+    .arg("--content")
+    .arg(&content_file)
+    .arg("--output")
+    .arg(&output_pdf)
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("SUCCESS"));
+
+  assert!(output_pdf.exists());
+
+  // 3. rsmk build --check
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("build")
+    .arg("--check")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("[dry-run: no PDF written]"))
+    .stdout(predicate::str::contains("Dry-run check passed"));
+
+  // 4. rsmk build -c
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("build")
+    .arg("-c")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("[dry-run: no PDF written]"))
+    .stdout(predicate::str::contains("Dry-run check passed"));
+
+  // 5. rsmk build --template classic
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("build")
+    .arg("--template")
+    .arg("classic")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("SUCCESS"));
+
+  // 6. Legacy rsmk check
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("check")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("[dry-run: no PDF written]"))
+    .stdout(predicate::str::contains("Dry-run check passed"));
+
+  // 7. Bare rsmk with no subcommand defaults to build
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("SUCCESS"));
+}
