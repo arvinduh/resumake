@@ -401,6 +401,36 @@ sections: []
   }
 
   #[test]
+  fn test_validate_schema_auto_with_meta_extra() {
+    let temp = TempDir::new().unwrap();
+    let content_file = temp.path().join("content.yaml");
+    fs::write(
+      &content_file,
+      r#"
+meta:
+  name: "Jane Doe"
+  version: "1.0.0"
+  contact:
+    - name: "jane@example.com"
+  extra:
+    status: "active"
+    years_experience: 10
+    verified: true
+    skills_tags:
+      - "rust"
+      - "distributed-systems"
+    attributes:
+      clearance: "Secret"
+      relocation: false
+sections: []
+"#,
+    )
+    .unwrap();
+
+    assert!(validate_schema_auto(&content_file, None).is_ok());
+  }
+
+  #[test]
   fn test_validate_schema_auto_does_not_check_generic_items_payload() {
     // Documents the known coverage gap: `items:` is an untyped
     // passthrough (see `Section::items`), so a typo inside it is not
@@ -419,6 +449,8 @@ meta:
   version: "1.0.0"
   contact:
     - name: "jane@example.com"
+  extra:
+    custom_field: "allowed"
 sections:
   - title: "Education"
     type: "education"
