@@ -31,9 +31,9 @@ graph TD
 
 ## 2. Module Responsibilities
 
-| Module          | Source File                               | Purpose                                                                                                              |
-| :-------------- | :---------------------------------------- | :------------------------------------------------------------------------------------------------------------------- |
-| **`models`**    | [`src/models.rs`](../src/models.rs)       | Serde data models, JSON Schema generation (`schemars`), extensible `meta.extra` map, and default value derivations.  |
+| Module          | Source File                               | Purpose                                                                                                             |
+| :-------------- | :---------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
+| **`models`**    | [`src/models.rs`](../src/models.rs)       | Serde data models, JSON Schema generation (`schemars`), extensible `meta.extra` map, and default value derivations. |
 | **`schema`**    | [`src/schema.rs`](../src/schema.rs)       | In-process schema validation, JSON Schema export, and workflow template generators.                                 |
 | **`engine`**    | [`src/engine.rs`](../src/engine.rs)       | Named template registry, template ejection, resolution, and Typst compiler process orchestration.                   |
 | **`init`**      | [`src/init.rs`](../src/init.rs)           | Interactive scaffolding wizard, git config management, SHA-256 workflow provenance stamping and refresh.            |

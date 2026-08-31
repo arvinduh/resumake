@@ -62,7 +62,8 @@ This scaffolds:
 - `.gitignore` (ignoring compiled PDFs and internal `.resumake/` caches).
 - `.gitattributes` (`* text=auto eol=lf`).
 - `.github/workflows/ci.yml` & `release.yml` with SHA-256 provenance headers.
-- Git repository initialization (and optional GitHub repository creation via `gh`).
+- Git repository initialization (and optional GitHub repository creation via
+  `gh`).
 
 ---
 
@@ -136,6 +137,7 @@ rsmk release
 ```
 
 `rsmk release` performs 5 automated pre-flight checks:
+
 1. Working tree is clean (no uncommitted changes).
 2. Upstream branch is synced (no unpushed commits).
 3. `meta.version` in `content.yaml` is valid SemVer and strictly newer than
