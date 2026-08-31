@@ -39,6 +39,26 @@ curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh |
 irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
 ```
 
+Both installers download the release archive over HTTPS, verify it against the
+published `.sha256` checksum, and refuse to install on a mismatch.
+
+#### Environment variables
+
+| Variable               | Default   | Effect                                                                                                                 |
+| :--------------------- | :-------- | :--------------------------------------------------------------------------------------------------------------------- |
+| `RESUMAKE_VERSION`     | `latest`  | Pin a specific release, e.g. `RESUMAKE_VERSION=0.1.1` (a leading `v` is accepted). `latest` tracks the newest release. |
+| `RESUMAKE_INSTALL_DIR` | see below | Directory to install the `resumake` binary into (`~/.local/bin` on Linux/macOS, `~/bin` on Windows).                   |
+
+```bash
+# Linux & macOS — install a pinned version
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | RESUMAKE_VERSION=0.1.1 sh
+```
+
+```powershell
+# Windows — install a pinned version
+$env:RESUMAKE_VERSION = '0.1.1'; irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
+```
+
 ### Package Managers / Cargo
 
 #### Fast install via `cargo-binstall` (zero compilation)

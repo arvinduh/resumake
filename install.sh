@@ -68,10 +68,18 @@ esac
 
 TARGET="${ARCH}-${PLATFORM}"
 ASSET_NAME="resumake-${TARGET}.tar.gz"
-DOWNLOAD_URL="https://github.com/arvinduh/resumake/releases/latest/download/${ASSET_NAME}"
+VERSION="${RESUMAKE_VERSION:-latest}"
+if [ "$VERSION" = "latest" ]; then
+  DOWNLOAD_URL="https://github.com/arvinduh/resumake/releases/latest/download/${ASSET_NAME}"
+else
+  DOWNLOAD_URL="https://github.com/arvinduh/resumake/releases/download/v${VERSION#v}/${ASSET_NAME}"
+fi
 INSTALL_DIR="${RESUMAKE_INSTALL_DIR:-$HOME/.local/bin}"
 
 info "Detected platform: ${TARGET}"
+if [ "$VERSION" != "latest" ]; then
+  info "Requested version: v${VERSION#v}"
+fi
 info "Installing resumake into ${INSTALL_DIR}..."
 
 mkdir -p "$INSTALL_DIR"
@@ -89,6 +97,27 @@ elif command -v wget > /dev/null 2>&1; then
   wget -qO "$TEMP_DIR/$ASSET_NAME" "$DOWNLOAD_URL"
 else
   error "Neither curl nor wget found. Please install either tool and retry."
+fi
+
+info "Verifying checksum..."
+if command -v sha256sum > /dev/null 2>&1; then
+  CHECK="sha256sum --check --quiet"
+elif command -v shasum > /dev/null 2>&1; then
+  CHECK="shasum -a 256 --check --quiet" # macOS has no sha256sum
+else
+  CHECK=""
+  warn "Neither sha256sum nor shasum found; skipping checksum verification."
+fi
+
+if [ -n "$CHECK" ]; then
+  if command -v curl > /dev/null 2>&1; then
+    curl -fsSL "$DOWNLOAD_URL.sha256" -o "$TEMP_DIR/$ASSET_NAME.sha256"
+  else
+    wget -qO "$TEMP_DIR/$ASSET_NAME.sha256" "$DOWNLOAD_URL.sha256"
+  fi
+  (cd "$TEMP_DIR" && $CHECK "$ASSET_NAME.sha256") ||
+    error "Checksum verification failed for ${ASSET_NAME}. Refusing to install."
+  success "Checksum verified."
 fi
 
 info "Extracting binary..."
