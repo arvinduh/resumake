@@ -73,11 +73,13 @@ graph TD
 
 - **Embedded Assets:** All Typst template files, modular block definitions, and
   default schemas are embedded directly into the binary at compile time via
-  `include_str!`. The user only needs a single binary executable.
+  `include_dir!` and `include_str!`. The user only needs a single binary
+  executable.
 - **Template Registry & Ejection:** Embedded templates live under
-  `src/embedded/templates/<name>/` (currently `classic`) and are registered in
-  `src/engine.rs`. Users can eject the full source tree via
-  `rsmk template eject <name>` into `./templates/<name>/` for direct hacking.
+  `src/embedded/templates/<name>/` (currently `classic`) and are automatically
+  discovered by the engine via `include_dir!`. Users can eject the full source
+  tree via `rsmk template eject <name>` into `./templates/<name>/` for direct
+  hacking.
 - **In-Process Validation:** Catching schema errors in Rust memory eliminates
   cryptic compiler tracebacks when invalid YAML properties are supplied.
 - **Zero Decorative Dependencies:** Avoids heavy UI frameworks or emoji bloat in
