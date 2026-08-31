@@ -46,6 +46,8 @@ self_update = { version = "=1.2.0", default-features = false, features = [
   "checksums",
   "progress-bar",
 ] }
+gix = { version = "0.72", default-features = false, features = ["status", "revision"] }
+
 
 [dev-dependencies]
 assert_cmd = "2.0"
