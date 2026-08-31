@@ -79,12 +79,16 @@ You can cut the release using `rsmk release` with automated pre-flight checks:
 rsmk release
 ```
 
-`rsmk release` automatically runs pre-flight verifications before creating or pushing tags:
+`rsmk release` automatically runs pre-flight verifications before creating or
+pushing tags:
+
 1. **Clean working tree**: verifies no uncommitted changes exist.
 2. **Upstream sync**: verifies the branch tracks origin with 0 unpushed commits.
-3. **Semver monotonicity**: checks `meta.version` is valid and strictly newer than existing git tags.
+3. **Semver monotonicity**: checks `meta.version` is valid and strictly newer
+   than existing git tags.
 4. **Pre-flight check**: runs `rsmk build --check` in-memory.
-5. **Atomic Tag & Push**: creates annotated tag `vX.Y.Z` and pushes to origin (bypassed on `--dry-run`).
+5. **Atomic Tag & Push**: creates annotated tag `vX.Y.Z` and pushes to origin
+   (bypassed on `--dry-run`).
 
 Alternatively, manual tag and push:
 
