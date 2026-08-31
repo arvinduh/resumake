@@ -293,17 +293,6 @@ fn test_cli_init_refuses_non_empty_directory() {
 
 #[test]
 fn test_cli_init_then_build_succeeds_end_to_end() {
-  // This test shells out to `typst` via `rsmk build --check`. On a machine
-  // without the Typst compiler on PATH, skip loudly rather than failing so
-  // `cargo test --all-targets` stays green on a fresh clone. CI installs
-  // typst and still exercises the real path.
-  if which::which("typst").is_err() {
-    eprintln!(
-      "skipping test_cli_init_then_build_succeeds_end_to_end: typst not on PATH"
-    );
-    return;
-  }
-
   // Regression test: the default `init` scaffold must actually compile.
   // Earlier versions emitted <bulletinfo> probes without a required `id`
   // field, which made `build`/`build --check` fail on every real resume
@@ -386,13 +375,6 @@ sections: []
 
 #[test]
 fn test_cli_check_succeeds_with_meta_extra() {
-  if which::which("typst").is_err() {
-    eprintln!(
-      "skipping test_cli_check_succeeds_with_meta_extra: typst not on PATH"
-    );
-    return;
-  }
-
   let temp = TempDir::new().unwrap();
   let content_file = temp.path().join("content.yaml");
   fs::write(
@@ -540,13 +522,6 @@ fn test_cli_template_eject_unknown_template() {
 
 #[test]
 fn test_cli_build_and_check_flags_integration() {
-  if which::which("typst").is_err() {
-    eprintln!(
-      "skipping test_cli_build_and_check_flags_integration: typst not on PATH"
-    );
-    return;
-  }
-
   let temp = TempDir::new().unwrap();
   let content_file = temp.path().join("content.yaml");
   let output_pdf = temp.path().join("custom_resume.pdf");
@@ -1155,13 +1130,6 @@ fn test_cli_build_check_watch_nonexistent_content_fails() {
 
 #[test]
 fn test_cli_build_watch_recompiles_on_change() {
-  if which::which("typst").is_err() {
-    eprintln!(
-      "skipping test_cli_build_watch_recompiles_on_change: typst not on PATH"
-    );
-    return;
-  }
-
   let temp = TempDir::new().unwrap();
   let content_file = temp.path().join("content.yaml");
   let output_pdf = temp.path().join("watch_resume.pdf");
