@@ -1,7 +1,8 @@
 [package]
 name = "resumake"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
+
 authors = ["Resumake Authors"]
 description = "Modular, golden-ratio résumé compiler and layout telemetry engine."
 license = "MIT"
