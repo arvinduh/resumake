@@ -7,8 +7,8 @@
 ---
 
 This tutorial guides you through installing Resumake, scaffolding a structured
-résumé project, customizing your content, and compiling your first single-page
-PDF with layout telemetry.
+résumé project, customizing your content, verifying layout geometry, and
+cutting releases.
 
 ---
 
@@ -25,15 +25,16 @@ Resumake is distributed as a standalone, zero-dependency native binary.
 
 ## 2. Installation
 
-### From Source (Cargo)
+### 1-Line Quick Install
 
 ```bash
-# Clone the repository
-git clone https://github.com/arvinduh/resumake.git
-cd resumake
+# Linux & macOS
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | sh
+```
 
-# Install binary to ~/.cargo/bin
-cargo install --path .
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
 ```
 
 Verify the installation:
@@ -48,29 +49,33 @@ rsmk --help
 
 ### Step 1: Scaffold a Project
 
-Create a new directory and scaffold the initial configuration and template:
+Create a new directory and run the initialization wizard:
 
 ```bash
-mkdir my-resume
-cd my-resume
+mkdir my-resume && cd my-resume
 rsmk init --name "Jane Doe"
 ```
 
-This generates `content.yaml` populated with standard sections (Education,
-Technical Skills, Experience, and Projects).
+This scaffolds:
+- `content.yaml` populated with standard sections (Education, Experience,
+  Projects, Skills) and configured with the `Libertinus Serif` font.
+- `.gitignore` (ignoring compiled PDFs and internal `.resumake/` caches).
+- `.gitattributes` (`* text=auto eol=lf`).
+- `.github/workflows/ci.yml` & `release.yml` with SHA-256 provenance headers.
+- Git repository initialization (and optional GitHub repository creation via `gh`).
 
 ---
 
-### Step 2: Compile to PDF
+### Step 2: Live Recompilation & Geometry Feedback
 
-Compile your résumé to a high-fidelity PDF:
+Start the live watcher loop while editing `content.yaml`:
 
 ```bash
-rsmk build
+rsmk build --watch
 ```
 
-Resumake compiles the Typst template and performs real-time layout telemetry
-analysis, outputting a terminal summary:
+Keep your PDF viewer open side-by-side. Every time you save `content.yaml`,
+Resumake re-renders the document and evaluates single-page geometry in <100ms:
 
 ```text
 ────────────────────────────────────────────────────────────────
@@ -89,47 +94,57 @@ analysis, outputting a terminal summary:
 
 ---
 
-### Picking a Template
-
-`rsmk build`/`check`/`watch` render `content.yaml` through a named, built-in
-layout — the same YAML works under any of them, since the content model has no
-idea which template is drawing it. Today the registry only ships `classic` (the
-layout above), which is also the default, so this is a no-op unless you pass it
-explicitly:
-
-```bash
-rsmk build --template classic
-```
-
-More built-in layouts (e.g. a two-column sidebar résumé) can be added to the
-registry over time without any changes to your `content.yaml` — see
-[System Architecture](architecture.md#4-key-design-decisions). If you'd rather
-supply your own Typst file entirely, bypassing the registry, use
-`--source <path.typ>` instead.
-
----
-
 ### Step 3: Fast Dry-Run Validation
 
-If you want to validate your YAML schema and check layout geometry without
-writing a PDF to disk, use the `check` command:
+To validate YAML schema structure and check layout geometry in CI or pre-commit
+without writing a PDF to disk:
 
 ```bash
-rsmk check
+rsmk build --check
 ```
 
 ---
 
-### Step 4: Live Auto-Recompilation (Watch Mode)
+### Step 4: Customizing Templates
 
-Enable real-time recompilation whenever you modify `content.yaml`:
+To inspect or customize the underlying Typst template:
 
 ```bash
-rsmk watch
+# List available templates
+rsmk template list
+
+# Eject the bundled classic template into your local workspace
+rsmk template eject classic
 ```
 
-Keep your PDF viewer open side-by-side to see instant visual updates in under
-100 milliseconds.
+This extracts `main.typ`, `tokens.typ`, `primitives.typ`, and `blocks/*.typ`
+into `./templates/classic/`. You can compile using your customized local
+template:
+
+```bash
+rsmk build --template ./templates/classic/main.typ
+```
+
+---
+
+### Step 5: Cutting Releases
+
+When you are ready to publish a new version of your résumé:
+
+```bash
+rsmk release
+```
+
+`rsmk release` performs 5 automated pre-flight checks:
+1. Working tree is clean (no uncommitted changes).
+2. Upstream branch is synced (no unpushed commits).
+3. `meta.version` in `content.yaml` is valid SemVer and strictly newer than
+   existing git tags.
+4. Pre-flight schema validation and layout check passes.
+5. Atomically creates tag `v<version>` and pushes to `origin`.
+
+Pushing the tag triggers your repository's GitHub Actions release workflow to
+compile and attach the PDF to a new GitHub Release.
 
 ---
 
@@ -139,3 +154,5 @@ Keep your PDF viewer open side-by-side to see instant visual updates in under
   links, and theme tokens.
 - **[Layout Telemetry Guide](telemetry-guide.md):** Understand the math behind
   single-page geometry optimization.
+- **[System Architecture](architecture.md):** Deep dive into the compiler and
+  pipeline design.

@@ -38,7 +38,7 @@ understand existing architecture, conventions, and design decisions.
 ## 3. User Guides & Operations
 
 - **[Getting Started](getting-started.md)** — End-user tutorial: installation,
-  initializing a resume workspace (`rsmk init`), checking layout (`rsmk check`),
+  initializing a resume workspace (`rsmk init`), checking layout (`rsmk build --check`),
   and compiling PDFs (`rsmk build`).
 - **[Release Procedure](release.md)** — Release workflows, version tagging,
   multi-platform binary builds, and changelog generation.
