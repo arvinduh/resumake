@@ -133,12 +133,14 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
       force,
       no_git,
       no_workflows,
+      update,
     } => run_init(InitOptions {
       name: name.as_deref(),
       output: &output,
       force,
       no_git,
       no_workflows,
+      update,
       quiet,
     }),
     Commands::Release {
