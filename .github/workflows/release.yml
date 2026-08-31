@@ -98,6 +98,7 @@ jobs:
         run: |
           ${{ matrix.packages_install }}
       - name: Build artifacts
+        shell: bash
         run: |
           dist build ${{ needs.plan.outputs.tag-flag }} \
             --print=linkage --output-format=json \
