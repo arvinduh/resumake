@@ -10,12 +10,14 @@ instructions for the Resumake résumé compiler.
 
 | Guide                                            | Description                                                                    | Target Audience          |
 | :----------------------------------------------- | :----------------------------------------------------------------------------- | :----------------------- |
+| **[Documentation Index](INDEX.md)**              | Central sitemap for all documentation, specs, and orchestration files.         | Developers & Agents      |
 | **[Getting Started](getting-started.md)**        | Step-by-step tutorial from installation to your first compiled PDF.            | New Users                |
 | **[YAML Schema Reference](schema-guide.md)**     | Complete specification of all directives, metadata, and block sections.        | Résumé Authors           |
 | **[Layout Telemetry Guide](telemetry-guide.md)** | Learn how strict 1-page geometry, fill percentage, and wrap checks work.       | Authors & Designers      |
 | **[System Architecture](architecture.md)**       | Deep dive into the native Rust engine, embedded Typst compiler, and pipeline.  | Developers & Integrators |
 | **[Contributing Guide](contributing.md)**        | Code standards, local test suite, pre-commit setup, and Pull Request workflow. | Contributors             |
 | **[Release Procedure](release.md)**              | Version tagging, git-cliff changelogs, and binary distribution workflow.       | Maintainers              |
+| **[Agent Orchestration](../AGENTS.md)**          | Universal agent entrypoint, quality gates, and multi-agent dispatch rules.     | AI Agents & Orchestrator |
 
 ---
 
