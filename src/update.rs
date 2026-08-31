@@ -66,17 +66,45 @@ pub fn normalize_host_target(host: &str) -> &str {
   }
 }
 
+/// Errors originating from the self-update process.
+#[derive(thiserror::Error, Debug)]
+pub enum UpdateError {
+  /// No prebuilt binary exists for the target platform.
+  #[error("no prebuilt rsmk binary for {target}; build from source")]
+  UnsupportedTarget {
+    /// Target triple.
+    target: String,
+  },
+  /// No releases have been published yet on GitHub.
+  #[error("no rsmk releases published yet")]
+  NoReleasesPublished,
+  /// Error returned by the self_update backend.
+  #[error("Self-update error: {0}")]
+  SelfUpdate(String),
+  /// Version comparison failed.
+  #[error("Version comparison failed: {0}")]
+  VersionComparison(String),
+  /// Underlying I/O error.
+  #[error("I/O error: {0}")]
+  Io(#[from] std::io::Error),
+}
+
 /// Decide what to do from a comparison of the current and latest semver
 /// strings. Pure and network-free so the matrix can be unit-tested.
 ///
 /// A genuine upgrade (`current < latest`) always wins over the `force` flag;
 /// `force` only upgrades the "nothing to do" outcome into a reinstall.
+///
+/// # Errors
+///
+/// Returns an [`UpdateError`] if version strings cannot be compared.
 pub fn update_action(
   current: &str,
   latest: &str,
   force: bool,
-) -> Result<UpdateAction, String> {
-  let ordering = cmp_versions(current, latest).map_err(|e| e.to_string())?;
+) -> Result<UpdateAction, UpdateError> {
+  let ordering = cmp_versions(current, latest)
+    .map_err(|e| UpdateError::VersionComparison(e.to_string()))?;
   Ok(match ordering {
     Ordering::Less => UpdateAction::Update,
     _ if force => UpdateAction::ForcedReinstall,
@@ -97,7 +125,7 @@ fn build_updater(
   target: &str,
   asset: &str,
   quiet: bool,
-) -> Result<github::Update, String> {
+) -> Result<github::Update, UpdateError> {
   github::Update::configure()
     .repo_owner(REPO_OWNER)
     .repo_name(REPO_NAME)
@@ -112,23 +140,34 @@ fn build_updater(
     // Never block on stdin — this may run unattended.
     .no_confirm(true)
     .build()
-    .map_err(|e| e.to_string())
+    .map_err(|e| UpdateError::SelfUpdate(e.to_string()))
 }
 
 /// Entry point for the `update` subcommand.
-pub fn run_update(check: bool, force: bool, quiet: bool) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns an [`UpdateError`] if update checks or downloads fail.
+pub fn run_update(
+  check: bool,
+  force: bool,
+  quiet: bool,
+) -> Result<(), UpdateError> {
   let current = env!("CARGO_PKG_VERSION");
   let target = normalize_host_target(self_update::get_target());
   let asset = asset_name_for_target(target).ok_or_else(|| {
-    format!("no prebuilt rsmk binary for {target}; build from source")
+    UpdateError::UnsupportedTarget {
+      target: target.to_string(),
+    }
   })?;
 
   let updater = build_updater(current, target, asset, quiet)?;
-  let latest_releases =
-    updater.get_latest_release().map_err(|e| e.to_string())?;
+  let latest_releases = updater
+    .get_latest_release()
+    .map_err(|e| UpdateError::SelfUpdate(e.to_string()))?;
   let latest_release = latest_releases
     .latest()
-    .ok_or_else(|| "no rsmk releases published yet".to_string())?;
+    .ok_or(UpdateError::NoReleasesPublished)?;
   let latest = latest_release.version().trim_start_matches('v');
 
   let action = update_action(current, latest, force)?;
@@ -155,7 +194,9 @@ pub fn run_update(check: bool, force: bool, quiet: bool) -> Result<(), String> {
       Ok(())
     }
     UpdateAction::Update => {
-      updater.update().map_err(|e| e.to_string())?;
+      updater
+        .update()
+        .map_err(|e| UpdateError::SelfUpdate(e.to_string()))?;
       say(quiet, &format!("Updated rsmk v{current} -> v{latest}"));
       Ok(())
     }
@@ -163,7 +204,9 @@ pub fn run_update(check: bool, force: bool, quiet: bool) -> Result<(), String> {
       // self_update skips the replace when versions match, so rebuild with a
       // sentinel current version to force it to reinstall the latest release.
       let forced = build_updater(FORCE_SENTINEL_VERSION, target, asset, quiet)?;
-      forced.update().map_err(|e| e.to_string())?;
+      forced
+        .update()
+        .map_err(|e| UpdateError::SelfUpdate(e.to_string()))?;
       say(quiet, &format!("Updated rsmk v{current} -> v{latest}"));
       Ok(())
     }

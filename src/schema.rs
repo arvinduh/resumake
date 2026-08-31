@@ -14,6 +14,99 @@ pub const CI_WORKFLOW_RAW: &str = include_str!("embedded/workflows/ci.yml");
 pub const RELEASE_WORKFLOW_RAW: &str =
   include_str!("embedded/workflows/release.yml");
 
+fn format_validation_errors(errors: &[String]) -> String {
+  errors
+    .iter()
+    .map(|e| format!("  - {e}"))
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+/// Errors originating from schema validation and content inspection.
+#[derive(thiserror::Error, Debug)]
+pub enum SchemaError {
+  /// Failed to read custom schema file.
+  #[error("Failed to read schema file '{}': {source}", path.display())]
+  SchemaFileRead {
+    /// Path to schema file.
+    path: PathBuf,
+    /// Underlying I/O error.
+    #[source]
+    source: std::io::Error,
+  },
+  /// Failed to parse custom schema JSON.
+  #[error("Failed to parse schema JSON from '{}': {source}", path.display())]
+  SchemaJsonParse {
+    /// Path to schema file.
+    path: PathBuf,
+    /// Underlying JSON parsing error.
+    #[source]
+    source: serde_json::Error,
+  },
+  /// Failed to read content YAML file.
+  #[error("Failed to read content file '{}': {source}", path.display())]
+  ContentFileRead {
+    /// Path to content file.
+    path: PathBuf,
+    /// Underlying I/O error.
+    #[source]
+    source: std::io::Error,
+  },
+  /// Failed to parse content YAML file.
+  #[error("Failed to parse content YAML from '{}': {source}", path.display())]
+  ContentYamlParse {
+    /// Path to content file.
+    path: PathBuf,
+    /// Underlying YAML parsing error.
+    #[source]
+    source: serde_yaml::Error,
+  },
+  /// Failed to compile JSON Schema validator.
+  #[error("Failed to compile JSON schema validator: {0}")]
+  ValidatorCompile(String),
+  /// Schema validation failed with one or more validation errors.
+  #[error("Schema validation failed:\n{}", format_validation_errors(errors))]
+  ValidationFailed {
+    /// List of formatted schema violation error messages.
+    errors: Vec<String>,
+  },
+  /// Failed to serialize JSON schema.
+  #[error("Failed to format JSON schema: {0}")]
+  JsonSerialize(#[source] serde_json::Error),
+  /// Failed to create output directory for exported schema.
+  #[error("Failed to create schema directory '{}': {source}", path.display())]
+  DirCreate {
+    /// Directory path.
+    path: PathBuf,
+    /// Underlying I/O error.
+    #[source]
+    source: std::io::Error,
+  },
+  /// Failed to write exported JSON schema.
+  #[error("Failed to write schema to '{}': {source}", path.display())]
+  FileWrite {
+    /// File path.
+    path: PathBuf,
+    /// Underlying I/O error.
+    #[source]
+    source: std::io::Error,
+  },
+  /// Missing required field in content YAML file.
+  #[error("Missing '{field}' field in '{}'", path.display())]
+  MissingField {
+    /// Name of the missing field.
+    field: &'static str,
+    /// Path to content file.
+    path: PathBuf,
+  },
+  /// Field in content YAML has invalid type.
+  #[error("Field '{0}' is not a string")]
+  InvalidFieldType(&'static str),
+  /// Underlying I/O error.
+  #[error("I/O error: {0}")]
+  Io(#[from] std::io::Error),
+}
+
 /// Validates a content YAML file against an optional JSON schema file.
 ///
 /// If `schema_path` is `None` or the file does not exist, the built-in
@@ -40,56 +133,48 @@ pub const RELEASE_WORKFLOW_RAW: &str =
 /// the shorthand form is.
 ///
 /// # Errors
-/// Returns a list of formatted validation error strings if the YAML is
-/// invalid or does not conform to the schema.
+/// Returns a [`SchemaError`] if reading, parsing, or validation fails.
 pub fn validate_schema_auto(
   content_path: &Path,
   schema_path: Option<&Path>,
-) -> Result<(), Vec<String>> {
+) -> Result<(), SchemaError> {
   // Step 1: Resolve the JSON schema Value (from custom file path if
   // exists, otherwise generate_builtin_schema())
   let schema_json: serde_json::Value = match schema_path {
     Some(p) if p.exists() => {
-      let schema_str = fs::read_to_string(p).map_err(|e| {
-        vec![format!(
-          "Failed to read schema file '{}': {}",
-          p.display(),
-          e
-        )]
+      let schema_str = fs::read_to_string(p).map_err(|source| {
+        SchemaError::SchemaFileRead {
+          path: p.to_path_buf(),
+          source,
+        }
       })?;
-      serde_json::from_str(&schema_str).map_err(|e| {
-        vec![format!(
-          "Failed to parse schema JSON from '{}': {}",
-          p.display(),
-          e
-        )]
+      serde_json::from_str(&schema_str).map_err(|source| {
+        SchemaError::SchemaJsonParse {
+          path: p.to_path_buf(),
+          source,
+        }
       })?
     }
     _ => generate_builtin_schema(),
   };
 
   // Step 2: Read and deserialize the content YAML file into a serde_json::Value
-  let content_str = fs::read_to_string(content_path).map_err(|e| {
-    vec![format!(
-      "Failed to read content file '{}': {}",
-      content_path.display(),
-      e
-    )]
+  let content_str = fs::read_to_string(content_path).map_err(|source| {
+    SchemaError::ContentFileRead {
+      path: content_path.to_path_buf(),
+      source,
+    }
   })?;
 
   let content_json: serde_json::Value = serde_yaml::from_str(&content_str)
-    .map_err(|e| {
-      vec![format!(
-        "Failed to parse content YAML from '{}': {}",
-        content_path.display(),
-        e
-      )]
+    .map_err(|source| SchemaError::ContentYamlParse {
+      path: content_path.to_path_buf(),
+      source,
     })?;
 
   // Step 3: Compile validator and collect error messages
-  let validator = jsonschema::validator_for(&schema_json).map_err(|e| {
-    vec![format!("Failed to compile JSON schema validator: {}", e)]
-  })?;
+  let validator = jsonschema::validator_for(&schema_json)
+    .map_err(|e| SchemaError::ValidatorCompile(e.to_string()))?;
 
   let mut errors = Vec::new();
   for error in validator.iter_errors(&content_json) {
@@ -105,7 +190,7 @@ pub fn validate_schema_auto(
   if errors.is_empty() {
     Ok(())
   } else {
-    Err(errors)
+    Err(SchemaError::ValidationFailed { errors })
   }
 }
 
@@ -113,26 +198,24 @@ pub fn validate_schema_auto(
 /// formatted string.
 ///
 /// # Errors
-/// Returns an error string if serialization or disk write fails.
+/// Returns a [`SchemaError`] if serialization or disk write fails.
 pub fn export_builtin_schema(
   output_path: Option<&Path>,
-) -> Result<String, String> {
+) -> Result<String, SchemaError> {
   let schema_json = generate_builtin_schema();
   let schema_str = serde_json::to_string_pretty(&schema_json)
-    .map_err(|e| format!("Failed to format JSON schema: {e}"))?;
+    .map_err(SchemaError::JsonSerialize)?;
 
   if let Some(path) = output_path {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-      fs::create_dir_all(parent).map_err(|e| {
-        format!(
-          "Failed to create schema directory '{}': {}",
-          parent.display(),
-          e
-        )
+      fs::create_dir_all(parent).map_err(|source| SchemaError::DirCreate {
+        path: parent.to_path_buf(),
+        source,
       })?;
     }
-    fs::write(path, &schema_str).map_err(|e| {
-      format!("Failed to write schema to '{}': {}", path.display(), e)
+    fs::write(path, &schema_str).map_err(|source| SchemaError::FileWrite {
+      path: path.to_path_buf(),
+      source,
     })?;
   }
 
@@ -186,69 +269,74 @@ pub fn generate_release_workflow(version: Option<&str>) -> String {
 }
 
 /// Loads the semantic version string (`meta.version`) from a content YAML file.
-pub fn load_content_version(content_path: &Path) -> Result<String, String> {
-  let content_str = fs::read_to_string(content_path).map_err(|e| {
-    format!(
-      "Failed to read content file '{}': {}",
-      content_path.display(),
-      e
-    )
+///
+/// # Errors
+/// Returns a [`SchemaError`] if reading, parsing, or extracting the version fails.
+pub fn load_content_version(
+  content_path: &Path,
+) -> Result<String, SchemaError> {
+  let content_str = fs::read_to_string(content_path).map_err(|source| {
+    SchemaError::ContentFileRead {
+      path: content_path.to_path_buf(),
+      source,
+    }
   })?;
 
   let val: serde_yaml::Value =
-    serde_yaml::from_str(&content_str).map_err(|e| {
-      format!(
-        "Failed to parse YAML from '{}': {}",
-        content_path.display(),
-        e
-      )
+    serde_yaml::from_str(&content_str).map_err(|source| {
+      SchemaError::ContentYamlParse {
+        path: content_path.to_path_buf(),
+        source,
+      }
     })?;
 
   let version_val =
     val
       .get("meta")
       .and_then(|m| m.get("version"))
-      .ok_or_else(|| {
-        format!(
-          "Missing 'meta.version' field in '{}'",
-          content_path.display()
-        )
+      .ok_or_else(|| SchemaError::MissingField {
+        field: "meta.version",
+        path: content_path.to_path_buf(),
       })?;
 
   let version_str = version_val
     .as_str()
-    .ok_or_else(|| "Field 'meta.version' is not a string".to_string())?;
+    .ok_or(SchemaError::InvalidFieldType("meta.version"))?;
 
   Ok(version_str.to_string())
 }
 
 /// Loads the author's name (`meta.name`) from a content YAML file.
-pub fn load_content_name(content_path: &Path) -> Result<String, String> {
-  let content_str = fs::read_to_string(content_path).map_err(|e| {
-    format!(
-      "Failed to read content file '{}': {}",
-      content_path.display(),
-      e
-    )
+///
+/// # Errors
+/// Returns a [`SchemaError`] if reading, parsing, or extracting the name fails.
+pub fn load_content_name(content_path: &Path) -> Result<String, SchemaError> {
+  let content_str = fs::read_to_string(content_path).map_err(|source| {
+    SchemaError::ContentFileRead {
+      path: content_path.to_path_buf(),
+      source,
+    }
   })?;
 
   let val: serde_yaml::Value =
-    serde_yaml::from_str(&content_str).map_err(|e| {
-      format!(
-        "Failed to parse YAML from '{}': {}",
-        content_path.display(),
-        e
-      )
+    serde_yaml::from_str(&content_str).map_err(|source| {
+      SchemaError::ContentYamlParse {
+        path: content_path.to_path_buf(),
+        source,
+      }
     })?;
 
   let name_val =
     val.get("meta").and_then(|m| m.get("name")).ok_or_else(|| {
-      format!("Missing 'meta.name' field in '{}'", content_path.display())
+      SchemaError::MissingField {
+        field: "meta.name",
+        path: content_path.to_path_buf(),
+      }
     })?;
 
   let name_str = name_val
     .as_str()
-    .ok_or_else(|| "Field 'meta.name' is not a string".to_string())?;
+    .ok_or(SchemaError::InvalidFieldType("meta.name"))?;
 
   Ok(name_str.to_string())
 }
@@ -402,8 +490,13 @@ sections: []
     )
     .unwrap();
 
-    let errors = validate_schema_auto(&content_file, None).unwrap_err();
-    assert!(errors.iter().any(|e| e.contains("role")));
+    let err = validate_schema_auto(&content_file, None).unwrap_err();
+    match err {
+      SchemaError::ValidationFailed { errors } => {
+        assert!(errors.iter().any(|e| e.contains("role")));
+      }
+      other => panic!("expected ValidationFailed, got {other:?}"),
+    }
   }
 
   #[test]
@@ -424,8 +517,13 @@ sections: []
     )
     .unwrap();
 
-    let errors = validate_schema_auto(&content_file, None).unwrap_err();
-    assert!(errors.iter().any(|e| e.contains("titel")));
+    let err = validate_schema_auto(&content_file, None).unwrap_err();
+    match err {
+      SchemaError::ValidationFailed { errors } => {
+        assert!(errors.iter().any(|e| e.contains("titel")));
+      }
+      other => panic!("expected ValidationFailed, got {other:?}"),
+    }
   }
 
   #[test]

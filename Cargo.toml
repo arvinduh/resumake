@@ -36,6 +36,8 @@ comfy-table = { version = "8.0", features = ["custom_styling"] }
 sha2 = "0.11"
 similar = "3.2"
 include_dir = "0.7"
+thiserror = "2.0"
+anyhow = "1.0"
 self_update = { version = "=1.2.0", default-features = false, features = [
   "rustls",
   "github",
