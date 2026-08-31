@@ -68,14 +68,14 @@ Analyzes bullet point text width against the column width, per bullet:
 
 ```text
 ───────────────────────────────────────────────────────────────────────
- Candidate:       Jane Doe                                             
- Output:          janedoe_resume.pdf                                   
- Version:         1.0.0                                                
- Page Count:      1 page(s)                                 [PASS 1/1] 
- Vertical Fill:   95.2% (spare: 0.38 in)                     [OPTIMAL] 
- Line Wraps:      0 wrapped items                            [0 WRAPS] 
- Underfills:      0 items (<86%)                             [0 UNDER] 
- Status:          SUCCESS (Strict 1-page layout verified)              
+ Candidate:       Jane Doe
+ Output:          janedoe_resume.pdf
+ Version:         1.0.0
+ Page Count:      1 page(s)                                 [PASS 1/1]
+ Vertical Fill:   95.2% (spare: 0.38 in)                     [OPTIMAL]
+ Line Wraps:      0 wrapped items                            [0 WRAPS]
+ Underfills:      0 items (<86%)                             [0 UNDER]
+ Status:          SUCCESS (Strict 1-page layout verified)
 ───────────────────────────────────────────────────────────────────────
 ```
 

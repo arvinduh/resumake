@@ -176,10 +176,7 @@ pub fn build_telemetry_table(
 
   // Final status row
   let (status_text, status_color) = if report.is_pass() {
-    (
-      "SUCCESS (Strict 1-page layout verified)",
-      Color::Green,
-    )
+    ("SUCCESS (Strict 1-page layout verified)", Color::Green)
   } else {
     (
       "FAILED (Document violates single-page geometry constraints)",
@@ -204,7 +201,8 @@ pub fn print_telemetry_table(
   output_pdf: &str,
   version: &str,
 ) {
-  let table = build_telemetry_table(report, candidate_name, output_pdf, version);
+  let table =
+    build_telemetry_table(report, candidate_name, output_pdf, version);
   println!("{table}");
 }
 
@@ -242,7 +240,8 @@ mod tests {
   fn test_build_telemetry_table_pass_structure() {
     let report =
       TelemetryReport::new(1, 95.2, 0.38, Vec::new(), Vec::new(), Vec::new());
-    let table = build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
+    let table =
+      build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
     let output = table.to_string();
     assert!(output.contains("Candidate:"));
     assert!(output.contains("Jane Doe"));
@@ -282,7 +281,8 @@ mod tests {
       }],
       Vec::new(),
     );
-    let table = build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
+    let table =
+      build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
     let output = table.to_string();
     assert!(output.contains("[FAIL 2/1]"));
     assert!(output.contains("[OVERFLOW]"));
@@ -290,17 +290,16 @@ mod tests {
     assert!(output.contains("[1 UNDER]"));
     assert!(output.contains("Layout Warnings:"));
     assert!(output.contains("Long bullet item that wraps to next line"));
-    assert!(output.contains("FAILED (Document violates single-page geometry constraints)"));
+    assert!(output
+      .contains("FAILED (Document violates single-page geometry constraints)"));
   }
 
   #[test]
   fn test_doc_sample_output() {
-    let report = TelemetryReport::new(1, 95.2, 0.38, Vec::new(), Vec::new(), Vec::new());
-    let table = build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
+    let report =
+      TelemetryReport::new(1, 95.2, 0.38, Vec::new(), Vec::new(), Vec::new());
+    let table =
+      build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
     println!("DOC SAMPLE:\n{table}");
   }
 }
-
-
-
-
