@@ -83,7 +83,10 @@ pub fn generate_unified_diff(
 ) -> String {
   similar::TextDiff::from_lines(old_content, new_content)
     .unified_diff()
-    .header(&format!("{filename} (current)"), &format!("{filename} (target)"))
+    .header(
+      &format!("{filename} (current)"),
+      &format!("{filename} (target)"),
+    )
     .to_string()
 }
 
