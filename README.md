@@ -157,10 +157,6 @@ rsmk release -m <MESSAGE>       # Custom annotated tag message
 # Template Management
 rsmk template list              # List built-in and local custom templates
 rsmk template eject classic     # Extract template tree to ./templates/classic/
-
-# Schema Tools
-rsmk schema                     # Print canonical JSON Schema (Draft-07) to stdout
-rsmk schema --export out.json   # Export JSON Schema to a file
 ```
 
 ---
