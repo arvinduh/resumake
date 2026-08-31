@@ -185,6 +185,7 @@ pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, String> {
   let repo = gix::discover(repo_dir)
     .map_err(|e| format!("Failed to open git repository: {e}"))?;
 
+
   let remote = repo
     .find_remote("origin")
     .map_err(|e| format!("git remote get-url origin failed: {e}"))?;
