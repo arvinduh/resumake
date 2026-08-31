@@ -99,10 +99,7 @@ pub fn validate_schema_auto(
     } else {
       instance_path
     };
-    errors.push(format!(
-      "Schema validation error at {}: {}",
-      location, error
-    ));
+    errors.push(format!("Schema validation error at {location}: {error}"));
   }
 
   if errors.is_empty() {
@@ -122,7 +119,7 @@ pub fn export_builtin_schema(
 ) -> Result<String, String> {
   let schema_json = generate_builtin_schema();
   let schema_str = serde_json::to_string_pretty(&schema_json)
-    .map_err(|e| format!("Failed to format JSON schema: {}", e))?;
+    .map_err(|e| format!("Failed to format JSON schema: {e}"))?;
 
   if let Some(path) = output_path {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -268,7 +265,7 @@ pub fn derive_output_filename(content_path: &Path) -> PathBuf {
       .collect::<String>()
       .to_lowercase();
     if !sanitized.is_empty() {
-      return PathBuf::from(format!("{}_resume.pdf", sanitized));
+      return PathBuf::from(format!("{sanitized}_resume.pdf"));
     }
   }
   PathBuf::from("resume.pdf")
