@@ -1,14 +1,21 @@
-//! Typst engine orchestration, embedded component cache, and subprocess
-//! execution.
+//! In-process Typst engine orchestration, embedded templates, and layout telemetry introspection.
 
 use crate::schema::validate_schema_auto;
 use crate::telemetry::{evaluate_telemetry, TelemetryReport};
 use include_dir::{include_dir, Dir};
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use which::which;
+use std::sync::Mutex;
+use typst::diag::{FileError, FileResult, Severity, SourceDiagnostic};
+use typst::foundations::{Bytes, Datetime, Dict, Label, Selector, Str, Value};
+use typst::layout::PagedDocument;
+use typst::syntax::{FileId, Source, VirtualPath};
+use typst::text::{Font, FontBook};
+use typst::utils::{LazyHash, PicoStr};
+use typst::{Document, Library, World};
+use typst_kit::fonts::FontSlot;
 
 /// A single Typst source file belonging to an embedded template, keyed by
 /// its path relative to the template's root directory (e.g.
@@ -266,15 +273,24 @@ pub fn eject_template(
   Ok(ejected_files)
 }
 
+/// Converts Unix days since epoch to a Gregorian [`Datetime`].
+fn days_to_date(days_since_epoch: i64) -> Option<Datetime> {
+  let z = days_since_epoch + 719468;
+  let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+  let doe = (z - era * 146097) as u32;
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  let y = (yoe as i64) + era * 400;
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  let mp = (5 * doy + 2) / 153;
+  let d = doy - (153 * mp + 2) / 5 + 1;
+  let m = if mp < 10 { mp + 3 } else { mp - 9 };
+  let y = if m <= 2 { y + 1 } else { y };
+  Datetime::from_ymd(y as i32, m as u8, d as u8)
+}
+
 /// Errors originating from the Typst execution engine.
 #[derive(thiserror::Error, Debug)]
 pub enum EngineError {
-  /// The `typst` binary could not be located on `PATH`.
-  #[error("typst executable not found on PATH.\n{instructions}")]
-  TypstNotFound {
-    /// Platform-specific installation instructions shown to the user.
-    instructions: String,
-  },
   /// A user-specified font directory was not found.
   #[error("No valid font directory found. Searched locations:\n{}", .searched.iter().map(|p| format!("  - {}", p.display())).collect::<Vec<_>>().join("\n"))]
   FontDirNotFound {
@@ -289,39 +305,17 @@ pub enum EngineError {
     /// Names of templates actually bundled into the binary.
     known: Vec<String>,
   },
-  /// `typst compile` exited with a non-zero status.
+  /// In-process Typst compilation failed with diagnostics.
   #[error("Typst compilation failed:\n{stderr}")]
   CompilationFailed {
-    /// Captured stderr or stdout from the subprocess.
+    /// Captured diagnostic messages.
     stderr: String,
   },
-  /// `typst query` exited with a non-zero status.
+  /// Metadata query failed.
   #[error("Typst query failed:\n{stderr}")]
   QueryFailed {
-    /// Captured stderr or stdout from the subprocess.
+    /// Diagnostic error message.
     stderr: String,
-  },
-  /// `typst watch` exited with a non-zero status.
-  #[error("Typst watch process failed:\n{stderr}")]
-  WatchFailed {
-    /// Captured stderr or stdout from the subprocess.
-    stderr: String,
-  },
-  /// The resolved `--content` file lies outside the discovered project
-  /// root. Typst can only read files under `--root`, so no spelling of
-  /// the path would let it load the file.
-  #[error(
-    "`{}` is outside the project root (`{}`).\n\
-     Run rsmk from the directory containing your résumé, or pass \
-     `--source` for a template elsewhere.",
-    display_path(content),
-    display_path(root)
-  )]
-  ContentOutsideRoot {
-    /// The content file, canonicalized where possible.
-    content: PathBuf,
-    /// The discovered project root, canonicalized where possible.
-    root: PathBuf,
   },
   /// Destination directory already exists and `--force` was not specified.
   #[error(
@@ -338,15 +332,6 @@ pub enum EngineError {
     /// Path to content file.
     path: PathBuf,
   },
-  /// Failed to create cache directory.
-  #[error("Failed to create engine cache directory '{}': {source}", path.display())]
-  CacheDirCreation {
-    /// Cache directory path.
-    path: PathBuf,
-    /// Underlying I/O error.
-    #[source]
-    source: std::io::Error,
-  },
   /// Document failed strict single-page layout geometry constraints.
   #[error("Dry-run check failed strict single-page layout constraints.")]
   LayoutConstraintViolation,
@@ -356,25 +341,304 @@ pub enum EngineError {
   /// Telemetry error.
   #[error(transparent)]
   Telemetry(#[from] crate::telemetry::TelemetryError),
-  /// The subprocess could not be spawned or its output could not be read.
+  /// Underlying I/O error.
   #[error("I/O error: {0}")]
   Io(#[from] std::io::Error),
 }
 
-/// Locates the `typst` binary on the system PATH using the `which` crate.
+/// In-process [`World`] implementation resolving embedded templates from memory,
+/// disk files from the project root, and system/custom fonts.
+pub struct ResumakeWorld {
+  library: LazyHash<Library>,
+  book: LazyHash<FontBook>,
+  fonts: Vec<FontSlot>,
+  main_id: FileId,
+  content_id: FileId,
+  root_path: PathBuf,
+  template_path: PathBuf,
+  content_path: PathBuf,
+  content_vpath: String,
+  template_name_hint: String,
+  sources: Mutex<HashMap<FileId, FileResult<Source>>>,
+  files: Mutex<HashMap<FileId, FileResult<Bytes>>>,
+  now: std::time::SystemTime,
+}
+
+impl ResumakeWorld {
+  /// Constructs a new [`ResumakeWorld`].
+  ///
+  /// # Errors
+  ///
+  /// Returns [`EngineError`] if font initialization fails.
+  pub fn new(
+    root_path: PathBuf,
+    template_path: PathBuf,
+    content_path: PathBuf,
+    font_path: Option<PathBuf>,
+  ) -> Result<Self, EngineError> {
+    let mut searcher = typst_kit::fonts::Fonts::searcher();
+    searcher.include_system_fonts(true);
+    searcher.include_embedded_fonts(true);
+
+    let mut font_dirs = Vec::new();
+    if let Some(ref fp) = font_path {
+      font_dirs.push(fp.clone());
+    }
+    let candidate_fonts = root_path.join("fonts");
+    if candidate_fonts.is_dir() {
+      font_dirs.push(candidate_fonts);
+    }
+    let candidate_assets = root_path.join("assets").join("fonts");
+    if candidate_assets.is_dir() {
+      font_dirs.push(candidate_assets);
+    }
+
+    let fonts = searcher.search_with(font_dirs);
+    let book = LazyHash::new(fonts.book);
+    let font_slots = fonts.fonts;
+
+    let content_vpath = normalize_posix_path(&root_path, &content_path)
+      .unwrap_or_else(|_| "/content.yaml".to_string());
+    let content_id = FileId::new(None, VirtualPath::new(&content_vpath));
+
+    let mut inputs = Dict::new();
+    inputs.insert(
+      Str::from("content"),
+      Value::Str(Str::from(content_vpath.as_str())),
+    );
+    let library = LazyHash::new(Library::builder().with_inputs(inputs).build());
+
+    let template_str = template_path.to_string_lossy().replace('\\', "/");
+    let template_name_hint = template_str
+      .split('/')
+      .next()
+      .unwrap_or(DEFAULT_TEMPLATE)
+      .to_string();
+
+    let main_vpath = if template_str.starts_with('/') {
+      template_str
+    } else if let Ok(rel) = template_path.strip_prefix(&root_path) {
+      format!("/{}", rel.to_string_lossy().replace('\\', "/"))
+    } else {
+      format!("/{template_str}")
+    };
+
+    let main_id = FileId::new(None, VirtualPath::new(&main_vpath));
+
+    Ok(Self {
+      library,
+      book,
+      fonts: font_slots,
+      main_id,
+      content_id,
+      root_path,
+      template_path,
+      content_path,
+      content_vpath,
+      template_name_hint,
+      sources: Mutex::new(HashMap::new()),
+      files: Mutex::new(HashMap::new()),
+      now: std::time::SystemTime::now(),
+    })
+  }
+
+  fn read_bytes_uncached(&self, id: FileId) -> FileResult<Bytes> {
+    let raw_vpath = id.vpath().as_rootless_path().to_string_lossy();
+    let vpath = raw_vpath.replace('\\', "/");
+    let trimmed_vpath = vpath.trim_start_matches('/');
+
+    // 1. Resolve from embedded templates in memory
+    if let Some(file) = TEMPLATES_DIR.get_file(trimmed_vpath) {
+      return Ok(Bytes::new(file.contents()));
+    }
+    if !self.template_name_hint.is_empty() {
+      let scoped_embedded =
+        format!("{}/{}", self.template_name_hint, trimmed_vpath);
+      if let Some(file) = TEMPLATES_DIR.get_file(&scoped_embedded) {
+        return Ok(Bytes::new(file.contents()));
+      }
+    }
+
+    // 2. Resolve content file
+    let rooted_vpath = format!("/{trimmed_vpath}");
+    if (id == self.content_id
+      || rooted_vpath == self.content_vpath
+      || trimmed_vpath == "content.yaml"
+      || trimmed_vpath.ends_with("/content.yaml")
+      || trimmed_vpath == self.content_vpath.trim_start_matches('/'))
+      && self.content_path.is_file()
+    {
+      return fs::read(&self.content_path)
+        .map(Bytes::new)
+        .map_err(|e| FileError::from_io(e, &self.content_path));
+    }
+
+    // 3. Resolve template entry or custom template parent files
+    if id == self.main_id && self.template_path.is_file() {
+      return fs::read(&self.template_path)
+        .map(Bytes::new)
+        .map_err(|e| FileError::from_io(e, &self.template_path));
+    }
+    if let Some(parent) = self.template_path.parent() {
+      let candidate = parent.join(trimmed_vpath);
+      if candidate.is_file() {
+        return fs::read(&candidate)
+          .map(Bytes::new)
+          .map_err(|e| FileError::from_io(e, &candidate));
+      }
+    }
+
+    // 4. Resolve from project root on disk
+    let disk_path = self.root_path.join(trimmed_vpath);
+    if disk_path.is_file() {
+      return fs::read(&disk_path)
+        .map(Bytes::new)
+        .map_err(|e| FileError::from_io(e, &disk_path));
+    }
+
+    // 5. If content_path filename matches
+    if let Some(content_name) = self.content_path.file_name() {
+      if trimmed_vpath == content_name.to_string_lossy()
+        && self.content_path.is_file()
+      {
+        return fs::read(&self.content_path)
+          .map(Bytes::new)
+          .map_err(|e| FileError::from_io(e, &self.content_path));
+      }
+    }
+
+    Err(FileError::NotFound(
+      id.vpath().as_rooted_path().to_path_buf(),
+    ))
+  }
+}
+
+impl World for ResumakeWorld {
+  fn library(&self) -> &LazyHash<Library> {
+    &self.library
+  }
+
+  fn book(&self) -> &LazyHash<FontBook> {
+    &self.book
+  }
+
+  fn main(&self) -> FileId {
+    self.main_id
+  }
+
+  fn source(&self, id: FileId) -> FileResult<Source> {
+    let mut lock = self.sources.lock().unwrap();
+    if let Some(res) = lock.get(&id) {
+      return res.clone();
+    }
+
+    let bytes_res = self.read_bytes_uncached(id);
+    let source_res = match bytes_res {
+      Ok(bytes) => match std::str::from_utf8(&bytes) {
+        Ok(text) => Ok(Source::new(id, text.to_string())),
+        Err(_) => Err(FileError::InvalidUtf8),
+      },
+      Err(err) => Err(err),
+    };
+
+    lock.insert(id, source_res.clone());
+    source_res
+  }
+
+  fn file(&self, id: FileId) -> FileResult<Bytes> {
+    let mut lock = self.files.lock().unwrap();
+    if let Some(res) = lock.get(&id) {
+      return res.clone();
+    }
+
+    let res = self.read_bytes_uncached(id);
+    lock.insert(id, res.clone());
+    res
+  }
+
+  fn font(&self, index: usize) -> Option<Font> {
+    self.fonts.get(index).and_then(|slot| slot.get())
+  }
+
+  fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+    let duration = self.now.duration_since(std::time::UNIX_EPOCH).ok()?;
+    let secs = match offset {
+      None => duration.as_secs() as i64,
+      Some(hours) => (duration.as_secs() as i64) + (hours * 3600),
+    };
+    days_to_date(secs / 86400)
+  }
+}
+
+/// Formats a list of [`SourceDiagnostic`] into a readable diagnostic string.
+pub fn format_diagnostics(
+  world: &ResumakeWorld,
+  diags: &[SourceDiagnostic],
+) -> String {
+  let mut out = Vec::new();
+  for diag in diags {
+    let severity = match diag.severity {
+      Severity::Error => "error",
+      Severity::Warning => "warning",
+    };
+    let mut location = String::new();
+    if let Some(id) = diag.span.id() {
+      let path = id.vpath().as_rooted_path();
+      if let Ok(source) = world.source(id) {
+        if let Some(range) = source.range(diag.span) {
+          let line =
+            source.byte_to_line(range.start).map(|l| l + 1).unwrap_or(1);
+          let col = source
+            .byte_to_column(range.start)
+            .map(|c| c + 1)
+            .unwrap_or(1);
+          location = format!("{}:{}:{}: ", path.display(), line, col);
+        } else {
+          location = format!("{}: ", path.display());
+        }
+      } else {
+        location = format!("{}: ", path.display());
+      }
+    }
+    let mut msg = format!("{location}{severity}: {}", diag.message);
+    for hint in &diag.hints {
+      msg.push_str(&format!("\n  = hint: {hint}"));
+    }
+    out.push(msg);
+  }
+  out.join("\n")
+}
+
+/// Queries metadata value(s) matching `selector` from a [`PagedDocument`] and serializes to JSON.
 ///
 /// # Errors
 ///
-/// Returns an [`EngineError::TypstNotFound`] if `typst` is not installed
-/// on `PATH`.
-pub fn find_typst_binary() -> Result<PathBuf, EngineError> {
-  which("typst").map_err(|_| EngineError::TypstNotFound {
-    instructions: concat!(
-      "  Windows: winget install --id Typst.Typst\n",
-      "  macOS:   brew install typst\n",
-      "  Linux:   cargo install --locked typst-cli"
-    )
-    .to_string(),
+/// Returns [`EngineError::QueryFailed`] if serialization fails.
+pub fn query_doc_metadata(
+  doc: &PagedDocument,
+  selector: &str,
+) -> Result<String, EngineError> {
+  let label_str = selector
+    .trim()
+    .trim_start_matches('<')
+    .trim_end_matches('>');
+  let label = Label::new(PicoStr::intern(label_str));
+  let sel = Selector::Label(label);
+  let elems = doc.introspector().query(&sel);
+
+  let mut values = Vec::new();
+  for elem in elems {
+    if let Some(metadata) =
+      elem.to_packed::<typst::introspection::MetadataElem>()
+    {
+      values.push(metadata.value.clone());
+    } else if let Ok(val) = elem.get_by_name("value") {
+      values.push(val);
+    }
+  }
+
+  serde_json::to_string(&values).map_err(|e| EngineError::QueryFailed {
+    stderr: e.to_string(),
   })
 }
 
@@ -431,68 +695,41 @@ fn display_path(path: &Path) -> String {
   s.into_owned()
 }
 
-/// Renders a path already known to be relative to the Typst root as an
-/// absolute, forward-slashed virtual path (e.g. `blocks/x.yaml` ->
-/// `/blocks/x.yaml`).
-fn to_rooted_posix(rel: &Path) -> String {
-  let posix = rel.to_string_lossy().replace('\\', "/");
-  let trimmed = posix.trim_start_matches('/');
-  format!("/{trimmed}")
-}
-
-/// Normalizes a content file path into a POSIX-compliant `--input` virtual
-/// path for Typst, resolved against `root` (which Typst is given as
-/// `--root`).
-///
-/// # Errors
-///
-/// Returns [`EngineError::ContentOutsideRoot`] when `content_path` resolves
-/// outside `root`. Typst refuses to read files outside `--root`, so there
-/// is no string that would make such a path load; rejecting it up front
-/// yields a message that names the file the user actually passed instead of
-/// a misleading error pointing at the template's `main.typ`.
+/// Normalizes a content file path into a POSIX virtual path.
 pub fn normalize_posix_path(
   root: &Path,
   content_path: &Path,
 ) -> Result<String, EngineError> {
-  // Fast path: the content path is already lexically under the root.
   if let Ok(rel) = content_path.strip_prefix(root) {
-    return Ok(to_rooted_posix(rel));
-  }
-
-  // Resolve `..`, symlinks, drive-letter casing and mixed separators by
-  // canonicalizing both sides. On Windows this also gives both paths a
-  // matching `\\?\` verbatim prefix so `strip_prefix` can line them up.
-  if let Some((canon_root, canon_content)) = root
-    .canonicalize()
-    .ok()
-    .zip(content_path.canonicalize().ok())
-  {
-    return match canon_content.strip_prefix(&canon_root) {
-      Ok(rel) => Ok(to_rooted_posix(rel)),
-      Err(_) => Err(EngineError::ContentOutsideRoot {
-        content: canon_content,
-        root: canon_root,
-      }),
-    };
-  }
-
-  // The paths could not both be canonicalized (the file does not exist yet,
-  // or the root does not). A relative path is still meaningful: treat it as
-  // root-relative, matching Typst's own resolution rules.
-  if content_path.is_relative() {
-    let raw = content_path.to_string_lossy().replace('\\', "/");
-    let trimmed = raw.trim_start_matches("./").trim_start_matches('/');
+    let s = rel.to_string_lossy().replace('\\', "/");
+    let trimmed = s.trim_start_matches('/');
     return Ok(format!("/{trimmed}"));
   }
 
-  // An absolute path that neither strips under the root nor canonicalizes
-  // cannot be read by Typst under `--root`. Reject it rather than handing
-  // Typst a drive-prefixed string it will mangle against `--root`.
-  Err(EngineError::ContentOutsideRoot {
-    content: content_path.to_path_buf(),
-    root: root.to_path_buf(),
-  })
+  if let (Ok(canon_root), Ok(canon_content)) =
+    (root.canonicalize(), content_path.canonicalize())
+  {
+    if let Ok(rel) = canon_content.strip_prefix(&canon_root) {
+      let s = rel.to_string_lossy().replace('\\', "/");
+      let trimmed = s.trim_start_matches('/');
+      return Ok(format!("/{trimmed}"));
+    }
+  }
+
+  if content_path.is_relative() {
+    let raw = content_path.to_string_lossy().replace('\\', "/");
+    let trimmed = raw
+      .trim_start_matches("./")
+      .trim_start_matches('/')
+      .trim_start_matches('\\');
+    return Ok(format!("/{trimmed}"));
+  }
+
+  if let Some(file_name) = content_path.file_name() {
+    return Ok(format!("/{}", file_name.to_string_lossy()));
+  }
+
+  Ok("/content.yaml".to_string())
 }
 
 /// Finds project root by checking for markers (`resume.yaml`,
@@ -515,47 +752,39 @@ pub fn find_project_root() -> PathBuf {
   std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-/// Engine facade coordinating Typst discovery, embedded modular templates,
-/// and subprocess execution.
+/// Engine facade coordinating in-process Typst compilation, embedded modular templates,
+/// and metadata introspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypstEngine {
-  /// Absolute path to the discovered `typst` binary.
-  pub typst_binary: PathBuf,
   /// Optional font directory passed to Typst via `--font-path`.
   pub font_path: Option<PathBuf>,
-  /// Project root passed to Typst via `--root`.
+  /// Project root path.
   pub root_path: PathBuf,
 }
 
 impl TypstEngine {
-  /// Discovers the Typst binary and optional font directory automatically
-  /// relative to project root.
+  /// Discovers the project root and optional font directory.
   ///
   /// # Errors
   ///
-  /// Returns an [`EngineError`] if `typst` cannot be found on `PATH` or font
-  /// directory is invalid.
+  /// Returns an [`EngineError`] if the font directory is invalid.
   pub fn new(font_path_override: Option<&Path>) -> Result<Self, EngineError> {
     let root_path = find_project_root();
-    let typst_binary = find_typst_binary()?;
     let font_path = discover_font_dir(&root_path, font_path_override)?;
     Ok(Self {
-      typst_binary,
       font_path,
       root_path,
     })
   }
 
   /// Resolves the template path. If a custom template file is provided
-  /// and exists, returns it directly (the `template_name` registry pick
-  /// is ignored in that case). Otherwise, looks up `template_name` in the
-  /// built-in template registry, extracts its modular component tree
-  /// into `.resumake/<template_name>/`, and returns its `main.typ`.
+  /// and exists, returns it directly. Otherwise, looks up `template_name` in the
+  /// built-in template registry or `./templates/` on disk.
   ///
   /// # Errors
   ///
-  /// Returns an [`EngineError`] if `template_name` is not a registered
-  /// template, or if extracting embedded files to disk fails.
+  /// Returns an [`EngineError::TemplateNotFound`] if `template_name` is not a registered
+  /// built-in or custom template.
   pub fn resolve_template(
     &self,
     template_name: &str,
@@ -574,78 +803,98 @@ impl TypstEngine {
       return Ok(rooted_direct);
     }
 
-    let template = match find_embedded_template(template_name) {
-      Some(t) => t,
-      None => {
-        let custom_main = self
-          .root_path
-          .join("templates")
-          .join(template_name)
-          .join("main.typ");
-        if custom_main.exists() && custom_main.is_file() {
-          return Ok(custom_main);
-        }
-
-        return Err(EngineError::TemplateNotFound {
-          name: template_name.to_string(),
-          known: known_template_names(),
-        });
-      }
-    };
-
-    let cache_dir = self.root_path.join(".resumake").join(&template.name);
-    fs::create_dir_all(&cache_dir).map_err(|source| {
-      EngineError::CacheDirCreation {
-        path: cache_dir.clone(),
-        source,
-      }
-    })?;
-
-    fs::write(cache_dir.join("main.typ"), template.entry)?;
-
-    for file in &template.files {
-      let dest = cache_dir.join(&file.rel_path);
-      if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
-      }
-      fs::write(&dest, file.contents)?;
+    if find_embedded_template(template_name).is_some() {
+      return Ok(PathBuf::from(format!("{template_name}/main.typ")));
     }
 
-    Ok(cache_dir.join("main.typ"))
+    let custom_main = self
+      .root_path
+      .join("templates")
+      .join(template_name)
+      .join("main.typ");
+    if custom_main.exists() && custom_main.is_file() {
+      return Ok(custom_main);
+    }
+
+    Err(EngineError::TemplateNotFound {
+      name: template_name.to_string(),
+      known: known_template_names(),
+    })
+  }
+
+  /// Instantiates a new [`ResumakeWorld`] for the given template and content.
+  ///
+  /// # Errors
+  ///
+  /// Returns an [`EngineError`] if world creation fails.
+  pub fn create_world(
+    &self,
+    template: &Path,
+    content: &Path,
+  ) -> Result<ResumakeWorld, EngineError> {
+    ResumakeWorld::new(
+      self.root_path.clone(),
+      template.to_path_buf(),
+      content.to_path_buf(),
+      self.font_path.clone(),
+    )
+  }
+
+  /// Compiles a Typst template and content file into a layouted [`PagedDocument`].
+  ///
+  /// # Errors
+  ///
+  /// Returns an [`EngineError::CompilationFailed`] if Typst compilation produces errors.
+  pub fn compile_paged(
+    &self,
+    template: &Path,
+    content: &Path,
+  ) -> Result<PagedDocument, EngineError> {
+    let world = self.create_world(template, content)?;
+    let warned = typst::compile::<PagedDocument>(&world);
+    match warned.output {
+      Ok(doc) => Ok(doc),
+      Err(errors) => {
+        let stderr = format_diagnostics(&world, &errors);
+        Err(EngineError::CompilationFailed { stderr })
+      }
+    }
   }
 
   /// Compiles a Typst template and content file into an output PDF document.
   ///
   /// # Errors
   ///
-  /// Returns an [`EngineError`] if `typst compile` fails.
+  /// Returns an [`EngineError`] if Typst compilation or PDF export fails.
   pub fn compile(
     &self,
     template: &Path,
     content: &Path,
     output: &Path,
   ) -> Result<(), EngineError> {
-    let content_posix = normalize_posix_path(&self.root_path, content)?;
-    let mut cmd = Command::new(&self.typst_binary);
-    cmd.arg("compile").arg("--root").arg(&self.root_path);
+    let world = self.create_world(template, content)?;
+    let warned = typst::compile::<PagedDocument>(&world);
+    let doc = match warned.output {
+      Ok(doc) => doc,
+      Err(errors) => {
+        let stderr = format_diagnostics(&world, &errors);
+        return Err(EngineError::CompilationFailed { stderr });
+      }
+    };
 
-    if let Some(ref fp) = self.font_path {
-      cmd.arg("--font-path").arg(fp);
+    let pdf_bytes = typst_pdf::pdf(&doc, &typst_pdf::PdfOptions::default())
+      .map_err(|errors| {
+        let stderr = format_diagnostics(&world, &errors);
+        EngineError::CompilationFailed { stderr }
+      })?;
+
+    if let Some(parent) = output.parent() {
+      if !parent.as_os_str().is_empty() {
+        fs::create_dir_all(parent)?;
+      }
     }
 
-    cmd
-      .arg("--input")
-      .arg(format!("content={content_posix}"))
-      .arg(template)
-      .arg(output);
-
-    let res = cmd.output()?;
-    if !res.status.success() {
-      let stderr = String::from_utf8_lossy(&res.stderr).trim().to_string();
-      let stdout = String::from_utf8_lossy(&res.stdout).trim().to_string();
-      let err_msg = if stderr.is_empty() { stdout } else { stderr };
-      return Err(EngineError::CompilationFailed { stderr: err_msg });
-    }
+    fs::write(output, pdf_bytes)?;
     Ok(())
   }
 
@@ -654,75 +903,15 @@ impl TypstEngine {
   ///
   /// # Errors
   ///
-  /// Returns an [`EngineError`] if `typst query` fails.
+  /// Returns an [`EngineError`] if compilation or querying fails.
   pub fn query_metadata(
     &self,
     template: &Path,
     content: &Path,
     selector: &str,
   ) -> Result<String, EngineError> {
-    let content_posix = normalize_posix_path(&self.root_path, content)?;
-    let mut cmd = Command::new(&self.typst_binary);
-    cmd.arg("query").arg("--root").arg(&self.root_path);
-
-    if let Some(ref fp) = self.font_path {
-      cmd.arg("--font-path").arg(fp);
-    }
-
-    cmd
-      .arg("--input")
-      .arg(format!("content={content_posix}"))
-      .arg(template)
-      .arg(selector)
-      .arg("--field")
-      .arg("value");
-
-    let res = cmd.output()?;
-    if !res.status.success() {
-      let stderr = String::from_utf8_lossy(&res.stderr).trim().to_string();
-      let stdout = String::from_utf8_lossy(&res.stdout).trim().to_string();
-      let err_msg = if stderr.is_empty() { stdout } else { stderr };
-      return Err(EngineError::QueryFailed { stderr: err_msg });
-    }
-
-    Ok(String::from_utf8_lossy(&res.stdout).trim().to_string())
-  }
-
-  /// Starts Typst live watch mode for real-time document recompilation.
-  ///
-  /// # Errors
-  ///
-  /// Returns an [`EngineError`] if `typst watch` fails to start.
-  pub fn watch(
-    &self,
-    template: &Path,
-    content: &Path,
-    output: &Path,
-  ) -> Result<(), EngineError> {
-    let content_posix = normalize_posix_path(&self.root_path, content)?;
-    let mut cmd = Command::new(&self.typst_binary);
-    cmd.arg("watch").arg("--root").arg(&self.root_path);
-
-    if let Some(ref fp) = self.font_path {
-      cmd.arg("--font-path").arg(fp);
-    }
-
-    cmd
-      .arg("--input")
-      .arg(format!("content={content_posix}"))
-      .arg(template)
-      .arg(output)
-      .stdin(Stdio::inherit())
-      .stdout(Stdio::inherit())
-      .stderr(Stdio::inherit());
-
-    let status = cmd.status()?;
-    if !status.success() {
-      return Err(EngineError::WatchFailed {
-        stderr: format!("exited with status {status}"),
-      });
-    }
-    Ok(())
+    let doc = self.compile_paged(template, content)?;
+    query_doc_metadata(&doc, selector)
   }
 }
 
@@ -748,13 +937,12 @@ pub fn verify_content(
   // 1. Schema check
   validate_schema_auto(content, schema)?;
 
-  // 2. Layout telemetry check
+  // 2. In-process layout telemetry check
   let engine = TypstEngine::new(font_path)?;
   let resolved_template = engine.resolve_template(template_name, source)?;
-  let page_json =
-    engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
-  let bullets_json =
-    engine.query_metadata(&resolved_template, content, "<bulletinfo>")?;
+  let doc = engine.compile_paged(&resolved_template, content)?;
+  let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
+  let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
   let report = evaluate_telemetry(&page_json, &bullets_json)?;
 
   if !report.is_pass() {
@@ -770,28 +958,21 @@ mod tests {
   use tempfile::TempDir;
 
   #[test]
-  fn test_resolve_template_extracts_modular_components() {
+  fn test_resolve_template_builtin_classic() {
     let temp = TempDir::new().unwrap();
     let engine = TypstEngine {
-      typst_binary: PathBuf::from("typst"),
       font_path: None,
       root_path: temp.path().to_path_buf(),
     };
 
     let resolved = engine.resolve_template(DEFAULT_TEMPLATE, None).unwrap();
-    assert!(resolved.exists());
-    let cache_dir = temp.path().join(".resumake").join("classic");
-    assert!(cache_dir.join("main.typ").exists());
-    assert!(cache_dir.join("tokens.typ").exists());
-    assert!(cache_dir.join("primitives.typ").exists());
-    assert!(cache_dir.join("blocks").join("experience.typ").exists());
+    assert_eq!(resolved, PathBuf::from("classic/main.typ"));
   }
 
   #[test]
   fn test_resolve_template_rejects_unknown_name() {
     let temp = TempDir::new().unwrap();
     let engine = TypstEngine {
-      typst_binary: PathBuf::from("typst"),
       font_path: None,
       root_path: temp.path().to_path_buf(),
     };
@@ -868,41 +1049,6 @@ mod tests {
       normalize_posix_path(root, &nested).unwrap(),
       "/resume/content.yaml"
     );
-  }
-
-  #[test]
-  fn test_normalize_posix_path_rejects_content_outside_root() {
-    let root_dir = TempDir::new().unwrap();
-    let other_dir = TempDir::new().unwrap();
-    let outside = other_dir.path().join("content.yaml");
-    fs::write(&outside, "name: Test\n").unwrap();
-
-    let err = normalize_posix_path(root_dir.path(), &outside).unwrap_err();
-    match err {
-      EngineError::ContentOutsideRoot { .. } => {}
-      other => panic!("expected ContentOutsideRoot, got {other:?}"),
-    }
-
-    let msg = err.to_string();
-    assert!(
-      msg.contains("outside the project root"),
-      "unexpected message: {msg}"
-    );
-    assert!(msg.contains("--source"), "unexpected message: {msg}");
-  }
-
-  #[test]
-  fn test_normalize_posix_path_rejects_nonexistent_absolute_outside_root() {
-    let root_dir = TempDir::new().unwrap();
-    // An absolute path that does not exist and does not strip under root:
-    // still rejected rather than mangled into a drive-prefixed string.
-    #[cfg(windows)]
-    let outside = Path::new(r"C:\definitely\not\here\content.yaml");
-    #[cfg(not(windows))]
-    let outside = Path::new("/definitely/not/here/content.yaml");
-
-    let err = normalize_posix_path(root_dir.path(), outside).unwrap_err();
-    assert!(matches!(err, EngineError::ContentOutsideRoot { .. }));
   }
 
   #[test]
@@ -999,7 +1145,6 @@ mod tests {
     fs::write(&custom_main, "// custom template\n").unwrap();
 
     let engine = TypstEngine {
-      typst_binary: PathBuf::from("typst"),
       font_path: None,
       root_path: temp.path().to_path_buf(),
     };
@@ -1013,5 +1158,84 @@ mod tests {
     // Resolving via custom template name under root/templates/custom
     let resolved_custom = engine.resolve_template("custom", None).unwrap();
     assert_eq!(resolved_custom, custom_main);
+  }
+
+  #[test]
+  fn test_in_process_compilation_and_telemetry() {
+    let temp = TempDir::new().unwrap();
+    let content_file = temp.path().join("content.yaml");
+    let output_pdf = temp.path().join("output.pdf");
+
+    let content_yaml = r#"
+meta:
+  name: "Jane Doe"
+  version: "1.0.0"
+  title: "Systems Engineer"
+  contact:
+    - name: "jane@example.com"
+sections:
+  - type: "experience"
+    title: "Experience"
+    items:
+      - role: "Staff Engineer"
+        org: "Acme Corp"
+        date: "2020 - Present"
+        bullets:
+          - "Engineered high-throughput streaming systems in Rust."
+"#;
+    fs::write(&content_file, content_yaml).unwrap();
+
+    let engine = TypstEngine {
+      font_path: None,
+      root_path: temp.path().to_path_buf(),
+    };
+
+    let template = engine.resolve_template("classic", None).unwrap();
+    engine
+      .compile(&template, &content_file, &output_pdf)
+      .unwrap();
+    assert!(output_pdf.exists());
+    assert!(fs::metadata(&output_pdf).unwrap().len() > 0);
+
+    let page_json = engine
+      .query_metadata(&template, &content_file, "<pageinfo>")
+      .unwrap();
+    assert!(page_json.contains("pages"));
+
+    let bullets_json = engine
+      .query_metadata(&template, &content_file, "<bulletinfo>")
+      .unwrap();
+    assert!(
+      bullets_json.contains("Engineered high-throughput streaming systems")
+    );
+
+    let report = evaluate_telemetry(&page_json, &bullets_json).unwrap();
+    assert_eq!(report.page_count, 1);
+    assert!(report.is_pass());
+  }
+
+  #[test]
+  fn test_compilation_error_formatting() {
+    let temp = TempDir::new().unwrap();
+    let content_file = temp.path().join("content.yaml");
+    let broken_template = temp.path().join("broken.typ");
+    let output_pdf = temp.path().join("output.pdf");
+
+    fs::write(&content_file, "meta:\n  name: Test\n").unwrap();
+    fs::write(&broken_template, "#undefined_function_call()\n").unwrap();
+
+    let engine = TypstEngine {
+      font_path: None,
+      root_path: temp.path().to_path_buf(),
+    };
+
+    let err = engine
+      .compile(&broken_template, &content_file, &output_pdf)
+      .unwrap_err();
+    let err_str = err.to_string();
+    assert!(
+      err_str.contains("undefined_function_call")
+        || err_str.contains("unknown variable")
+    );
   }
 }
