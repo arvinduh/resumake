@@ -143,6 +143,24 @@ pub enum Commands {
     #[arg(short = 'f', long = "force")]
     force: bool,
   },
+  /// Validate repository state, verify semver, and cut a new release tag
+  Release {
+    /// Path to content YAML file
+    #[arg(short, long, default_value = "content.yaml")]
+    content: PathBuf,
+
+    /// Optional release message for the annotated git tag
+    #[arg(short, long)]
+    message: Option<String>,
+
+    /// Dry-run mode: run all pre-flight checks without creating or pushing a git tag
+    #[arg(long)]
+    dry_run: bool,
+
+    /// Skip compilation and telemetry pre-flight check (rsmk build --check)
+    #[arg(long)]
+    skip_build: bool,
+  },
   /// Manage and eject résumé layout templates
   Template(TemplateArgs),
 }
@@ -335,6 +353,76 @@ mod tests {
         _ => panic!("Expected Eject command"),
       },
       _ => panic!("Expected Template command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_release_default_flags() {
+    let cli = Cli::parse_from(["rsmk", "release"]);
+    match cli.command.unwrap() {
+      Commands::Release {
+        content,
+        message,
+        dry_run,
+        skip_build,
+      } => {
+        assert_eq!(content, PathBuf::from("content.yaml"));
+        assert_eq!(message, None);
+        assert!(!dry_run);
+        assert!(!skip_build);
+      }
+      _ => panic!("Expected Release command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_release_custom_flags() {
+    let cli = Cli::parse_from([
+      "rsmk",
+      "release",
+      "--content",
+      "my_resume.yaml",
+      "--message",
+      "Version 1.2.0 release",
+      "--dry-run",
+      "--skip-build",
+    ]);
+    match cli.command.unwrap() {
+      Commands::Release {
+        content,
+        message,
+        dry_run,
+        skip_build,
+      } => {
+        assert_eq!(content, PathBuf::from("my_resume.yaml"));
+        assert_eq!(message, Some("Version 1.2.0 release".to_string()));
+        assert!(dry_run);
+        assert!(skip_build);
+      }
+      _ => panic!("Expected Release command"),
+    }
+
+    let cli_short = Cli::parse_from([
+      "rsmk",
+      "release",
+      "-c",
+      "my_resume.yaml",
+      "-m",
+      "Short msg",
+    ]);
+    match cli_short.command.unwrap() {
+      Commands::Release {
+        content,
+        message,
+        dry_run,
+        skip_build,
+      } => {
+        assert_eq!(content, PathBuf::from("my_resume.yaml"));
+        assert_eq!(message, Some("Short msg".to_string()));
+        assert!(!dry_run);
+        assert!(!skip_build);
+      }
+      _ => panic!("Expected Release command"),
     }
   }
 }

@@ -1,6 +1,8 @@
 //! Typst engine orchestration, embedded component cache, and subprocess
 //! execution.
 
+use crate::schema::validate_schema_auto;
+use crate::telemetry::{evaluate_telemetry, TelemetryReport};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -736,6 +738,55 @@ impl TypstEngine {
     cmd.status().map_err(|e| e.to_string())?;
     Ok(())
   }
+}
+
+/// Validates content schema and runs layout telemetry evaluation without generating a PDF.
+///
+/// # Errors
+///
+/// Returns an error string if the content file does not exist, fails schema validation,
+/// fails Typst compilation/querying, or violates single-page geometry constraints.
+pub fn verify_content(
+  content: &Path,
+  template_name: &str,
+  source: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+) -> Result<TelemetryReport, String> {
+  if !content.exists() {
+    return Err(format!("Content file not found: '{}'", content.display()));
+  }
+
+  // 1. Schema check
+  validate_schema_auto(content, schema).map_err(|errors| {
+    format!(
+      "Schema validation failed:\n{}",
+      errors
+        .iter()
+        .map(|e| format!("  - {e}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+    )
+  })?;
+
+  // 2. Layout telemetry check
+  let engine = TypstEngine::new(font_path).map_err(|e| e.to_string())?;
+  let resolved_template = engine
+    .resolve_template(template_name, source)
+    .map_err(|e| e.to_string())?;
+  let page_json =
+    engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
+  let bullets_json =
+    engine.query_metadata(&resolved_template, content, "<bulletinfo>")?;
+  let report = evaluate_telemetry(&page_json, &bullets_json)?;
+
+  if !report.is_pass() {
+    return Err(
+      "Dry-run check failed strict single-page layout constraints.".to_string(),
+    );
+  }
+
+  Ok(report)
 }
 
 #[cfg(test)]

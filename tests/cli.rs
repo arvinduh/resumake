@@ -397,3 +397,320 @@ fn test_cli_build_and_check_flags_integration() {
     .success()
     .stdout(predicate::str::contains("SUCCESS"));
 }
+
+fn setup_git_repo_with_remote(
+  dir: &std::path::Path,
+  content_yaml: &str,
+) -> std::path::PathBuf {
+  let origin_dir = dir.join("remote.git");
+  let work_dir = dir.join("repo");
+  fs::create_dir_all(&origin_dir).unwrap();
+  fs::create_dir_all(&work_dir).unwrap();
+
+  // 1. Init bare remote
+  std::process::Command::new("git")
+    .arg("init")
+    .arg("--bare")
+    .current_dir(&origin_dir)
+    .output()
+    .unwrap();
+
+  // 2. Init work repo
+  std::process::Command::new("git")
+    .arg("init")
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["config", "user.name", "Test User"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["config", "user.email", "test@example.com"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["config", "commit.gpgsign", "false"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+
+  // Add remote origin
+  let origin_path_str = origin_dir.to_str().unwrap();
+  std::process::Command::new("git")
+    .args(["remote", "add", "origin", origin_path_str])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+
+  // Write content.yaml
+  let content_file = work_dir.join("content.yaml");
+  fs::write(&content_file, content_yaml).unwrap();
+
+  // Commit and push
+  std::process::Command::new("git")
+    .args(["add", "."])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["commit", "-m", "chore: initial commit"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["branch", "-M", "main"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["push", "-u", "origin", "main"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+
+  work_dir
+}
+
+const SAMPLE_CONTENT: &str = r#"
+meta:
+  name: "Jane Doe"
+  version: "1.2.0"
+  contact:
+    - name: "jane@example.com"
+sections: []
+"#;
+
+#[test]
+fn test_cli_release_dry_run_success() {
+  let temp = TempDir::new().unwrap();
+  let work_dir = setup_git_repo_with_remote(temp.path(), SAMPLE_CONTENT);
+
+  // Add prior tag v1.1.0
+  std::process::Command::new("git")
+    .args(["tag", "-a", "v1.1.0", "-m", "v1.1.0"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["push", "origin", "v1.1.0"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(&work_dir)
+    .arg("release")
+    .arg("--dry-run")
+    .arg("--skip-build")
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Résumé Release v1.2.0"))
+    .stdout(predicate::str::contains("working tree clean"))
+    .stdout(predicate::str::contains(
+      "upstream branch synced (nothing unpushed)",
+    ))
+    .stdout(predicate::str::contains("v1.2.0 is new, ahead of v1.1.0"))
+    .stdout(predicate::str::contains(
+      "pre-flight check skipped (--skip-build)",
+    ));
+
+  // Verify tag v1.2.0 was not created in dry-run
+  let tags_out = std::process::Command::new("git")
+    .args(["tag", "-l"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  let tags_str = String::from_utf8_lossy(&tags_out.stdout);
+  assert!(!tags_str.contains("v1.2.0"));
+}
+
+#[test]
+fn test_cli_release_dirty_working_tree_fails() {
+  let temp = TempDir::new().unwrap();
+  let work_dir = setup_git_repo_with_remote(temp.path(), SAMPLE_CONTENT);
+
+  // Dirty the tree with an untracked file
+  fs::write(work_dir.join("untracked.txt"), "dirty").unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(&work_dir)
+    .arg("release")
+    .arg("--dry-run")
+    .arg("--skip-build")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("uncommitted changes"));
+}
+
+#[test]
+fn test_cli_release_invalid_semver_fails() {
+  let temp = TempDir::new().unwrap();
+  let invalid_content = r#"
+meta:
+  name: "Jane Doe"
+  version: "not-a-semver"
+  contact:
+    - name: "jane@example.com"
+sections: []
+"#;
+  let work_dir = setup_git_repo_with_remote(temp.path(), invalid_content);
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(&work_dir)
+    .arg("release")
+    .arg("--dry-run")
+    .arg("--skip-build")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("Invalid semver"));
+}
+
+#[test]
+fn test_cli_release_semver_monotonicity_fails() {
+  let temp = TempDir::new().unwrap();
+  let work_dir = setup_git_repo_with_remote(temp.path(), SAMPLE_CONTENT); // v1.2.0
+
+  // Add higher tag v1.3.0
+  std::process::Command::new("git")
+    .args(["tag", "-a", "v1.3.0", "-m", "v1.3.0"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["push", "origin", "v1.3.0"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(&work_dir)
+    .arg("release")
+    .arg("--dry-run")
+    .arg("--skip-build")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("semver monotonicity check failed"));
+}
+
+#[test]
+fn test_cli_release_unpushed_commits_fails() {
+  let temp = TempDir::new().unwrap();
+  let work_dir = setup_git_repo_with_remote(temp.path(), SAMPLE_CONTENT);
+
+  // Make an unpushed commit
+  fs::write(work_dir.join("note.txt"), "hello").unwrap();
+  std::process::Command::new("git")
+    .args(["add", "."])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["commit", "-m", "unpushed"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(&work_dir)
+    .arg("release")
+    .arg("--dry-run")
+    .arg("--skip-build")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("unpushed commit"));
+}
+
+#[test]
+fn test_cli_release_no_upstream_fails() {
+  let temp = TempDir::new().unwrap();
+  let work_dir = temp.path().join("local_repo");
+  fs::create_dir_all(&work_dir).unwrap();
+
+  std::process::Command::new("git")
+    .arg("init")
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["config", "user.name", "Test User"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["config", "user.email", "test@example.com"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["config", "commit.gpgsign", "false"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+
+  fs::write(work_dir.join("content.yaml"), SAMPLE_CONTENT).unwrap();
+  std::process::Command::new("git")
+    .args(["add", "."])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  std::process::Command::new("git")
+    .args(["commit", "-m", "initial"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(&work_dir)
+    .arg("release")
+    .arg("--dry-run")
+    .arg("--skip-build")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("upstream"));
+}
+
+#[test]
+fn test_cli_release_actual_tag_and_push_success() {
+  let temp = TempDir::new().unwrap();
+  let work_dir = setup_git_repo_with_remote(temp.path(), SAMPLE_CONTENT);
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(&work_dir)
+    .arg("release")
+    .arg("--skip-build")
+    .arg("-m")
+    .arg("Release v1.2.0")
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("created tag v1.2.0"))
+    .stdout(predicate::str::contains("pushed tag to origin"))
+    .stdout(predicate::str::contains("Release workflow triggered:"));
+
+  // Verify tag v1.2.0 exists in work repo
+  let tags_out = std::process::Command::new("git")
+    .args(["tag", "-l"])
+    .current_dir(&work_dir)
+    .output()
+    .unwrap();
+  let tags_str = String::from_utf8_lossy(&tags_out.stdout);
+  assert!(tags_str.contains("v1.2.0"));
+
+  // Verify tag v1.2.0 exists in bare remote
+  let remote_tags_out = std::process::Command::new("git")
+    .args(["tag", "-l"])
+    .current_dir(temp.path().join("remote.git"))
+    .output()
+    .unwrap();
+  let remote_tags_str = String::from_utf8_lossy(&remote_tags_out.stdout);
+  assert!(remote_tags_str.contains("v1.2.0"));
+}

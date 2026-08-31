@@ -5,6 +5,7 @@ use resumake::cli::{Cli, Commands, TemplateCommands};
 use resumake::engine::{
   eject_template, list_templates, TypstEngine, DEFAULT_TEMPLATE,
 };
+use resumake::release::run_release;
 use resumake::schema::{
   derive_output_filename, export_builtin_schema, generate_init_template,
   load_content_name, load_content_version, validate_schema_auto,
@@ -130,6 +131,12 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
       output,
       force,
     } => run_init(name.as_deref(), &output, force),
+    Commands::Release {
+      content,
+      message,
+      dry_run,
+      skip_build,
+    } => run_release(&content, message.as_deref(), dry_run, skip_build, quiet),
     Commands::Template(args) => match args.command {
       TemplateCommands::List => run_template_list(),
       TemplateCommands::Eject { name, force } => {
