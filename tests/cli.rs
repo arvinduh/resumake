@@ -1117,3 +1117,122 @@ fn test_cli_release_version_skew_warning() {
       "Run `rsmk init --update` to synchronize your workflow pin."
     ));
 }
+
+#[test]
+fn test_cli_build_watch_nonexistent_content_fails() {
+  let temp = TempDir::new().unwrap();
+  let content_file = temp.path().join("nonexistent.yaml");
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("build")
+    .arg("--watch")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("Content file not found"));
+}
+
+#[test]
+fn test_cli_build_check_watch_nonexistent_content_fails() {
+  let temp = TempDir::new().unwrap();
+  let content_file = temp.path().join("nonexistent.yaml");
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("build")
+    .arg("--check")
+    .arg("--watch")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("Content file not found"));
+}
+
+#[test]
+fn test_cli_build_watch_recompiles_on_change() {
+  if which::which("typst").is_err() {
+    eprintln!(
+      "skipping test_cli_build_watch_recompiles_on_change: typst not on PATH"
+    );
+    return;
+  }
+
+  let temp = TempDir::new().unwrap();
+  let content_file = temp.path().join("content.yaml");
+  let output_pdf = temp.path().join("watch_resume.pdf");
+
+  // Scaffold content
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .arg("init")
+    .arg("--name")
+    .arg("Jane Doe")
+    .arg("--output")
+    .arg(&content_file)
+    .assert()
+    .success();
+
+  // Spawn rsmk build --watch
+  let bin = assert_cmd::cargo::cargo_bin("rsmk");
+  let mut child = std::process::Command::new(bin)
+    .current_dir(temp.path())
+    .args([
+      "build",
+      "--watch",
+      "--content",
+      content_file.to_str().unwrap(),
+      "--output",
+      output_pdf.to_str().unwrap(),
+    ])
+    .spawn()
+    .expect("failed to spawn watch process");
+
+  // Wait for initial PDF to be produced and initial build to finish
+  let start = std::time::Instant::now();
+  while !output_pdf.exists()
+    && start.elapsed() < std::time::Duration::from_secs(5)
+  {
+    std::thread::sleep(std::time::Duration::from_millis(100));
+  }
+  assert!(
+    output_pdf.exists(),
+    "Initial PDF was not created by watcher"
+  );
+
+  // Give initial build a moment to fully finalize before recording mtime
+  std::thread::sleep(std::time::Duration::from_millis(1000));
+  let initial_mtime = fs::metadata(&output_pdf).unwrap().modified().unwrap();
+
+  // Modify content.yaml
+  let content = fs::read_to_string(&content_file).unwrap();
+  let updated_content = content.replace("Jane Doe", "Jane Smith");
+  fs::write(&content_file, updated_content).unwrap();
+
+  // Wait for debounce + recompilation (typst compile + telemetry queries can take several seconds under load)
+  let wait_start = std::time::Instant::now();
+  let mut updated = false;
+  while wait_start.elapsed() < std::time::Duration::from_secs(15) {
+    if let Ok(meta) = fs::metadata(&output_pdf) {
+      if let Ok(mtime) = meta.modified() {
+        if mtime > initial_mtime {
+          updated = true;
+          break;
+        }
+      }
+    }
+    std::thread::sleep(std::time::Duration::from_millis(100));
+  }
+
+  let _ = child.kill();
+  let _ = child.wait();
+
+  assert!(
+    updated,
+    "Output PDF was not updated after content.yaml modification in watch mode"
+  );
+}
