@@ -97,16 +97,17 @@ git tag -a vX.Y.Z -m "vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-Pushing the `v*` tag triggers `.github/workflows/release.yml`, which:
+Pushing the `v*` tag triggers `.github/workflows/release.yml` (managed by
+`cargo-dist`), which:
 
-1. Sets `make_latest: true` so `github.com/arvinduh/resumake/releases/latest`
-   always points to the newest CLI binary release for update checkers.
-2. Generates and publishes release notes from `CHANGELOG.md` via `git-cliff`.
-3. Attaches the `resume.schema.json` committed at the repo root (kept current by
-   the schema drift test) — it checks out the tag and uploads the file, with no
-   Rust build.
-4. Compiles optimized standalone binaries across Linux (x86_64), macOS (ARM64 &
-   Intel), and Windows (x86_64) with SHA-256 checksums.
+1. Plans and orchestrates multi-platform compilation across Linux (x86_64),
+   macOS (ARM64 & Intel), and Windows (x86_64).
+2. Generates standalone archives, checksums, and clean 1-line installers
+   (`resumake-installer.sh`, `resumake-installer.ps1`).
+3. Compiles the canonical JSON Schema (`cargo run --example generate-schema`)
+   and attaches `resume.schema.json` as a release asset.
+4. Creates the GitHub Release with generated release notes, manifests, and
+   binaries.
 
 ---
 

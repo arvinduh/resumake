@@ -32,33 +32,28 @@
 #### Linux & macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.sh | sh
 ```
 
 #### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
+irm https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.ps1 | iex
 ```
 
-Both installers download the release archive over HTTPS, verify it against the
-published `.sha256` checksum, and refuse to install on a mismatch.
+Both installers download the release archive over HTTPS, verify checksums, and
+configure your binary path.
 
-#### Environment variables
-
-| Variable               | Default   | Effect                                                                                                                 |
-| :--------------------- | :-------- | :--------------------------------------------------------------------------------------------------------------------- |
-| `RESUMAKE_VERSION`     | `latest`  | Pin a specific release, e.g. `RESUMAKE_VERSION=0.1.1` (a leading `v` is accepted). `latest` tracks the newest release. |
-| `RESUMAKE_INSTALL_DIR` | see below | Directory to install the `rsmk` binary into (`~/.local/bin` on Linux/macOS, `~/bin` on Windows).                       |
+#### Pinned Version Install
 
 ```bash
 # Linux & macOS — install a pinned version
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | RESUMAKE_VERSION=0.1.1 sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/releases/download/v0.2.0/resumake-installer.sh | sh
 ```
 
 ```powershell
 # Windows — install a pinned version
-$env:RESUMAKE_VERSION = '0.1.1'; irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
+irm https://github.com/arvinduh/resumake/releases/download/v0.2.0/resumake-installer.ps1 | iex
 ```
 
 ### Direct Prebuilt Binaries

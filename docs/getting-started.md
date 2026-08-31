@@ -29,12 +29,12 @@ Resumake is distributed as a standalone, zero-dependency native binary.
 
 ```bash
 # Linux & macOS
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
+irm https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.ps1 | iex
 ```
 
 Verify the installation:
@@ -48,15 +48,15 @@ rsmk --help
 Once installed, upgrade in place from the latest GitHub release:
 
 ```bash
-rsmk update             # download and install the latest release
+rsmk update             # download and install the latest release via axoupdater
 rsmk update --check      # only report whether a newer release exists
 rsmk update --force      # reinstall even if already on the latest version
 ```
 
-`rsmk update` is the supported upgrade path: it fetches the release archive over
-HTTPS, verifies it against the published `.sha256` checksum, and atomically
-replaces the running binary. Re-running the install script (or the PowerShell
-`irm … | iex` line on Windows) still works too.
+`rsmk update` is the supported upgrade path: it uses `axoupdater` to discover
+and atomically replace the running binary with the newest GitHub Release
+artifacts. Re-running the install script (or the PowerShell `irm … | iex` line
+on Windows) still works too.
 
 ---
 

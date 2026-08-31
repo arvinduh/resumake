@@ -22,6 +22,17 @@ pkg-fmt = "tar.gz"
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"
 
+[workspace.metadata.dist]
+cargo-dist-version = "0.32.0"
+ci = "github"
+installers = ["shell", "powershell"]
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+]
+
 [dependencies]
 clap = { version = "4.5", features = ["derive", "cargo"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -38,17 +49,7 @@ similar = "3.2"
 include_dir = "0.7"
 thiserror = "2.0"
 anyhow = "1.0"
-self_update = { version = "=1.2.0", default-features = false, features = [
-  "rustls",
-  "github",
-  "reqwest",
-  "archive-tar",
-  "archive-zip",
-  "compression-tar-gz",
-  "compression-zip-deflate",
-  "checksums",
-  "progress-bar",
-] }
+axoupdater = { version = "0.9", features = ["blocking"] }
 gix = { version = "0.87", default-features = false, features = [
   "revision",
   "sha1",
