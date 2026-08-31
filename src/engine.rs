@@ -147,6 +147,15 @@ pub enum EngineError {
     /// Captured stderr or stdout from the subprocess.
     stderr: String,
   },
+  /// The resolved `--content` file lies outside the discovered project
+  /// root. Typst can only read files under `--root`, so no spelling of
+  /// the path would let it load the file.
+  ContentOutsideRoot {
+    /// The content file, canonicalized where possible.
+    content: PathBuf,
+    /// The discovered project root, canonicalized where possible.
+    root: PathBuf,
+  },
   /// The subprocess could not be spawned or its output could not be read.
   Io(std::io::Error),
 }
@@ -183,6 +192,16 @@ impl fmt::Display for EngineError {
       }
       EngineError::WatchFailed { stderr } => {
         write!(f, "Typst watch process failed:\n{stderr}")
+      }
+      EngineError::ContentOutsideRoot { content, root } => {
+        write!(
+          f,
+          "`{}` is outside the project root (`{}`).\n\
+           Run resumake from the directory containing your résumé, or pass \
+           `--source` for a template elsewhere.",
+          display_path(content),
+          display_path(root)
+        )
       }
       EngineError::Io(err) => write!(f, "I/O error: {err}"),
     }
@@ -263,37 +282,85 @@ pub fn discover_font_dir(
   Ok(None)
 }
 
-/// Normalizes a content file path into a POSIX-compliant input path for
-/// Typst.
-pub fn normalize_posix_path(root: &Path, content_path: &Path) -> String {
+/// Strips the Windows `\\?\` verbatim prefix (and the `UNC\` marker) from a
+/// path so it reads naturally in user-facing messages. A no-op on paths
+/// without the prefix and on non-Windows platforms.
+fn display_path(path: &Path) -> String {
+  let s = path.to_string_lossy();
+  #[cfg(windows)]
+  {
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+      return format!(r"\\{rest}");
+    }
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+      return rest.to_string();
+    }
+  }
+  s.into_owned()
+}
+
+/// Renders a path already known to be relative to the Typst root as an
+/// absolute, forward-slashed virtual path (e.g. `blocks/x.yaml` ->
+/// `/blocks/x.yaml`).
+fn to_rooted_posix(rel: &Path) -> String {
+  let posix = rel.to_string_lossy().replace('\\', "/");
+  let trimmed = posix.trim_start_matches('/');
+  format!("/{trimmed}")
+}
+
+/// Normalizes a content file path into a POSIX-compliant `--input` virtual
+/// path for Typst, resolved against `root` (which Typst is given as
+/// `--root`).
+///
+/// # Errors
+///
+/// Returns [`EngineError::ContentOutsideRoot`] when `content_path` resolves
+/// outside `root`. Typst refuses to read files outside `--root`, so there
+/// is no string that would make such a path load; rejecting it up front
+/// yields a message that names the file the user actually passed instead of
+/// a misleading error pointing at the template's `main.typ`.
+pub fn normalize_posix_path(
+  root: &Path,
+  content_path: &Path,
+) -> Result<String, EngineError> {
+  // Fast path: the content path is already lexically under the root.
   if let Ok(rel) = content_path.strip_prefix(root) {
-    let posix = rel.to_string_lossy().replace('\\', "/");
-    let trimmed = posix.trim_start_matches('/');
-    return format!("/{trimmed}");
+    return Ok(to_rooted_posix(rel));
   }
 
-  let canon_rel = root
+  // Resolve `..`, symlinks, drive-letter casing and mixed separators by
+  // canonicalizing both sides. On Windows this also gives both paths a
+  // matching `\\?\` verbatim prefix so `strip_prefix` can line them up.
+  if let Some((canon_root, canon_content)) = root
     .canonicalize()
     .ok()
     .zip(content_path.canonicalize().ok())
-    .and_then(|(r, c)| c.strip_prefix(&r).ok().map(|p| p.to_path_buf()));
-
-  if let Some(rel) = canon_rel {
-    let posix = rel.to_string_lossy().replace('\\', "/");
-    let trimmed = posix.trim_start_matches('/');
-    return format!("/{trimmed}");
+  {
+    return match canon_content.strip_prefix(&canon_root) {
+      Ok(rel) => Ok(to_rooted_posix(rel)),
+      Err(_) => Err(EngineError::ContentOutsideRoot {
+        content: canon_content,
+        root: canon_root,
+      }),
+    };
   }
 
+  // The paths could not both be canonicalized (the file does not exist yet,
+  // or the root does not). A relative path is still meaningful: treat it as
+  // root-relative, matching Typst's own resolution rules.
   if content_path.is_relative() {
     let raw = content_path.to_string_lossy().replace('\\', "/");
-    let trimmed = raw
-      .trim_start_matches("./")
-      .trim_start_matches(".\\")
-      .trim_start_matches('/');
-    return format!("/{trimmed}");
+    let trimmed = raw.trim_start_matches("./").trim_start_matches('/');
+    return Ok(format!("/{trimmed}"));
   }
 
-  content_path.to_string_lossy().replace('\\', "/")
+  // An absolute path that neither strips under the root nor canonicalizes
+  // cannot be read by Typst under `--root`. Reject it rather than handing
+  // Typst a drive-prefixed string it will mangle against `--root`.
+  Err(EngineError::ContentOutsideRoot {
+    content: content_path.to_path_buf(),
+    root: root.to_path_buf(),
+  })
 }
 
 /// Finds project root by checking for markers (`resume.yaml`,
@@ -409,7 +476,7 @@ impl TypstEngine {
     content: &Path,
     output: &Path,
   ) -> Result<(), String> {
-    let content_posix = normalize_posix_path(&self.root_path, content);
+    let content_posix = normalize_posix_path(&self.root_path, content)?;
     let mut cmd = Command::new(&self.typst_binary);
     cmd.arg("compile").arg("--root").arg(&self.root_path);
 
@@ -445,7 +512,7 @@ impl TypstEngine {
     content: &Path,
     selector: &str,
   ) -> Result<String, String> {
-    let content_posix = normalize_posix_path(&self.root_path, content);
+    let content_posix = normalize_posix_path(&self.root_path, content)?;
     let mut cmd = Command::new(&self.typst_binary);
     cmd.arg("query").arg("--root").arg(&self.root_path);
 
@@ -483,7 +550,7 @@ impl TypstEngine {
     content: &Path,
     output: &Path,
   ) -> Result<(), String> {
-    let content_posix = normalize_posix_path(&self.root_path, content);
+    let content_posix = normalize_posix_path(&self.root_path, content)?;
     let mut cmd = Command::new(&self.typst_binary);
     cmd.arg("watch").arg("--root").arg(&self.root_path);
 
@@ -569,12 +636,61 @@ mod tests {
   fn test_normalize_posix_path() {
     let root = Path::new("/workspace/project");
     assert_eq!(
-      normalize_posix_path(root, Path::new("content.yaml")),
+      normalize_posix_path(root, Path::new("content.yaml")).unwrap(),
       "/content.yaml"
     );
     assert_eq!(
-      normalize_posix_path(root, Path::new("./content.yaml")),
+      normalize_posix_path(root, Path::new("./content.yaml")).unwrap(),
       "/content.yaml"
     );
+  }
+
+  #[test]
+  fn test_normalize_posix_path_absolute_under_root() {
+    let temp = TempDir::new().unwrap();
+    let root = temp.path();
+    let nested = root.join("resume").join("content.yaml");
+    fs::create_dir_all(nested.parent().unwrap()).unwrap();
+    fs::write(&nested, "name: Test\n").unwrap();
+
+    assert_eq!(
+      normalize_posix_path(root, &nested).unwrap(),
+      "/resume/content.yaml"
+    );
+  }
+
+  #[test]
+  fn test_normalize_posix_path_rejects_content_outside_root() {
+    let root_dir = TempDir::new().unwrap();
+    let other_dir = TempDir::new().unwrap();
+    let outside = other_dir.path().join("content.yaml");
+    fs::write(&outside, "name: Test\n").unwrap();
+
+    let err = normalize_posix_path(root_dir.path(), &outside).unwrap_err();
+    match err {
+      EngineError::ContentOutsideRoot { .. } => {}
+      other => panic!("expected ContentOutsideRoot, got {other:?}"),
+    }
+
+    let msg = err.to_string();
+    assert!(
+      msg.contains("outside the project root"),
+      "unexpected message: {msg}"
+    );
+    assert!(msg.contains("--source"), "unexpected message: {msg}");
+  }
+
+  #[test]
+  fn test_normalize_posix_path_rejects_nonexistent_absolute_outside_root() {
+    let root_dir = TempDir::new().unwrap();
+    // An absolute path that does not exist and does not strip under root:
+    // still rejected rather than mangled into a drive-prefixed string.
+    #[cfg(windows)]
+    let outside = Path::new(r"C:\definitely\not\here\content.yaml");
+    #[cfg(not(windows))]
+    let outside = Path::new("/definitely/not/here/content.yaml");
+
+    let err = normalize_posix_path(root_dir.path(), outside).unwrap_err();
+    assert!(matches!(err, EngineError::ContentOutsideRoot { .. }));
   }
 }
