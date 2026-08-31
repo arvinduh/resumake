@@ -146,9 +146,9 @@ schema. To add one:
    A template that skips this still compiles fine, but `rsmk build`/`check` will
    report degraded or missing telemetry for it.
 
-3. **Register it** in `src/engine.rs`: add an `EmbeddedTemplate` constant
-   (following `CLASSIC_TEMPLATE`, with one `include_str!` per file) and append
-   it to `TEMPLATE_REGISTRY`. That's the only Rust code that needs to change —
+3. **Register it:** No manual Rust code registration is required! The template
+   registry dynamically embeds and discovers all template directories under
+   `src/embedded/templates/` at compile time via `include_dir!`.
    `--template <name>` picks it up automatically, and `resolve_template` handles
    extraction to `.resumake/<name>/`.
 
