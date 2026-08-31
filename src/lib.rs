@@ -11,3 +11,4 @@ pub mod release;
 pub mod schema;
 pub mod telemetry;
 pub mod ui;
+pub mod update;
