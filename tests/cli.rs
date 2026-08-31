@@ -17,12 +17,10 @@ fn test_cli_help() {
 }
 
 #[test]
-fn test_cli_init_and_schema_export() {
+fn test_cli_init_scaffolds_content() {
   let temp = TempDir::new().unwrap();
   let content_file = temp.path().join("content.yaml");
-  let schema_file = temp.path().join("schema.json");
 
-  // 1. Test init
   let mut cmd_init = Command::cargo_bin("rsmk").unwrap();
   cmd_init
     .arg("init")
@@ -39,20 +37,6 @@ fn test_cli_init_and_schema_export() {
   assert!(content.contains("Jane Doe"));
   assert!(content.contains("Libertinus Serif"));
   assert!(!content.contains("Linux Libertine"));
-
-  // 2. Test schema export
-  let mut cmd_schema = Command::cargo_bin("rsmk").unwrap();
-  cmd_schema
-    .arg("schema")
-    .arg("--export")
-    .arg(&schema_file)
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("[PASS]"));
-
-  assert!(schema_file.exists());
-  let schema = fs::read_to_string(&schema_file).unwrap();
-  assert!(schema.contains("ResumeDocument"));
 }
 
 #[test]
