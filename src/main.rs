@@ -118,6 +118,9 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
         run_template_eject(&name, force, quiet)
       }
     },
+    Commands::Update { check, force } => {
+      resumake::update::run_update(check, force, quiet)
+    }
   }
 }
 

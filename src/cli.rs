@@ -116,6 +116,16 @@ pub enum Commands {
   },
   /// Manage and eject résumé layout templates
   Template(TemplateArgs),
+  /// Replace the installed binary with the latest GitHub release
+  Update {
+    /// Report whether a newer release exists without installing it
+    #[arg(long)]
+    check: bool,
+
+    /// Reinstall even if the current version is already latest
+    #[arg(short, long)]
+    force: bool,
+  },
 }
 
 /// Arguments for the `template` subcommand.
@@ -277,6 +287,36 @@ mod tests {
         _ => panic!("Expected Eject command"),
       },
       _ => panic!("Expected Template command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_update_flags() {
+    let cli = Cli::parse_from(["rsmk", "update"]);
+    match cli.command.unwrap() {
+      Commands::Update { check, force } => {
+        assert!(!check);
+        assert!(!force);
+      }
+      _ => panic!("Expected Update command"),
+    }
+
+    let cli_flags = Cli::parse_from(["rsmk", "update", "--check", "--force"]);
+    match cli_flags.command.unwrap() {
+      Commands::Update { check, force } => {
+        assert!(check);
+        assert!(force);
+      }
+      _ => panic!("Expected Update command"),
+    }
+
+    let cli_short = Cli::parse_from(["rsmk", "update", "-f"]);
+    match cli_short.command.unwrap() {
+      Commands::Update { check, force } => {
+        assert!(!check);
+        assert!(force);
+      }
+      _ => panic!("Expected Update command"),
     }
   }
 

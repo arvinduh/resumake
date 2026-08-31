@@ -31,6 +31,8 @@ git config core.hooksPath .githooks
 - `src/telemetry.rs` — Strict 1-page layout geometry calculations, overflow, and
   wrap checks
 - `src/ui.rs` — Visual terminal diagnostics, table formatting, and color output
+- `src/update.rs` — `rsmk update` self-update from GitHub Releases via the
+  `self_update` crate, plus pure version-decision helpers
 - `src/embedded/` — Built-in templates (`classic/`), workflow templates, and
   initialization assets
 - `docs/` — Architecture documentation, guides, and ADRs (see `docs/INDEX.md`)
