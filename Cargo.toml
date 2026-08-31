@@ -47,6 +47,8 @@ self_update = { version = "=1.2.0", default-features = false, features = [
   "checksums",
   "progress-bar",
 ] }
+notify = "8.2.0"
+notify-debouncer-mini = "0.7.0"
 
 [dev-dependencies]
 assert_cmd = "2.0"
