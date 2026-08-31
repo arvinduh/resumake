@@ -53,10 +53,10 @@ pub fn asset_name_for_target(target: &str) -> Option<&'static str> {
 /// everything else maps to itself.
 ///
 /// Consequence: a user who self-built with the `x86_64-pc-windows-gnu`
-/// toolchain is moved onto the published `-msvc` `.zip` build the first time
-/// they run `rsmk update`. `rsmk` links no C runtime dependencies dynamically,
-/// so the swap is harmless — and intentional, since there is no `-gnu` release
-/// asset to update from.
+/// toolchain is moved onto the published `-msvc` `.zip` build the first
+/// time they run `rsmk update`. `rsmk` links no C runtime dependencies
+/// dynamically, so the swap is harmless, and intentional: there is no
+/// `-gnu` release asset to update from.
 pub fn normalize_host_target(host: &str) -> &str {
   match host {
     "x86_64-pc-windows-gnu" | "x86_64-pc-windows-gnullvm" => {
