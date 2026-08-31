@@ -1,6 +1,9 @@
 //! Resumake CLI entry point and command router.
 
 use clap::Parser;
+use notify_debouncer_mini::{
+  new_debouncer, notify::RecursiveMode, DebounceEventResult,
+};
 use resumake::cli::{Cli, Commands, TemplateCommands};
 use resumake::engine::{
   eject_template, list_templates, TypstEngine, DEFAULT_TEMPLATE,
@@ -15,7 +18,6 @@ use resumake::telemetry::evaluate_telemetry;
 use resumake::ui::{
   print_error, print_info, print_success, print_telemetry_table,
 };
-use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -61,7 +63,9 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
             template_name,
             source.as_deref(),
             output.as_deref(),
+            schema.as_deref(),
             font_path.as_deref(),
+            quiet,
           )
         }
       } else if check {
@@ -250,19 +254,112 @@ fn run_check(
   Ok(())
 }
 
+fn setup_watcher(
+  content: &Path,
+  template_name: &str,
+  source: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+) -> Result<
+  (
+    notify_debouncer_mini::Debouncer<
+      notify_debouncer_mini::notify::RecommendedWatcher,
+    >,
+    std::sync::mpsc::Receiver<DebounceEventResult>,
+  ),
+  String,
+> {
+  let (tx, rx) = std::sync::mpsc::channel();
+  let mut debouncer = new_debouncer(std::time::Duration::from_millis(200), tx)
+    .map_err(|e| format!("Failed to initialize file watcher: {e}"))?;
+
+  debouncer
+    .watcher()
+    .watch(content, RecursiveMode::NonRecursive)
+    .map_err(|e| {
+      format!("Failed to watch content file '{}': {e}", content.display())
+    })?;
+
+  let root = resumake::engine::find_project_root();
+
+  if let Some(src) = source {
+    if src.exists() {
+      if src.is_dir() {
+        let _ = debouncer.watcher().watch(src, RecursiveMode::Recursive);
+      } else {
+        let _ = debouncer.watcher().watch(src, RecursiveMode::NonRecursive);
+        if let Some(parent) = src
+          .parent()
+          .filter(|p| !p.as_os_str().is_empty() && p.exists())
+        {
+          let _ = debouncer.watcher().watch(parent, RecursiveMode::Recursive);
+        }
+      }
+    }
+  }
+
+  if let Ok(engine) = TypstEngine::new(font_path) {
+    if let Ok(resolved) = engine.resolve_template(template_name, source) {
+      if resolved.exists() {
+        if let Some(parent) = resolved
+          .parent()
+          .filter(|p| !p.as_os_str().is_empty() && p.exists())
+        {
+          let _ = debouncer.watcher().watch(parent, RecursiveMode::Recursive);
+        }
+      }
+    }
+    if let Some(ref font_dir) = engine.font_path {
+      if font_dir.exists() && font_dir.is_dir() {
+        let _ = debouncer
+          .watcher()
+          .watch(font_dir, RecursiveMode::Recursive);
+      }
+    }
+  }
+
+  let templates_dir = root.join("templates");
+  if templates_dir.exists() && templates_dir.is_dir() {
+    let _ = debouncer
+      .watcher()
+      .watch(&templates_dir, RecursiveMode::Recursive);
+  }
+
+  if let Some(s) = schema {
+    if s.exists() {
+      let _ = debouncer.watcher().watch(s, RecursiveMode::NonRecursive);
+    }
+  } else {
+    for candidate in &["resume.schema.json", "schema.json"] {
+      let p = root.join(candidate);
+      if p.exists() {
+        let _ = debouncer.watcher().watch(&p, RecursiveMode::NonRecursive);
+      }
+    }
+  }
+
+  if let Some(f) = font_path {
+    if f.exists() && f.is_dir() {
+      let _ = debouncer.watcher().watch(f, RecursiveMode::Recursive);
+    }
+  }
+
+  Ok((debouncer, rx))
+}
+
 fn run_watch(
   content: &Path,
   template_name: &str,
   source: Option<&Path>,
   output: Option<&Path>,
+  schema: Option<&Path>,
   font_path: Option<&Path>,
+  quiet: bool,
 ) -> Result<(), String> {
   if !content.exists() {
     return Err(format!("Content file not found: '{}'", content.display()));
   }
 
-  let engine = TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template_name, source)?;
   let output_pdf = match output {
     Some(out) => out.to_path_buf(),
     None => derive_output_filename(content),
@@ -274,7 +371,61 @@ fn run_watch(
     output_pdf.display()
   ));
 
-  engine.watch(&resolved_template, content, &output_pdf)
+  let (_debouncer, rx) =
+    setup_watcher(content, template_name, source, schema, font_path)?;
+
+  if let Err(err) = run_build(
+    content,
+    template_name,
+    source,
+    Some(&output_pdf),
+    schema,
+    font_path,
+    quiet,
+  ) {
+    print_error(&err);
+  }
+
+  let canonical_output = output_pdf.canonicalize().ok();
+
+  for events_res in rx {
+    match events_res {
+      Ok(events) => {
+        let has_relevant_change = events.iter().any(|event| {
+          if let Some(ref canon_out) = canonical_output {
+            if let Ok(canon_event) = event.path.canonicalize() {
+              if &canon_event == canon_out {
+                return false;
+              }
+            }
+          }
+          if event.path == output_pdf {
+            return false;
+          }
+          true
+        });
+
+        if has_relevant_change {
+          if let Err(err) = run_build(
+            content,
+            template_name,
+            source,
+            Some(&output_pdf),
+            schema,
+            font_path,
+            quiet,
+          ) {
+            print_error(&err);
+          }
+        }
+      }
+      Err(err) => {
+        print_error(&format!("Watch error: {err}"));
+      }
+    }
+  }
+
+  Ok(())
 }
 
 fn run_check_watch(
@@ -294,44 +445,31 @@ fn run_check_watch(
     content.display()
   ));
 
+  let (_debouncer, rx) =
+    setup_watcher(content, template_name, source, schema, font_path)?;
+
   if let Err(err) =
     run_check(content, template_name, source, schema, font_path, quiet)
   {
     print_error(&err);
   }
 
-  let mut last_content_mtime =
-    fs::metadata(content).and_then(|m| m.modified()).ok();
-  let mut last_source_mtime =
-    source.and_then(|s| fs::metadata(s).and_then(|m| m.modified()).ok());
-  let mut last_schema_mtime =
-    schema.and_then(|s| fs::metadata(s).and_then(|m| m.modified()).ok());
-
-  loop {
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
-    let cur_content_mtime =
-      fs::metadata(content).and_then(|m| m.modified()).ok();
-    let cur_source_mtime =
-      source.and_then(|s| fs::metadata(s).and_then(|m| m.modified()).ok());
-    let cur_schema_mtime =
-      schema.and_then(|s| fs::metadata(s).and_then(|m| m.modified()).ok());
-
-    if cur_content_mtime != last_content_mtime
-      || cur_source_mtime != last_source_mtime
-      || cur_schema_mtime != last_schema_mtime
-    {
-      last_content_mtime = cur_content_mtime;
-      last_source_mtime = cur_source_mtime;
-      last_schema_mtime = cur_schema_mtime;
-
-      if let Err(err) =
-        run_check(content, template_name, source, schema, font_path, quiet)
-      {
-        print_error(&err);
+  for events_res in rx {
+    match events_res {
+      Ok(_events) => {
+        if let Err(err) =
+          run_check(content, template_name, source, schema, font_path, quiet)
+        {
+          print_error(&err);
+        }
+      }
+      Err(err) => {
+        print_error(&format!("Watch error: {err}"));
       }
     }
   }
+
+  Ok(())
 }
 
 fn run_template_list() -> Result<(), String> {
