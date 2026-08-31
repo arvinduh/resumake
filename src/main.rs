@@ -1,8 +1,10 @@
 //! Resumake CLI entry point and command router.
 
 use clap::Parser;
-use resumake::cli::{Cli, Commands};
-use resumake::engine::{TypstEngine, DEFAULT_TEMPLATE};
+use resumake::cli::{Cli, Commands, TemplateCommands};
+use resumake::engine::{
+  eject_template, list_templates, TypstEngine, DEFAULT_TEMPLATE,
+};
 use resumake::schema::{
   derive_output_filename, export_builtin_schema, generate_init_template,
   load_content_name, load_content_version, validate_schema_auto,
@@ -128,6 +130,12 @@ fn execute_command(command: Commands, quiet: bool) -> Result<(), String> {
       output,
       force,
     } => run_init(name.as_deref(), &output, force),
+    Commands::Template(args) => match args.command {
+      TemplateCommands::List => run_template_list(),
+      TemplateCommands::Eject { name, force } => {
+        run_template_eject(&name, force, quiet)
+      }
+    },
   }
 }
 
@@ -375,5 +383,35 @@ fn run_init(
     "Initialized new résumé content scaffold at '{}'",
     output.display()
   ));
+  Ok(())
+}
+
+fn run_template_list() -> Result<(), String> {
+  let templates = list_templates();
+  println!("Available templates:");
+  for tpl in templates {
+    println!("  - {tpl}");
+  }
+  Ok(())
+}
+
+fn run_template_eject(
+  name: &str,
+  force: bool,
+  quiet: bool,
+) -> Result<(), String> {
+  let target_dir = Path::new("templates").join(name);
+  let ejected_files =
+    eject_template(name, &target_dir, force).map_err(|e| e.to_string())?;
+
+  if !quiet {
+    println!("✓ Ejected template '{name}' to ./templates/{name}/");
+    for file in ejected_files {
+      println!("  - {file}");
+    }
+    println!(
+      "Run `rsmk build --template ./templates/{name}/main.typ` to compile with your local template."
+    );
+  }
   Ok(())
 }
