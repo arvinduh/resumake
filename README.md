@@ -32,13 +32,13 @@
 #### Linux & macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | sh
 ```
 
 #### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
 ```
 
 Both installers download the release archive over HTTPS, verify it against the
@@ -53,12 +53,12 @@ published `.sha256` checksum, and refuse to install on a mismatch.
 
 ```bash
 # Linux & macOS — install a pinned version
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | RESUMAKE_VERSION=0.1.1 sh
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | RESUMAKE_VERSION=0.1.1 sh
 ```
 
 ```powershell
 # Windows — install a pinned version
-$env:RESUMAKE_VERSION = '0.1.1'; irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
+$env:RESUMAKE_VERSION = '0.1.1'; irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
 ```
 
 ### Direct Prebuilt Binaries

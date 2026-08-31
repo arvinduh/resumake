@@ -29,12 +29,12 @@ Resumake is distributed as a standalone, zero-dependency native binary.
 
 ```bash
 # Linux & macOS
-curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/arvinduh/resumake/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.ps1 | iex
 ```
 
 Verify the installation:

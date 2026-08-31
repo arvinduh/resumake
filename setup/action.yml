@@ -15,6 +15,6 @@ runs:
       env:
         RESUMAKE_VERSION: "${{ inputs.version }}"
       run: |
-        INSTALL_URL="https://raw.githubusercontent.com/arvinduh/resumake/main/install.sh"
+        INSTALL_URL="https://raw.githubusercontent.com/arvinduh/resumake/main/installers/install.sh"
         curl -fsSL "$INSTALL_URL" | sh
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
