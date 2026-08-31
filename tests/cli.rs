@@ -55,6 +55,17 @@ fn test_cli_init_and_schema_export() {
 
 #[test]
 fn test_cli_init_then_build_succeeds_end_to_end() {
+  // This test shells out to `typst` via `resumake check`. On a machine
+  // without the Typst compiler on PATH, skip loudly rather than failing so
+  // `cargo test --all-targets` stays green on a fresh clone. CI installs
+  // typst and still exercises the real path.
+  if which::which("typst").is_err() {
+    eprintln!(
+      "skipping test_cli_init_then_build_succeeds_end_to_end: typst not on PATH"
+    );
+    return;
+  }
+
   // Regression test: the default `init` scaffold must actually compile.
   // Earlier versions emitted <bulletinfo> probes without a required `id`
   // field, which made `build`/`check` fail on every real resume (i.e. any
