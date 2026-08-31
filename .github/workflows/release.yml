@@ -116,11 +116,11 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary_name: resumake
+            binary_name: rsmk
             asset_name: resumake-x86_64-unknown-linux-gnu.tar.gz
           - os: macos-latest
             target: aarch64-apple-darwin
-            binary_name: resumake
+            binary_name: rsmk
             asset_name: resumake-aarch64-apple-darwin.tar.gz
           # Intel macOS is cross-compiled from the Apple Silicon runner: the
           # macos-13 Intel runner no longer schedules (see #6). The Xcode
@@ -128,11 +128,11 @@ jobs:
           # dtolnay/rust-toolchain installs the target from this matrix entry.
           - os: macos-latest
             target: x86_64-apple-darwin
-            binary_name: resumake
+            binary_name: rsmk
             asset_name: resumake-x86_64-apple-darwin.tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            binary_name: resumake.exe
+            binary_name: rsmk.exe
             asset_name: resumake-x86_64-pc-windows-msvc.zip
 
     steps:

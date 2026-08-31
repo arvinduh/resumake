@@ -19,7 +19,7 @@
 - **Zero-Dependency Engine**: Built-in modular Typst engine and design tokens
   embedded directly in the binary.
 - **Live Watch Mode**: Real-time document recompilation on file change
-  (`resumake watch`).
+  (`rsmk watch`).
 
 ---
 
@@ -47,7 +47,7 @@ published `.sha256` checksum, and refuse to install on a mismatch.
 | Variable               | Default   | Effect                                                                                                                 |
 | :--------------------- | :-------- | :--------------------------------------------------------------------------------------------------------------------- |
 | `RESUMAKE_VERSION`     | `latest`  | Pin a specific release, e.g. `RESUMAKE_VERSION=0.1.1` (a leading `v` is accepted). `latest` tracks the newest release. |
-| `RESUMAKE_INSTALL_DIR` | see below | Directory to install the `resumake` binary into (`~/.local/bin` on Linux/macOS, `~/bin` on Windows).                   |
+| `RESUMAKE_INSTALL_DIR` | see below | Directory to install the `rsmk` binary into (`~/.local/bin` on Linux/macOS, `~/bin` on Windows).                       |
 
 ```bash
 # Linux & macOS — install a pinned version
@@ -87,13 +87,13 @@ Prebuilt standalone binaries are attached to every
 ### 1. Scaffold a New Résumé
 
 ```bash
-resumake init --name "Jane Doe"
+rsmk init --name "Jane Doe"
 ```
 
 ### 3. Compile to PDF with Layout Telemetry
 
 ```bash
-resumake build
+rsmk build
 ```
 
 ---
@@ -120,19 +120,19 @@ resumake build
 ## CLI Reference
 
 ```bash
-resumake build              # Compile resume to PDF and evaluate layout
-resumake check               # Dry-run validation without writing a PDF
-resumake watch               # Real-time auto-recompile on file change
-resumake schema              # Print canonical JSON Schema (Draft-07) to stdout
-resumake schema --export out.json  # ...or write it to a file
-resumake init --name <NAME>  # Scaffold new content.yaml with directives
+rsmk build              # Compile resume to PDF and evaluate layout
+rsmk check               # Dry-run validation without writing a PDF
+rsmk watch               # Real-time auto-recompile on file change
+rsmk schema              # Print canonical JSON Schema (Draft-07) to stdout
+rsmk schema --export out.json  # ...or write it to a file
+rsmk init --name <NAME>  # Scaffold new content.yaml with directives
 ```
 
 `build`, `check`, and `watch` also accept:
 
 ```bash
-resumake build --template <name>   # Pick a built-in layout (default: classic)
-resumake build --source <path.typ> # Bypass the registry with your own Typst file
+rsmk build --template <name>   # Pick a built-in layout (default: classic)
+rsmk build --source <path.typ> # Bypass the registry with your own Typst file
 ```
 
 The same `content.yaml` renders under any registered template — see

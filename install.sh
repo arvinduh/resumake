@@ -80,7 +80,7 @@ info "Detected platform: ${TARGET}"
 if [ "$VERSION" != "latest" ]; then
   info "Requested version: v${VERSION#v}"
 fi
-info "Installing resumake into ${INSTALL_DIR}..."
+info "Installing rsmk into ${INSTALL_DIR}..."
 
 mkdir -p "$INSTALL_DIR"
 
@@ -122,10 +122,10 @@ fi
 
 info "Extracting binary..."
 tar -xzf "$TEMP_DIR/$ASSET_NAME" -C "$TEMP_DIR"
-mv "$TEMP_DIR/resumake" "$INSTALL_DIR/resumake"
-chmod +x "$INSTALL_DIR/resumake"
+mv "$TEMP_DIR/rsmk" "$INSTALL_DIR/rsmk"
+chmod +x "$INSTALL_DIR/rsmk"
 
-success "resumake installed successfully to ${INSTALL_DIR}/resumake"
+success "rsmk installed successfully to ${INSTALL_DIR}/rsmk"
 
 # Verify PATH
 case ":${PATH}:" in
@@ -137,4 +137,4 @@ case ":${PATH}:" in
     ;;
 esac
 
-"$INSTALL_DIR/resumake" --version || true
+"$INSTALL_DIR/rsmk" --version || true

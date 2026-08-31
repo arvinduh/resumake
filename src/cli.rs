@@ -7,10 +7,10 @@ use std::path::PathBuf;
 /// High-performance native Rust résumé compilation and telemetry engine.
 #[derive(Debug, Parser)]
 #[command(
-  name = "resumake",
+  name = "rsmk",
   version,
   about = "Modular résumé compiler and telemetry engine",
-  long_about = "Resumake is a high-performance native Rust CLI for \
+  long_about = "rsmk is a high-performance native Rust CLI for \
     compiling and verifying single-page résumés with strict layout \
     telemetry."
 )]
@@ -145,7 +145,7 @@ mod tests {
 
   #[test]
   fn test_cli_default_command() {
-    let cli = Cli::parse_from(["resumake"]);
+    let cli = Cli::parse_from(["rsmk"]);
     assert!(cli.command.is_none());
     assert!(!cli.quiet);
   }
@@ -153,7 +153,7 @@ mod tests {
   #[test]
   fn test_cli_build_flags() {
     let cli = Cli::parse_from([
-      "resumake",
+      "rsmk",
       "build",
       "--content",
       "alt.yaml",
@@ -181,7 +181,7 @@ mod tests {
 
   #[test]
   fn test_cli_build_template_name_flag() {
-    let cli = Cli::parse_from(["resumake", "build", "--template", "classic"]);
+    let cli = Cli::parse_from(["rsmk", "build", "--template", "classic"]);
     match cli.command.unwrap() {
       Commands::Build { template_name, .. } => {
         assert_eq!(template_name, "classic");

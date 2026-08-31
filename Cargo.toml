@@ -10,6 +10,10 @@ repository = "https://github.com/arvinduh/resumake"
 keywords = ["resume", "typst", "compiler", "telemetry", "cli"]
 categories = ["command-line-utilities", "text-processing"]
 
+[[bin]]
+name = "rsmk"
+path = "src/main.rs"
+
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }.{ archive-format }"
 bin-dir = "{ bin }{ binary-ext }"

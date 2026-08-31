@@ -1,4 +1,4 @@
-//! End-to-end integration tests for resumake CLI.
+//! End-to-end integration tests for rsmk CLI.
 
 use assert_cmd::Command;
 use predicates::prelude::*;
@@ -7,12 +7,12 @@ use tempfile::TempDir;
 
 #[test]
 fn test_cli_help() {
-  let mut cmd = Command::cargo_bin("resumake").unwrap();
+  let mut cmd = Command::cargo_bin("rsmk").unwrap();
   cmd
     .arg("--help")
     .assert()
     .success()
-    .stdout(predicate::str::contains("resumake"))
+    .stdout(predicate::str::contains("rsmk"))
     .stdout(predicate::str::contains("Compile"));
 }
 
@@ -23,7 +23,7 @@ fn test_cli_init_and_schema_export() {
   let schema_file = temp.path().join("schema.json");
 
   // 1. Test init
-  let mut cmd_init = Command::cargo_bin("resumake").unwrap();
+  let mut cmd_init = Command::cargo_bin("rsmk").unwrap();
   cmd_init
     .arg("init")
     .arg("--name")
@@ -41,7 +41,7 @@ fn test_cli_init_and_schema_export() {
   assert!(!content.contains("Linux Libertine"));
 
   // 2. Test schema export
-  let mut cmd_schema = Command::cargo_bin("resumake").unwrap();
+  let mut cmd_schema = Command::cargo_bin("rsmk").unwrap();
   cmd_schema
     .arg("schema")
     .arg("--export")
@@ -57,7 +57,7 @@ fn test_cli_init_and_schema_export() {
 
 #[test]
 fn test_cli_init_then_build_succeeds_end_to_end() {
-  // This test shells out to `typst` via `resumake check`. On a machine
+  // This test shells out to `typst` via `rsmk check`. On a machine
   // without the Typst compiler on PATH, skip loudly rather than failing so
   // `cargo test --all-targets` stays green on a fresh clone. CI installs
   // typst and still exercises the real path.
@@ -76,7 +76,7 @@ fn test_cli_init_then_build_succeeds_end_to_end() {
   let temp = TempDir::new().unwrap();
   let content_file = temp.path().join("content.yaml");
 
-  Command::cargo_bin("resumake")
+  Command::cargo_bin("rsmk")
     .unwrap()
     .arg("init")
     .arg("--name")
@@ -86,7 +86,7 @@ fn test_cli_init_then_build_succeeds_end_to_end() {
     .assert()
     .success();
 
-  Command::cargo_bin("resumake")
+  Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
     .arg("check")
@@ -103,7 +103,7 @@ fn test_cli_check_detects_invalid_yaml() {
   let invalid_file = temp.path().join("invalid.yaml");
   fs::write(&invalid_file, "invalid: [yaml").unwrap();
 
-  let mut cmd = Command::cargo_bin("resumake").unwrap();
+  let mut cmd = Command::cargo_bin("rsmk").unwrap();
   cmd
     .arg("check")
     .arg("--content")
@@ -135,7 +135,7 @@ sections: []
   )
   .unwrap();
 
-  Command::cargo_bin("resumake")
+  Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
     .arg("check")
@@ -175,7 +175,7 @@ sections: []
   )
   .unwrap();
 
-  Command::cargo_bin("resumake")
+  Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
     .arg("check")

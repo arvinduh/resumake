@@ -48,7 +48,7 @@ Write-Info "Detected platform: $target"
 if ($version -ne "latest") {
     Write-Info "Requested version: v$($version -replace '^v', '')"
 }
-Write-Info "Installing resumake into $installDir..."
+Write-Info "Installing rsmk into $installDir..."
 
 if (-not (Test-Path -Path $installDir)) {
     New-Item -ItemType Directory -Path $installDir -Force | Out-Null
@@ -76,11 +76,11 @@ try {
     Write-Info "Extracting binary..."
     Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
 
-    $binarySource = Join-Path $tempDir "resumake.exe"
-    $binaryDest = Join-Path $installDir "resumake.exe"
+    $binarySource = Join-Path $tempDir "rsmk.exe"
+    $binaryDest = Join-Path $installDir "rsmk.exe"
 
     Copy-Item -Path $binarySource -Destination $binaryDest -Force
-    Write-Success "resumake installed successfully to $binaryDest"
+    Write-Success "rsmk installed successfully to $binaryDest"
 
     # Check PATH
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")

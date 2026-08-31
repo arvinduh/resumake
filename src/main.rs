@@ -93,7 +93,7 @@ fn run_build(
 ) -> Result<(), String> {
   if !content.exists() {
     return Err(format!(
-      "Content file not found: '{}'. Run 'resumake init' to create one.",
+      "Content file not found: '{}'. Run 'rsmk init' to create one.",
       content.display()
     ));
   }
