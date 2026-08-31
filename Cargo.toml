@@ -33,6 +33,7 @@ which = "8.0"
 colored = "3.0"
 comfy-table = { version = "8.0", features = ["custom_styling"] }
 sha2 = "0.11"
+similar = "3.2"
 
 [dev-dependencies]
 assert_cmd = "2.0"

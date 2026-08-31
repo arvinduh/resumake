@@ -74,63 +74,17 @@ pub fn extract_provenance_and_body(content: &str) -> Option<(&str, &str)> {
   Some((hash, body))
 }
 
-/// Generates a standard unified diff between two text documents.
+/// Generates a standard unified diff between two text documents, labelled
+/// `<filename> (current)` and `<filename> (target)`.
 pub fn generate_unified_diff(
   filename: &str,
   old_content: &str,
   new_content: &str,
 ) -> String {
-  let old_lines: Vec<&str> = old_content.lines().collect();
-  let new_lines: Vec<&str> = new_content.lines().collect();
-
-  let m = old_lines.len();
-  let n = new_lines.len();
-
-  let mut dp = vec![vec![0u32; n + 1]; m + 1];
-  for i in 1..=m {
-    for j in 1..=n {
-      if old_lines[i - 1] == new_lines[j - 1] {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = dp[i - 1][j].max(dp[i][j - 1]);
-      }
-    }
-  }
-
-  let mut diff_ops = Vec::new();
-  let mut i = m;
-  let mut j = n;
-
-  while i > 0 || j > 0 {
-    if i > 0 && j > 0 && old_lines[i - 1] == new_lines[j - 1] {
-      diff_ops.push((' ', old_lines[i - 1]));
-      i -= 1;
-      j -= 1;
-    } else if j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j]) {
-      diff_ops.push(('+', new_lines[j - 1]));
-      j -= 1;
-    } else if i > 0 && (j == 0 || dp[i][j - 1] < dp[i - 1][j]) {
-      diff_ops.push(('-', old_lines[i - 1]));
-      i -= 1;
-    }
-  }
-
-  diff_ops.reverse();
-
-  let mut out = String::new();
-  out.push_str(&format!("--- {filename} (current)\n"));
-  out.push_str(&format!("+++ {filename} (target)\n"));
-  out.push_str(&format!("@@ -1,{m} +1,{n} @@\n"));
-
-  for (op, line) in diff_ops {
-    match op {
-      '+' => out.push_str(&format!("+{line}\n")),
-      '-' => out.push_str(&format!("-{line}\n")),
-      _ => out.push_str(&format!(" {line}\n")),
-    }
-  }
-
-  out
+  similar::TextDiff::from_lines(old_content, new_content)
+    .unified_diff()
+    .header(&format!("{filename} (current)"), &format!("{filename} (target)"))
+    .to_string()
 }
 
 /// Returns true when `path` should be treated as an explicit content-file
