@@ -102,9 +102,9 @@ Pushing the `v*` tag triggers `.github/workflows/release.yml`, which:
 1. Sets `make_latest: true` so `github.com/arvinduh/resumake/releases/latest`
    always points to the newest CLI binary release for update checkers.
 2. Generates and publishes release notes from `CHANGELOG.md` via `git-cliff`.
-3. Attaches the `resume.schema.json` committed at the repo root (kept current
-   by the schema drift test) — it checks out the tag and uploads the file, with
-   no Rust build.
+3. Attaches the `resume.schema.json` committed at the repo root (kept current by
+   the schema drift test) — it checks out the tag and uploads the file, with no
+   Rust build.
 4. Compiles optimized standalone binaries across Linux (x86_64), macOS (ARM64 &
    Intel), and Windows (x86_64) with SHA-256 checksums.
 

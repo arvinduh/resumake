@@ -206,8 +206,8 @@ yourself; it reaches you two ways:
 - **For editors, as a release asset.** Every schema release (`s*`) and binary
   release attaches `resume.schema.json` as a download. The
   `# yaml-language-server: $schema=<release URL>` comment `rsmk init` writes at
-  the top of `content.yaml` points at the stable schema-release URL (see
-  section 6 below), so VS Code and JetBrains YAML plugins fetch and cache it
+  the top of `content.yaml` points at the stable schema-release URL (see section
+  6 below), so VS Code and JetBrains YAML plugins fetch and cache it
   automatically.
 - **For inspection and diffing, as a committed file.** A copy lives at the
   repository root as [`resume.schema.json`](../resume.schema.json). Contributors
