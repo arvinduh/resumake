@@ -56,17 +56,15 @@ jobs:
     name: Security Audit (cargo audit)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      checks: write
-      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
       - name: Run cargo audit
-        uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: cargo audit
 
   test:
     name: Test on ${{ matrix.os }}
