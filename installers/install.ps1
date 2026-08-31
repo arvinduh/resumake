@@ -54,6 +54,9 @@ if (-not (Test-Path -Path $installDir)) {
     New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 }
 
+# Best-effort cleanup of a rename-aside left by a previous run
+Remove-Item -Path (Join-Path $installDir 'rsmk.exe.old') -Force -ErrorAction SilentlyContinue
+
 $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
@@ -79,7 +82,19 @@ try {
     $binarySource = Join-Path $tempDir "rsmk.exe"
     $binaryDest = Join-Path $installDir "rsmk.exe"
 
+    # rsmk.exe may be running (e.g. `rsmk build --watch` in another terminal). A
+    # running image can be renamed but not overwritten, so move the existing
+    # binary aside before copying the new one in.
+    if (Test-Path -Path $binaryDest) {
+        try {
+            Move-Item -Path $binaryDest -Destination "$binaryDest.old" -Force
+        }
+        catch {
+            Write-Err "Could not replace $binaryDest. Close any running rsmk processes and retry."
+        }
+    }
     Copy-Item -Path $binarySource -Destination $binaryDest -Force
+    Remove-Item -Path "$binaryDest.old" -Force -ErrorAction SilentlyContinue
     Write-Success "rsmk installed successfully to $binaryDest"
 
     # Check PATH

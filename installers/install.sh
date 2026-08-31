@@ -87,6 +87,7 @@ mkdir -p "$INSTALL_DIR"
 TEMP_DIR="$(mktemp -d)"
 cleanup() {
   rm -rf "$TEMP_DIR"
+  rm -f "$INSTALL_DIR/.rsmk.tmp.$$"
 }
 trap cleanup EXIT
 
@@ -122,8 +123,9 @@ fi
 
 info "Extracting binary..."
 tar -xzf "$TEMP_DIR/$ASSET_NAME" -C "$TEMP_DIR"
-mv "$TEMP_DIR/rsmk" "$INSTALL_DIR/rsmk"
-chmod +x "$INSTALL_DIR/rsmk"
+cp "$TEMP_DIR/rsmk" "$INSTALL_DIR/.rsmk.tmp.$$"
+chmod 755 "$INSTALL_DIR/.rsmk.tmp.$$"
+mv -f "$INSTALL_DIR/.rsmk.tmp.$$" "$INSTALL_DIR/rsmk"
 
 success "rsmk installed successfully to ${INSTALL_DIR}/rsmk"
 
