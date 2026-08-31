@@ -47,9 +47,6 @@ git config core.hooksPath .githooks
    - `Polyglot Lint & Format`: `fml fmt --check` and `fml lint`.
    - `Security Audit`: `cargo audit` against Rust advisory database.
    - `Multi-OS Test Matrix`: Full test suite across Linux and Windows.
-   - `Schema Drift`: `cargo test --lib schema` asserts the committed
-     `resume.schema.json` still matches the models (regenerate with
-     `cargo run --example generate-schema`).
 
 ## Conventions
 
@@ -57,9 +54,9 @@ git config core.hooksPath .githooks
   style.
 - Maintain telemetry contracts: all templates must emit `<pageinfo>` and route
   bullets through `<bulletinfo>`.
-- Schema stability: `src/models.rs` is canonical. Never hand-edit
-  `resume.schema.json`; regenerate it with
-  `cargo run --example generate-schema`.
+- Schema stability: `src/models.rs` is canonical. `resume.schema.json` is never
+  committed — the release workflows generate it from the models with
+  `cargo run --example generate-schema` and publish it as a release asset.
 - Always run the freshly built binary (`cargo run -q -- ...`), never a stale
   global `resumake`/`rsmk` on PATH.
 

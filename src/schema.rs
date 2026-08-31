@@ -327,26 +327,6 @@ meta:
   }
 
   #[test]
-  fn test_committed_schema_is_not_stale() {
-    // The canonical schema is committed at the repo root as
-    // `resume.schema.json`. It must always match what the current models
-    // generate; regenerate it with `cargo run --example generate-schema`.
-    let generated =
-      export_builtin_schema(None).expect("in-memory schema generation failed");
-    let committed_path =
-      Path::new(env!("CARGO_MANIFEST_DIR")).join("resume.schema.json");
-    let committed = fs::read_to_string(&committed_path).expect(
-      "resume.schema.json is stale — regenerate with `cargo run --example generate-schema`",
-    );
-
-    assert_eq!(
-      generated.trim_end(),
-      committed.trim_end(),
-      "resume.schema.json is stale — regenerate with `cargo run --example generate-schema`"
-    );
-  }
-
-  #[test]
   fn test_generate_init_template() {
     let tmpl = generate_init_template("Jane Doe");
     assert!(tmpl.contains("Jane Doe"));

@@ -8,10 +8,10 @@
 *.pdf
 output/
 
-# The canonical JSON Schema is committed at the repo root as
-# resume.schema.json (regenerate with `cargo run --example generate-schema`;
-# a drift test keeps it in sync with src/models.rs). Ignore stray copies
-# written elsewhere.
+# The canonical JSON Schema is never committed — it is generated from
+# src/models.rs at release time (`cargo run --example generate-schema`) and
+# published only as a GitHub Release asset. Ignore any local copy.
+/resume.schema.json
 /schema/resume.schema.json
 
 # --- IDEs & Editors ---
