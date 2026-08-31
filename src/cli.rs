@@ -149,6 +149,10 @@ pub enum Commands {
     /// Skip generating GitHub Actions CI and Release workflows
     #[arg(long)]
     no_workflows: bool,
+
+    /// Refresh GitHub Actions workflow pins without modifying content.yaml
+    #[arg(short, long)]
+    update: bool,
   },
   /// Validate repository state, verify semver, and cut a new release tag
   Release {
@@ -443,12 +447,14 @@ mod tests {
         force,
         no_git,
         no_workflows,
+        update,
       } => {
         assert_eq!(name, None);
         assert_eq!(output, PathBuf::from("content.yaml"));
         assert!(!force);
         assert!(!no_git);
         assert!(!no_workflows);
+        assert!(!update);
       }
       _ => panic!("Expected Init command"),
     }
@@ -463,6 +469,7 @@ mod tests {
       "--force",
       "--no-git",
       "--no-workflows",
+      "--update",
     ]);
     match cli_custom.command.unwrap() {
       Commands::Init {
@@ -471,12 +478,22 @@ mod tests {
         force,
         no_git,
         no_workflows,
+        update,
       } => {
         assert_eq!(name, Some("John Smith".to_string()));
         assert_eq!(output, PathBuf::from("custom.yaml"));
         assert!(force);
         assert!(no_git);
         assert!(no_workflows);
+        assert!(update);
+      }
+      _ => panic!("Expected Init command"),
+    }
+
+    let cli_short_update = Cli::parse_from(["rsmk", "init", "-u"]);
+    match cli_short_update.command.unwrap() {
+      Commands::Init { update, .. } => {
+        assert!(update);
       }
       _ => panic!("Expected Init command"),
     }

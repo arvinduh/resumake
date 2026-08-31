@@ -1,6 +1,7 @@
 //! Release orchestration, pre-flight repository and semver verification, and tag management.
 
 use crate::engine::{verify_content, DEFAULT_TEMPLATE};
+use crate::init::check_workflow_version_skew;
 use crate::schema::load_content_version;
 use colored::Colorize;
 use std::cmp::Ordering;
@@ -327,6 +328,8 @@ pub fn run_release(
   // 1. Read and validate version from content.yaml
   let raw_version = load_content_version(content_path)?;
   let target_ver = SemVer::parse(&raw_version)?;
+
+  check_workflow_version_skew(repo_dir, env!("CARGO_PKG_VERSION"));
 
   if !quiet {
     println!("Résumé Release v{target_ver}\n");
