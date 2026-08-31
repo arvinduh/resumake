@@ -45,6 +45,9 @@ pub struct Meta {
   /// Visual styling tokens (typography, margins, colors, paper size).
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub theme: Option<ThemeConfig>,
+  /// Extensible custom metadata key-values.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub extra: Option<BTreeMap<String, serde_json::Value>>,
 }
 
 /// A contact item representation (string or structured object).
@@ -570,5 +573,48 @@ sections:
     let doc: ResumeDocument = serde_yaml::from_str(yaml).unwrap();
     assert_eq!(doc.meta.name, "Jane Doe");
     assert_eq!(doc.sections.len(), 1);
+    assert_eq!(doc.meta.extra, None);
+  }
+
+  #[test]
+  fn test_deserialize_meta_extra_extensible_fields() {
+    let yaml = r#"
+meta:
+  name: "Jane Doe"
+  version: "1.0.0"
+  contact:
+    - name: "jane@example.com"
+  extra:
+    custom_str: "hello world"
+    custom_num: 42
+    custom_bool: true
+    custom_list:
+      - "item1"
+      - "item2"
+    custom_nested:
+      key: "nested value"
+      count: 100
+sections: []
+"#;
+    let doc: ResumeDocument = serde_yaml::from_str(yaml).unwrap();
+    assert_eq!(doc.meta.name, "Jane Doe");
+    let extra = doc.meta.extra.expect("meta.extra should be Some");
+    assert_eq!(
+      extra.get("custom_str").unwrap(),
+      &serde_json::json!("hello world")
+    );
+    assert_eq!(extra.get("custom_num").unwrap(), &serde_json::json!(42));
+    assert_eq!(extra.get("custom_bool").unwrap(), &serde_json::json!(true));
+    assert_eq!(
+      extra.get("custom_list").unwrap(),
+      &serde_json::json!(["item1", "item2"])
+    );
+    assert_eq!(
+      extra.get("custom_nested").unwrap(),
+      &serde_json::json!({
+        "key": "nested value",
+        "count": 100
+      })
+    );
   }
 }
