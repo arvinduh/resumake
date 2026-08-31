@@ -200,29 +200,28 @@ single-role shorthand fields (`title`, `dates`, `bullets`) directly.
 
 The schema is derived directly from the Rust types in
 [`src/models.rs`](../src/models.rs), so it can never drift from this document or
-from what the running binary accepts. You do not normally need to produce it
-yourself; it reaches you two ways:
+from what the running binary accepts. It is **not committed anywhere in this
+repository** — there is no second copy to fall out of sync.
 
-- **For editors, as a release asset.** Every schema release (`s*`) and binary
-  release attaches `resume.schema.json` as a download. The
-  `# yaml-language-server: $schema=<release URL>` comment `rsmk init` writes at
-  the top of `content.yaml` points at the stable schema-release URL (see section
-  6 below), so VS Code and JetBrains YAML plugins fetch and cache it
-  automatically.
-- **For inspection and diffing, as a committed file.** A copy lives at the
-  repository root as [`resume.schema.json`](../resume.schema.json). Contributors
-  regenerate it with `cargo run --example generate-schema`; a drift test in
-  [`src/schema.rs`](../src/schema.rs) fails CI if the committed copy falls out
-  of sync with the models.
+Instead, the release workflows run
+[`examples/generate-schema.rs`](../examples/generate-schema.rs) to produce
+`resume.schema.json` fresh from the current models, and attach it to the
+release. Every schema release (`s*`) and binary release carries that asset. The
+`# yaml-language-server: $schema=<release URL>` comment `rsmk init` writes at
+the top of `content.yaml` points at the stable schema-release URL (see section
+6), so VS Code and JetBrains YAML plugins fetch and cache it automatically.
+
+To read the schema a specific set of models produces, check out that revision
+and run `cargo run --example generate-schema` locally (the output is
+git-ignored).
 
 ---
 
 ## 6. Schema Stability & Versioning
 
 The schema is derived at compile time from `src/models.rs`; it is not a
-separately-versioned artifact. The `resume.schema.json` committed at the
-repository root is a convenience copy for inspection and diffing, held in sync
-with the models by a drift test — the schema still can never silently drift from
+separately-versioned artifact, and it is never committed — the release workflows
+generate it from the models at publish time, so it can never silently drift from
 what the running binary actually accepts (see
 [System Architecture](architecture.md) for why). Two things follow from that:
 

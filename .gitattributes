@@ -1,5 +1,0 @@
-# The canonical schema is written with LF endings by
-# `cargo run --example generate-schema`; pin it so the drift test in
-# src/schema.rs compares byte-for-byte on every platform (the repo
-# otherwise relies on core.autocrlf).
-resume.schema.json text eol=lf

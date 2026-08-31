@@ -18,6 +18,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate schema from the models
+        run: cargo run --release --example generate-schema
+
       - name: Publish schema release
         uses: softprops/action-gh-release@v3
         with:
