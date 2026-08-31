@@ -99,18 +99,16 @@ Keep your PDF viewer open side-by-side. Every time you save `content.yaml`,
 Resumake re-renders the document and evaluates single-page geometry in <100ms:
 
 ```text
-────────────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────────────────
  Candidate:       Jane Doe
  Output:          janedoe_resume.pdf
  Version:         1.0.0
-────────────────────────────────────────────────────────────────
- Page Count:      1 page(s)                             [PASS 1/1]
- Vertical Fill:   95.2% (spare: 0.38 in)                 [OPTIMAL]
- Line Wraps:      0 wrapped items                        [0 WRAPS]
- Underfills:      0 items (<86%)                         [0 UNDER]
-────────────────────────────────────────────────────────────────
- Status: SUCCESS (Strict 1-page layout verified)
-────────────────────────────────────────────────────────────────
+ Page Count:      1 page(s)                                 [PASS 1/1]
+ Vertical Fill:   95.2% (spare: 0.38 in)                     [OPTIMAL]
+ Line Wraps:      0 wrapped items                            [0 WRAPS]
+ Underfills:      0 items (<86%)                             [0 UNDER]
+ Status:          SUCCESS (Strict 1-page layout verified)
+───────────────────────────────────────────────────────────────────────
 ```
 
 ---
