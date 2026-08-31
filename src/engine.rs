@@ -112,6 +112,137 @@ fn known_template_names() -> Vec<&'static str> {
   TEMPLATE_REGISTRY.iter().map(|t| t.name).collect()
 }
 
+/// Summary information about a template (built-in or discovered on disk).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateInfo {
+  /// Name of the template.
+  pub name: String,
+  /// Whether the template is embedded in the binary.
+  pub is_builtin: bool,
+  /// Whether the template is the default built-in template.
+  pub is_default: bool,
+  /// Local filesystem path for custom templates, if discovered on disk.
+  pub path: Option<PathBuf>,
+}
+
+impl fmt::Display for TemplateInfo {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if self.is_builtin {
+      if self.is_default {
+        write!(f, "{} (built-in, default)", self.name)
+      } else {
+        write!(f, "{} (built-in)", self.name)
+      }
+    } else {
+      write!(f, "{} (custom)", self.name)
+    }
+  }
+}
+
+/// Lists all built-in templates and any custom templates discovered in `./templates/`.
+pub fn list_templates() -> Vec<TemplateInfo> {
+  let root = find_project_root();
+  list_templates_in(&root.join("templates"))
+}
+
+/// Lists all built-in templates and any custom templates discovered in the given directory.
+pub fn list_templates_in(templates_dir: &Path) -> Vec<TemplateInfo> {
+  let mut results = Vec::new();
+
+  for template in TEMPLATE_REGISTRY {
+    results.push(TemplateInfo {
+      name: template.name.to_string(),
+      is_builtin: true,
+      is_default: template.name == DEFAULT_TEMPLATE,
+      path: None,
+    });
+  }
+
+  if templates_dir.is_dir() {
+    if let Ok(entries) = fs::read_dir(templates_dir) {
+      let mut custom_templates = Vec::new();
+      for entry in entries.flatten() {
+        let path = entry.path();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        if file_name.starts_with('.') {
+          continue;
+        }
+
+        if path.is_dir() {
+          custom_templates.push(TemplateInfo {
+            name: file_name,
+            is_builtin: false,
+            is_default: false,
+            path: Some(path),
+          });
+        } else if path.is_file()
+          && path.extension().is_some_and(|ext| ext == "typ")
+        {
+          let stem = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or(file_name);
+          custom_templates.push(TemplateInfo {
+            name: stem,
+            is_builtin: false,
+            is_default: false,
+            path: Some(path),
+          });
+        }
+      }
+      custom_templates.sort_by(|a, b| a.name.cmp(&b.name));
+      results.extend(custom_templates);
+    }
+  }
+
+  results
+}
+
+/// Extracts all embedded Typst component files for the template into `target_dir`.
+///
+/// # Errors
+///
+/// Returns [`EngineError::TemplateNotFound`] if `name` is not in the built-in registry.
+/// Returns [`EngineError::DestinationAlreadyExists`] if `target_dir` exists and `force` is false.
+/// Returns [`EngineError::Io`] if directory creation or file writing fails.
+pub fn eject_template(
+  name: &str,
+  target_dir: &Path,
+  force: bool,
+) -> Result<Vec<String>, EngineError> {
+  let template = find_embedded_template(name).ok_or_else(|| {
+    EngineError::TemplateNotFound {
+      name: name.to_string(),
+      known: known_template_names(),
+    }
+  })?;
+
+  if target_dir.exists() && !force {
+    return Err(EngineError::DestinationAlreadyExists {
+      path: target_dir.to_path_buf(),
+    });
+  }
+
+  fs::create_dir_all(target_dir)?;
+
+  let mut ejected_files = Vec::new();
+
+  let entry_dest = target_dir.join("main.typ");
+  fs::write(&entry_dest, template.entry)?;
+  ejected_files.push("main.typ".to_string());
+
+  for file in template.files {
+    let dest = target_dir.join(file.rel_path);
+    if let Some(parent) = dest.parent() {
+      fs::create_dir_all(parent)?;
+    }
+    fs::write(&dest, file.contents)?;
+    ejected_files.push(file.rel_path.to_string());
+  }
+
+  Ok(ejected_files)
+}
+
 /// Errors originating from the Typst execution engine.
 #[derive(Debug)]
 pub enum EngineError {
@@ -155,6 +286,11 @@ pub enum EngineError {
     content: PathBuf,
     /// The discovered project root, canonicalized where possible.
     root: PathBuf,
+  },
+  /// Destination directory already exists and `--force` was not specified.
+  DestinationAlreadyExists {
+    /// Destination directory path.
+    path: PathBuf,
   },
   /// The subprocess could not be spawned or its output could not be read.
   Io(std::io::Error),
@@ -201,6 +337,13 @@ impl fmt::Display for EngineError {
            `--source` for a template elsewhere.",
           display_path(content),
           display_path(root)
+        )
+      }
+      EngineError::DestinationAlreadyExists { path } => {
+        write!(
+          f,
+          "Destination directory '{}' already exists. Use --force to overwrite.",
+          display_path(path)
         )
       }
       EngineError::Io(err) => write!(f, "I/O error: {err}"),
@@ -434,13 +577,36 @@ impl TypstEngine {
       return Ok(tpl.to_path_buf());
     }
 
-    let template = find_embedded_template(template_name).ok_or_else(|| {
-      EngineError::TemplateNotFound {
-        name: template_name.to_string(),
-        known: known_template_names(),
+    let direct_path = Path::new(template_name);
+    if direct_path.exists() && direct_path.is_file() {
+      return Ok(direct_path.to_path_buf());
+    }
+    let rooted_direct = self.root_path.join(template_name);
+    if rooted_direct.exists() && rooted_direct.is_file() {
+      return Ok(rooted_direct);
+    }
+
+    let template = match find_embedded_template(template_name) {
+      Some(t) => t,
+      None => {
+        let custom_main = self
+          .root_path
+          .join("templates")
+          .join(template_name)
+          .join("main.typ");
+        if custom_main.exists() && custom_main.is_file() {
+          return Ok(custom_main);
+        }
+
+        return Err(
+          EngineError::TemplateNotFound {
+            name: template_name.to_string(),
+            known: known_template_names(),
+          }
+          .to_string(),
+        );
       }
-      .to_string()
-    })?;
+    };
 
     let cache_dir = self.root_path.join(".resumake").join(template.name);
     fs::create_dir_all(&cache_dir).map_err(|e| {
@@ -692,5 +858,115 @@ mod tests {
 
     let err = normalize_posix_path(root_dir.path(), outside).unwrap_err();
     assert!(matches!(err, EngineError::ContentOutsideRoot { .. }));
+  }
+
+  #[test]
+  fn test_list_templates_builtins_and_custom() {
+    let temp = TempDir::new().unwrap();
+    let templates_dir = temp.path().join("templates");
+
+    // Initially without templates dir
+    let list = list_templates_in(&templates_dir);
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].name, "classic");
+    assert!(list[0].is_builtin);
+    assert!(list[0].is_default);
+    assert_eq!(list[0].to_string(), "classic (built-in, default)");
+
+    // Add custom directories and files
+    fs::create_dir_all(templates_dir.join("modern")).unwrap();
+    fs::create_dir_all(templates_dir.join("minimal")).unwrap();
+    fs::write(templates_dir.join("single.typ"), "// single file\n").unwrap();
+    fs::write(templates_dir.join("ignore.txt"), "text\n").unwrap();
+    fs::create_dir_all(templates_dir.join(".hidden")).unwrap();
+
+    let list2 = list_templates_in(&templates_dir);
+    assert_eq!(list2.len(), 4);
+    assert_eq!(list2[0].name, "classic");
+    assert!(list2[0].is_builtin);
+
+    assert_eq!(list2[1].name, "minimal");
+    assert!(!list2[1].is_builtin);
+    assert_eq!(list2[1].to_string(), "minimal (custom)");
+
+    assert_eq!(list2[2].name, "modern");
+    assert!(!list2[2].is_builtin);
+    assert_eq!(list2[2].to_string(), "modern (custom)");
+
+    assert_eq!(list2[3].name, "single");
+    assert!(!list2[3].is_builtin);
+    assert_eq!(list2[3].to_string(), "single (custom)");
+  }
+
+  #[test]
+  fn test_eject_template_success_and_collision_rejection() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("templates").join("classic");
+
+    // 1. First eject should succeed
+    let files = eject_template("classic", &target, false).unwrap();
+    assert!(files.contains(&"main.typ".to_string()));
+    assert!(files.contains(&"tokens.typ".to_string()));
+    assert!(files.contains(&"primitives.typ".to_string()));
+    assert!(files.contains(&"blocks/experience.typ".to_string()));
+
+    assert!(target.join("main.typ").exists());
+    assert!(target.join("tokens.typ").exists());
+    assert!(target.join("primitives.typ").exists());
+    assert!(target.join("blocks").join("experience.typ").exists());
+
+    // 2. Second eject without force must fail with DestinationAlreadyExists
+    let err = eject_template("classic", &target, false).unwrap_err();
+    match err {
+      EngineError::DestinationAlreadyExists { path } => {
+        assert_eq!(path, target);
+      }
+      other => panic!("expected DestinationAlreadyExists, got {other:?}"),
+    }
+
+    // 3. Eject with force should succeed
+    let files_forced = eject_template("classic", &target, true).unwrap();
+    assert_eq!(files, files_forced);
+  }
+
+  #[test]
+  fn test_eject_template_rejects_unknown_name() {
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("templates").join("unknown");
+    let err = eject_template("unknown", &target, false).unwrap_err();
+    match err {
+      EngineError::TemplateNotFound { name, .. } => {
+        assert_eq!(name, "unknown");
+      }
+      other => panic!("expected TemplateNotFound, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn test_resolve_template_direct_path_and_custom() {
+    let temp = TempDir::new().unwrap();
+    let custom_main = temp
+      .path()
+      .join("templates")
+      .join("custom")
+      .join("main.typ");
+    fs::create_dir_all(custom_main.parent().unwrap()).unwrap();
+    fs::write(&custom_main, "// custom template\n").unwrap();
+
+    let engine = TypstEngine {
+      typst_binary: PathBuf::from("typst"),
+      font_path: None,
+      root_path: temp.path().to_path_buf(),
+    };
+
+    // Resolving via direct path
+    let resolved_direct = engine
+      .resolve_template(&custom_main.to_string_lossy(), None)
+      .unwrap();
+    assert_eq!(resolved_direct, custom_main);
+
+    // Resolving via custom template name under root/templates/custom
+    let resolved_custom = engine.resolve_template("custom", None).unwrap();
+    assert_eq!(resolved_custom, custom_main);
   }
 }

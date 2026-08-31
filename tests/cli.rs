@@ -185,3 +185,112 @@ sections: []
     .success()
     .stdout(predicate::str::contains("SUCCESS"));
 }
+
+#[test]
+fn test_cli_template_list() {
+  let temp = TempDir::new().unwrap();
+
+  let mut cmd = Command::cargo_bin("rsmk").unwrap();
+  cmd
+    .current_dir(temp.path())
+    .arg("template")
+    .arg("list")
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Available templates:"))
+    .stdout(predicate::str::contains("classic (built-in, default)"));
+
+  // Add custom template in ./templates/
+  let custom_tpl_dir = temp.path().join("templates").join("custom_theme");
+  fs::create_dir_all(&custom_tpl_dir).unwrap();
+
+  let mut cmd2 = Command::cargo_bin("rsmk").unwrap();
+  cmd2
+    .current_dir(temp.path())
+    .arg("template")
+    .arg("list")
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("classic (built-in, default)"))
+    .stdout(predicate::str::contains("custom_theme (custom)"));
+}
+
+#[test]
+fn test_cli_template_eject_classic() {
+  let temp = TempDir::new().unwrap();
+
+  let mut cmd = Command::cargo_bin("rsmk").unwrap();
+  cmd
+    .current_dir(temp.path())
+    .arg("template")
+    .arg("eject")
+    .arg("classic")
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("✓ Ejected template 'classic' to ./templates/classic/"))
+    .stdout(predicate::str::contains("main.typ"))
+    .stdout(predicate::str::contains("tokens.typ"))
+    .stdout(predicate::str::contains("primitives.typ"))
+    .stdout(predicate::str::contains("blocks/experience.typ"))
+    .stdout(predicate::str::contains("Run `rsmk build --template ./templates/classic/main.typ` to compile with your local template."));
+
+  let target_dir = temp.path().join("templates").join("classic");
+  assert!(target_dir.join("main.typ").exists());
+  assert!(target_dir.join("tokens.typ").exists());
+  assert!(target_dir.join("primitives.typ").exists());
+  assert!(target_dir.join("blocks").join("experience.typ").exists());
+}
+
+#[test]
+fn test_cli_template_eject_collision_without_force() {
+  let temp = TempDir::new().unwrap();
+
+  // First eject
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("template")
+    .arg("eject")
+    .arg("classic")
+    .assert()
+    .success();
+
+  // Second eject without force should fail
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("template")
+    .arg("eject")
+    .arg("classic")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("already exists"))
+    .stderr(predicate::str::contains("--force"));
+
+  // Eject with force should succeed
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("template")
+    .arg("eject")
+    .arg("classic")
+    .arg("--force")
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("✓ Ejected template 'classic'"));
+}
+
+#[test]
+fn test_cli_template_eject_unknown_template() {
+  let temp = TempDir::new().unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("template")
+    .arg("eject")
+    .arg("nonexistent")
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("Unknown template 'nonexistent'"));
+}

@@ -124,6 +124,32 @@ pub enum Commands {
     #[arg(short = 'f', long = "force")]
     force: bool,
   },
+  /// Manage and eject résumé layout templates
+  Template(TemplateArgs),
+}
+
+/// Arguments for the `template` subcommand.
+#[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
+pub struct TemplateArgs {
+  /// Template subcommand to execute
+  #[command(subcommand)]
+  pub command: TemplateCommands,
+}
+
+/// Available template subcommands.
+#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
+pub enum TemplateCommands {
+  /// List all available built-in and discovered custom templates
+  List,
+  /// Eject an embedded template to a local directory for customization
+  Eject {
+    /// Name of the template to eject (e.g. `classic`)
+    name: String,
+
+    /// Overwrite destination directory if it already exists
+    #[arg(short, long)]
+    force: bool,
+  },
 }
 
 impl Default for Commands {
@@ -187,6 +213,61 @@ mod tests {
         assert_eq!(template_name, "classic");
       }
       _ => panic!("Expected Build command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_template_list() {
+    let cli = Cli::parse_from(["rsmk", "template", "list"]);
+    match cli.command.unwrap() {
+      Commands::Template(args) => {
+        assert_eq!(args.command, TemplateCommands::List);
+      }
+      _ => panic!("Expected Template command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_template_eject() {
+    let cli = Cli::parse_from(["rsmk", "template", "eject", "classic"]);
+    match cli.command.unwrap() {
+      Commands::Template(args) => match args.command {
+        TemplateCommands::Eject { name, force } => {
+          assert_eq!(name, "classic");
+          assert!(!force);
+        }
+        _ => panic!("Expected Eject command"),
+      },
+      _ => panic!("Expected Template command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_template_eject_force_flags() {
+    let cli =
+      Cli::parse_from(["rsmk", "template", "eject", "classic", "--force"]);
+    match cli.command.unwrap() {
+      Commands::Template(args) => match args.command {
+        TemplateCommands::Eject { name, force } => {
+          assert_eq!(name, "classic");
+          assert!(force);
+        }
+        _ => panic!("Expected Eject command"),
+      },
+      _ => panic!("Expected Template command"),
+    }
+
+    let cli_short =
+      Cli::parse_from(["rsmk", "template", "eject", "classic", "-f"]);
+    match cli_short.command.unwrap() {
+      Commands::Template(args) => match args.command {
+        TemplateCommands::Eject { name, force } => {
+          assert_eq!(name, "classic");
+          assert!(force);
+        }
+        _ => panic!("Expected Eject command"),
+      },
+      _ => panic!("Expected Template command"),
     }
   }
 }
