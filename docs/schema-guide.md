@@ -213,8 +213,8 @@ resumake schema --export resume.schema.json
 
 This is not a file you need to generate yourself for day-to-day use: the
 `# yaml-language-server: $schema=...` comment `resumake init` writes at the top
-of `content.yaml` already points at the versioned copy published with each
-GitHub Release, so VS Code and JetBrains YAML plugins pick it up automatically.
+of `content.yaml` already points at the stable schema-release URL (see section 6
+below), so VS Code and JetBrains YAML plugins pick it up automatically.
 `resumake schema --export` is for local tooling that wants a schema file
 directly (custom linters, a different editor plugin, CI in a downstream
 project).
@@ -234,13 +234,52 @@ never silently drift from what the running binary actually accepts (see
   version bump may break an existing `content.yaml`. In practice: if
   `resumake check` passes on one release in a major line, it will keep passing
   on later releases in that same major line.
-- **A schema published under one release stays exactly as it was.** Each GitHub
-  Release publishes its own `resume.schema.json` as a release asset
-  (`.github/workflows/release.yml`), and `resumake init` points a freshly
-  scaffolded file at that exact tagged copy — not a branch-tracking URL that
-  would silently re-validate old files against a newer schema the moment `main`
+- **A schema published under one release stays exactly as it was.** A tagged
+  release asset is never rewritten in place, so a `$schema` URL that resolves
+  today keeps resolving to the same bytes — not a branch-tracking URL that would
+  silently re-validate old files against a newer schema the moment `main`
   changes.
 
-If you're pinning a `resumake` version for a team or CI pipeline, pin the same
-major version everyone's editors resolve `$schema` against, and treat a major
-version bump as the point to re-read this guide.
+### Which URL to cite
+
+`resume.schema.json` is attached to two different kinds of GitHub Release, and
+only one of them is a stable pointer:
+
+- **Schema releases (`s*`, e.g. `s1.0`) are the stable, citable schema URLs.**
+  This is what a `# yaml-language-server: $schema=` directive, a downstream
+  linter, or any pin in `content.yaml` should point at. The canonical form is:
+
+  ```text
+  https://github.com/arvinduh/resumake/releases/download/s<major>.<minor>/resume.schema.json
+  ```
+
+  `resumake init` writes this form (currently `s1.0`) into every scaffolded
+  file. Schema releases set `make_latest: false`, so they never displace the
+  binary release from `/releases/latest` or confuse update checkers.
+
+- **The copy attached to a binary release (`v*`, e.g. `v0.1.1`) is for
+  inspection only.** It lets you read the exact schema a given `resumake` binary
+  was built against — useful when diagnosing why a `content.yaml` validates
+  under one binary but not another. It is _not_ a stable pointer: do not put a
+  `v*` asset URL in a `$schema` directive or any downstream pin.
+
+### Schema versioning
+
+The `s<major>.<minor>` number on a schema release is the contract editors and
+downstream tooling resolve against. The intended convention, mirroring the
+semver behaviour of the `resumake` crate described above:
+
+- **Additive changes bump the minor: `s1.0` → `s1.1`.** New optional fields, new
+  aliases, new section types — anything that leaves every previously valid
+  `content.yaml` still valid. `s1.1` is expected to be additive-only over
+  `s1.0`. You can move the `$schema` URL in your `content.yaml` up to a newer
+  `s1.x` at any time without touching the file; staying on an older `s1.x` is
+  fine too, you just won't get completion for the newer fields.
+- **Breaking changes bump the major: `s1.x` → `s2.0`.** Renaming or removing a
+  field, tightening a type, or making an optional field required — anything that
+  can make an existing `content.yaml` fail `resumake check`. Treat a new
+  `s<major>` as the point to re-read this guide before moving your URL.
+
+If you're pinning for a team or CI pipeline, make sure everyone's editors
+resolve `$schema` against the same `s<major>.<minor>` URL, and treat an
+`s<major>` bump as the point to re-read this guide.
