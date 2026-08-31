@@ -1871,6 +1871,7 @@ dependencies = [
  "predicates",
  "schemars",
  "self_update",
+ "semver",
  "serde",
  "serde_json",
  "serde_yaml",
