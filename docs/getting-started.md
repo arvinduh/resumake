@@ -7,8 +7,8 @@
 ---
 
 This tutorial guides you through installing Resumake, scaffolding a structured
-résumé project, customizing your content, verifying layout geometry, and
-cutting releases.
+résumé project, customizing your content, verifying layout geometry, and cutting
+releases.
 
 ---
 
@@ -57,6 +57,7 @@ rsmk init --name "Jane Doe"
 ```
 
 This scaffolds:
+
 - `content.yaml` populated with standard sections (Education, Experience,
   Projects, Skills) and configured with the `Libertinus Serif` font.
 - `.gitignore` (ignoring compiled PDFs and internal `.resumake/` caches).

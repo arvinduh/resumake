@@ -20,8 +20,8 @@
   `init`, `release`, and `template`.
 - **Zero-Dependency Engine**: Built-in modular Typst engine and design tokens
   embedded directly in the binary.
-- **CI/CD Automation**: Embedded GitHub Actions workflows with automatic
-  SHA-256 provenance tracking and release management.
+- **CI/CD Automation**: Embedded GitHub Actions workflows with automatic SHA-256
+  provenance tracking and release management.
 
 ---
 
@@ -78,6 +78,7 @@ rsmk init --name "Jane Doe"
 ```
 
 This scaffolds:
+
 - `content.yaml` configured with `Libertinus Serif` font.
 - `.gitignore` (ignoring compiled PDFs and cache artifacts).
 - `.gitattributes` (`* text=auto eol=lf`).
@@ -106,8 +107,8 @@ Evaluates schema validity and layout constraints without writing a PDF to disk.
 rsmk release
 ```
 
-Runs 5 automated pre-flight assertions (clean working tree, upstream sync, SemVer
-monotonicity, in-memory layout check) before creating and pushing git tag
+Runs 5 automated pre-flight assertions (clean working tree, upstream sync,
+SemVer monotonicity, in-memory layout check) before creating and pushing git tag
 `v<version>` to trigger the GitHub Actions release workflow.
 
 ---
@@ -166,15 +167,15 @@ rsmk schema --export out.json   # Export JSON Schema to a file
 
 Explore the complete documentation in the [`docs/`](docs/README.md) directory:
 
-| Guide                                                 | Description                                                                        |
-| :---------------------------------------------------- | :--------------------------------------------------------------------------------- |
-| **[Documentation Index](docs/INDEX.md)**              | Central sitemap for all documentation, specs, and orchestration files.             |
-| **[Getting Started](docs/getting-started.md)**        | Step-by-step tutorial from installation to cutting your first release.             |
-| **[YAML Schema Reference](docs/schema-guide.md)**     | Complete specification of all directives, metadata, and block sections.           |
-| **[Layout Telemetry Guide](docs/telemetry-guide.md)** | Learn how strict 1-page geometry, fill percentage, and wrap checks work.           |
-| **[System Architecture](docs/architecture.md)**       | Deep dive into the native Rust engine, embedded Typst compiler, and pipeline.      |
-| **[Release Procedure](docs/release.md)**              | Version tagging, git-cliff changelogs, and binary distribution workflow.           |
-| **[Contributing Guide](docs/contributing.md)**        | Code standards, local test suite, pre-commit setup, and Pull Request workflow.     |
+| Guide                                                 | Description                                                                    |
+| :---------------------------------------------------- | :----------------------------------------------------------------------------- |
+| **[Documentation Index](docs/INDEX.md)**              | Central sitemap for all documentation, specs, and orchestration files.         |
+| **[Getting Started](docs/getting-started.md)**        | Step-by-step tutorial from installation to cutting your first release.         |
+| **[YAML Schema Reference](docs/schema-guide.md)**     | Complete specification of all directives, metadata, and block sections.        |
+| **[Layout Telemetry Guide](docs/telemetry-guide.md)** | Learn how strict 1-page geometry, fill percentage, and wrap checks work.       |
+| **[System Architecture](docs/architecture.md)**       | Deep dive into the native Rust engine, embedded Typst compiler, and pipeline.  |
+| **[Release Procedure](docs/release.md)**              | Version tagging, git-cliff changelogs, and binary distribution workflow.       |
+| **[Contributing Guide](docs/contributing.md)**        | Code standards, local test suite, pre-commit setup, and Pull Request workflow. |
 
 ---
 
