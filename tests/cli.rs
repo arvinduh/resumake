@@ -175,7 +175,7 @@ sections: []
   )
   .unwrap();
 
-  Command::cargo_bin("resumake")
+  Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
     .arg("check")
