@@ -47,7 +47,7 @@ published `.sha256` checksum, and refuse to install on a mismatch.
 | Variable               | Default   | Effect                                                                                                                 |
 | :--------------------- | :-------- | :--------------------------------------------------------------------------------------------------------------------- |
 | `RESUMAKE_VERSION`     | `latest`  | Pin a specific release, e.g. `RESUMAKE_VERSION=0.1.1` (a leading `v` is accepted). `latest` tracks the newest release. |
-| `RESUMAKE_INSTALL_DIR` | see below | Directory to install the `rsmk` binary into (`~/.local/bin` on Linux/macOS, `~/bin` on Windows).                   |
+| `RESUMAKE_INSTALL_DIR` | see below | Directory to install the `rsmk` binary into (`~/.local/bin` on Linux/macOS, `~/bin` on Windows).                       |
 
 ```bash
 # Linux & macOS — install a pinned version

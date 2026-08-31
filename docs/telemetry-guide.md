@@ -34,9 +34,8 @@ Resumake evaluates these factors automatically on every build.
 
 - Resumake queries the compiled document's `<pageinfo>` metadata for the final
   page count.
-- If page count is greater than 1, `rsmk build`/`check` exits with a
-  non-zero status and a failure message, preventing accidental multi-page
-  exports.
+- If page count is greater than 1, `rsmk build`/`check` exits with a non-zero
+  status and a failure message, preventing accidental multi-page exports.
 
 ### B. Vertical Fill Percentage (`[OPTIMAL]`)
 
