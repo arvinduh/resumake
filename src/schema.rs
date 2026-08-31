@@ -7,6 +7,13 @@ use std::path::{Path, PathBuf};
 
 const INIT_TEMPLATE_RAW: &str = include_str!("embedded/init_template.yaml");
 
+/// Raw embedded template for the GitHub Actions CI workflow stub.
+pub const CI_WORKFLOW_RAW: &str = include_str!("embedded/workflows/ci.yml");
+
+/// Raw embedded template for the GitHub Actions release workflow stub.
+pub const RELEASE_WORKFLOW_RAW: &str =
+  include_str!("embedded/workflows/release.yml");
+
 /// Validates a content YAML file against an optional JSON schema file.
 ///
 /// If `schema_path` is `None` or the file does not exist, the built-in
@@ -155,6 +162,30 @@ pub fn generate_init_template(candidate_name: &str) -> String {
   INIT_TEMPLATE_RAW
     .replace("CANDIDATE_NAME", name)
     .replace("RESUMAKE_SCHEMA_URL", &schema_url())
+}
+
+/// Generates a starter GitHub Actions CI workflow stub for downstream repositories.
+///
+/// Substitutes `RSMK_VERSION` with `version` if provided and non-empty,
+/// otherwise defaults to the current binary version ([`env!("CARGO_PKG_VERSION")`]).
+pub fn generate_ci_workflow(version: Option<&str>) -> String {
+  let v = match version {
+    Some(s) if !s.trim().is_empty() => s.trim(),
+    _ => env!("CARGO_PKG_VERSION"),
+  };
+  CI_WORKFLOW_RAW.replace("RSMK_VERSION", v)
+}
+
+/// Generates a starter GitHub Actions release workflow stub for downstream repositories.
+///
+/// Substitutes `RSMK_VERSION` with `version` if provided and non-empty,
+/// otherwise defaults to the current binary version ([`env!("CARGO_PKG_VERSION")`]).
+pub fn generate_release_workflow(version: Option<&str>) -> String {
+  let v = match version {
+    Some(s) if !s.trim().is_empty() => s.trim(),
+    _ => env!("CARGO_PKG_VERSION"),
+  };
+  RELEASE_WORKFLOW_RAW.replace("RSMK_VERSION", v)
 }
 
 /// Loads the semantic version string (`meta.version`) from a content YAML file.
@@ -461,5 +492,54 @@ sections:
     .unwrap();
 
     assert!(validate_schema_auto(&content_file, None).is_ok());
+  }
+
+  #[test]
+  fn test_generate_ci_workflow() {
+    // Test default binary version
+    let default_ci = generate_ci_workflow(None);
+    assert!(!default_ci.contains("RSMK_VERSION"));
+    assert!(default_ci.contains(env!("CARGO_PKG_VERSION")));
+    assert!(default_ci.contains("uses: actions/checkout@v4"));
+    assert!(default_ci.contains("uses: arvinduh/resumake/setup@v1"));
+    assert!(default_ci.contains("run: rsmk build --check"));
+
+    // Ensure it is valid YAML
+    let parsed: serde_yaml::Value = serde_yaml::from_str(&default_ci).unwrap();
+    assert_eq!(parsed["name"], "CI");
+
+    // Test explicit version override
+    let custom_ci = generate_ci_workflow(Some("0.9.9"));
+    assert!(custom_ci.contains(r#"version: "0.9.9""#));
+  }
+
+  #[test]
+  fn test_generate_release_workflow() {
+    // Test default binary version
+    let default_release = generate_release_workflow(None);
+    assert!(!default_release.contains("RSMK_VERSION"));
+    assert!(default_release.contains(env!("CARGO_PKG_VERSION")));
+    assert!(default_release.contains("uses: actions/checkout@v4"));
+    assert!(default_release.contains("uses: arvinduh/resumake/setup@v1"));
+    assert!(default_release.contains("run: rsmk build"));
+    assert!(default_release.contains("uses: softprops/action-gh-release@v2"));
+    assert!(default_release.contains(r#"files: "*.pdf""#));
+
+    // Ensure it is valid YAML
+    let parsed: serde_yaml::Value =
+      serde_yaml::from_str(&default_release).unwrap();
+    assert_eq!(parsed["name"], "Release");
+
+    // Test explicit version override
+    let custom_release = generate_release_workflow(Some("1.2.3"));
+    assert!(custom_release.contains(r#"version: "1.2.3""#));
+  }
+
+  #[test]
+  fn test_setup_action_is_valid_yaml() {
+    let action_str = include_str!("../setup/action.yml");
+    let parsed: serde_yaml::Value = serde_yaml::from_str(action_str).unwrap();
+    assert_eq!(parsed["name"], "Setup Resumake (rsmk)");
+    assert_eq!(parsed["runs"]["using"], "composite");
   }
 }
