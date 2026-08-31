@@ -37,6 +37,8 @@ fn test_cli_init_and_schema_export() {
   assert!(content_file.exists());
   let content = fs::read_to_string(&content_file).unwrap();
   assert!(content.contains("Jane Doe"));
+  assert!(content.contains("Libertinus Serif"));
+  assert!(!content.contains("Linux Libertine"));
 
   // 2. Test schema export
   let mut cmd_schema = Command::cargo_bin("resumake").unwrap();
