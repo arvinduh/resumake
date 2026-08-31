@@ -148,7 +148,9 @@ pub enum Commands {
     #[arg(short, long)]
     force: bool,
 
-    /// Skip initializing a git repository and git config files
+    /// Skip initializing a git repository and git config files (also skips
+    /// GitHub Actions workflows, which require a repo; add them later with
+    /// `rsmk init --update`)
     #[arg(long)]
     no_git: bool,
 
@@ -156,7 +158,7 @@ pub enum Commands {
     #[arg(long)]
     no_workflows: bool,
 
-    /// Refresh GitHub Actions workflow pins without modifying content.yaml
+    /// Create or refresh GitHub Actions workflows without modifying content.yaml
     #[arg(short, long)]
     update: bool,
   },

@@ -124,13 +124,42 @@ fn test_cli_init_no_git() {
     .stdout(predicate::str::contains(
       "Initialized new résumé content scaffold",
     ))
-    .stdout(predicate::str::contains("Created GitHub Actions workflows"));
+    .stdout(predicate::str::contains(
+      "Skipping GitHub Actions workflows (--no-git)",
+    ));
 
   assert!(temp.path().join("content.yaml").exists());
   assert!(!temp.path().join(".git").exists());
   assert!(!temp.path().join(".gitignore").exists());
   assert!(!temp.path().join(".gitattributes").exists());
+  // Workflows require a git repo; --no-git skips them entirely.
+  assert!(!temp.path().join(".github").exists());
+}
+
+#[test]
+fn test_cli_init_no_git_then_add_workflows_via_update() {
+  let temp = TempDir::new().unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("--no-git")
+    .assert()
+    .success();
+  assert!(!temp.path().join(".github").exists());
+
+  // The workspace can opt into workflows later without re-scaffolding content.
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("init")
+    .arg("--update")
+    .assert()
+    .success();
+
   assert!(temp.path().join(".github/workflows/ci.yml").exists());
+  assert!(temp.path().join(".github/workflows/release.yml").exists());
 }
 
 #[test]

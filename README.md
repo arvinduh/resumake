@@ -145,7 +145,8 @@ rsmk build -t, --template <TPL> # Pick a template ('classic' or path to main.typ
 rsmk init                       # Interactive wizard: git + workflows + gh setup
 rsmk init <DEST>                # Scaffold into a directory (created if needed)
 rsmk init --name <NAME>         # Scaffold with specific candidate name
-rsmk init -u, --update          # Refresh workflow stubs using SHA-256 provenance
+rsmk init --no-git              # Content only — no repo, and no CI/Release workflows
+rsmk init -u, --update          # Add or refresh workflow stubs (SHA-256 provenance)
 rsmk init -f, --force           # Overwrite existing files; scaffold into a non-empty dir
 
 # Release Engine

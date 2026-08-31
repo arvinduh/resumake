@@ -739,7 +739,17 @@ pub fn run_init(opts: InitOptions) -> Result<(), String> {
     }
   }
 
-  if !opts.no_workflows {
+  // GitHub Actions workflows only make sense inside a repository, so they are
+  // scaffolded only when a git repo is being set up. A workspace created with
+  // --no-git can add them later with `rsmk init --update`.
+  if opts.no_git {
+    if !opts.no_workflows && !opts.quiet {
+      print_info(
+        "Skipping GitHub Actions workflows (--no-git). Run `rsmk init --update` \
+         from the project directory to add CI/Release workflows later.",
+      );
+    }
+  } else if !opts.no_workflows {
     scaffold_workflows(base_dir, opts.force)?;
     if !opts.quiet {
       print_success("Created GitHub Actions workflows in .github/workflows/");

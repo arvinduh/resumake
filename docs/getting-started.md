@@ -66,6 +66,10 @@ This scaffolds:
 - Git repository initialization (and optional GitHub repository creation via
   `gh`).
 
+Pass `--no-git` for a content-only scaffold: no repository, and no CI/Release
+workflows (they require a repo). Add the workflows later from the project
+directory with `rsmk init --update`.
+
 ---
 
 ### Step 2: Live Recompilation & Geometry Feedback
