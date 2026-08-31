@@ -145,3 +145,43 @@ sections: []
     .failure()
     .stderr(predicate::str::contains("role"));
 }
+
+#[test]
+fn test_cli_check_succeeds_with_meta_extra() {
+  if which::which("typst").is_err() {
+    eprintln!(
+      "skipping test_cli_check_succeeds_with_meta_extra: typst not on PATH"
+    );
+    return;
+  }
+
+  let temp = TempDir::new().unwrap();
+  let content_file = temp.path().join("content.yaml");
+  fs::write(
+    &content_file,
+    r#"
+meta:
+  name: "Jane Doe"
+  version: "1.0.0"
+  contact:
+    - name: "jane@example.com"
+  extra:
+    clearance: "Secret"
+    relocation: false
+    custom_metrics:
+      github_followers: 500
+sections: []
+"#,
+  )
+  .unwrap();
+
+  Command::cargo_bin("resumake")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("check")
+    .arg("--content")
+    .arg(&content_file)
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("SUCCESS"));
+}
