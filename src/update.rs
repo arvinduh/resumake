@@ -48,15 +48,21 @@ pub fn run_update(
   quiet: bool,
 ) -> Result<(), UpdateError> {
   let mut updater = AxoUpdater::new_for("resumake");
-  let has_receipt = updater.load_receipt().is_ok();
-
-  if !has_receipt {
+  if updater.load_receipt().is_err() {
+    let current_exe = std::env::current_exe()?;
+    let install_dir = current_exe
+      .parent()
+      .unwrap_or_else(|| std::path::Path::new("."));
     updater.set_release_source(ReleaseSource {
       release_type: ReleaseSourceType::GitHub,
       owner: "arvinduh".to_string(),
       name: "resumake".to_string(),
       app_name: "resumake".to_string(),
     });
+    updater.set_install_dir(install_dir.to_str().unwrap_or("."));
+    if let Ok(ver) = Version::parse(env!("CARGO_PKG_VERSION")) {
+      let _ = updater.set_current_version(ver);
+    }
   }
 
   if force {
@@ -67,8 +73,8 @@ pub fn run_update(
   let current_version = Version::parse(current_version_str).ok();
 
   if check {
-    if has_receipt {
-      if updater.is_update_needed_sync()? {
+    if let Ok(is_needed) = updater.is_update_needed_sync() {
+      if is_needed {
         say(
           quiet,
           "A newer rsmk is available. Run `rsmk update` to upgrade.",
@@ -87,7 +93,7 @@ pub fn run_update(
           say(
             quiet,
             &format!(
-              "A newer rsmk is available: v{latest_ver} (currently running v{cur}). Run `rsmk update` or re-run your installer to upgrade."
+              "A newer rsmk is available: v{latest_ver} (currently running v{cur}). Run `rsmk update` to upgrade."
             ),
           );
         } else {
@@ -111,25 +117,20 @@ pub fn run_update(
     return Ok(());
   }
 
-  if has_receipt {
-    if let Some(_res) = updater.run_sync()? {
+  say(quiet, "Checking for resumake updates...");
+  match updater.run_sync() {
+    Ok(Some(_res)) => {
       say(quiet, "rsmk was updated successfully!");
-    } else {
-      say(quiet, "rsmk is already up to date.");
     }
-  } else {
-    say(
-      quiet,
-      &format!(
-        "No installation receipt found for rsmk (v{current_version_str}).\n\
-        In-place binary replacement is supported for installations managed via the 1-line installer script.\n\n\
-        To upgrade to the latest version:\n  \
-        • Windows (PowerShell):  irm https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.ps1 | iex\n  \
-        • Linux & macOS:        curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.sh | sh\n  \
-        • Windows (MSI):        https://github.com/arvinduh/resumake/releases/latest\n  \
-        • Cargo:                cargo install --git https://github.com/arvinduh/resumake"
-      ),
-    );
+    Ok(None) => {
+      say(
+        quiet,
+        &format!("rsmk is already up to date (v{current_version_str})."),
+      );
+    }
+    Err(e) => {
+      say(quiet, &format!("[FAIL] Self-update failed: {e}"));
+    }
   }
 
   Ok(())
