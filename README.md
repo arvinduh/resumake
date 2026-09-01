@@ -56,10 +56,13 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/relea
 irm https://github.com/arvinduh/resumake/releases/download/v0.2.0/resumake-installer.ps1 | iex
 ```
 
-### Direct Prebuilt Binaries
+### Direct Prebuilt Binaries & Windows MSI Installer
 
-Prebuilt standalone binaries are attached to every
-[GitHub Release](https://github.com/arvinduh/resumake/releases/latest).
+- **Windows MSI Installer**: Download `resumake-x86_64-pc-windows-msvc.msi` for
+  a standard Windows installation wizard.
+- **Standalone Binaries**: Prebuilt archives for Linux, macOS, and Windows are
+  attached to every
+  [GitHub Release](https://github.com/arvinduh/resumake/releases/latest).
 
 ---
 
