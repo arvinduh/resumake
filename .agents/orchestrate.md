@@ -84,6 +84,9 @@ or merge.
   - Zero internal re-exporting (`pub use crate::...`); only `src/lib.rs` exports
     the public API.
   - Control public visibility cleanly at the module level in `src/lib.rs`.
+  - Release boundaries: `rsmk release` is strictly an end-user command for
+    résumé repos containing `content.yaml`. Releases of `resumake` itself are
+    cut by pushing a `v*` tag directly to `main` (driven by `cargo-dist`).
 - Progressive 2-tier quality gate:
   - **Tier 1 (Local pre-commit hook)**: `.githooks/pre-commit` (activated via
     `git config core.hooksPath .githooks`). Runs `fml fmt --staged` and
