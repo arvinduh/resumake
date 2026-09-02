@@ -67,7 +67,6 @@ sha2 = "0.11"
 similar = "3.2"
 include_dir = "0.7"
 thiserror = "2.0"
-anyhow = "1.0"
 axoupdater = { version = "0.9", features = ["blocking"] }
 tokio = { version = "1", default-features = false, features = ["rt", "net"] }
 gix = { version = "0.87", default-features = false, features = [

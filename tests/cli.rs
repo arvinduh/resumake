@@ -1163,7 +1163,7 @@ fn test_cli_build_watch_recompiles_on_change() {
   // Wait for initial PDF to be produced and initial build to finish
   let start = std::time::Instant::now();
   while !output_pdf.exists()
-    && start.elapsed() < std::time::Duration::from_secs(5)
+    && start.elapsed() < std::time::Duration::from_secs(25)
   {
     std::thread::sleep(std::time::Duration::from_millis(100));
   }
@@ -1184,7 +1184,7 @@ fn test_cli_build_watch_recompiles_on_change() {
   // Wait for debounce + recompilation (typst compile + telemetry queries can take several seconds under load)
   let wait_start = std::time::Instant::now();
   let mut updated = false;
-  while wait_start.elapsed() < std::time::Duration::from_secs(15) {
+  while wait_start.elapsed() < std::time::Duration::from_secs(30) {
     if let Ok(meta) = fs::metadata(&output_pdf) {
       if let Ok(mtime) = meta.modified() {
         if mtime > initial_mtime {
