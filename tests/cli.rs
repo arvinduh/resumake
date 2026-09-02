@@ -1204,3 +1204,26 @@ fn test_cli_build_watch_recompiles_on_change() {
     "Output PDF was not updated after content.yaml modification in watch mode"
   );
 }
+
+#[test]
+fn test_cli_update_help() {
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .arg("update")
+    .arg("--help")
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("--force"))
+    .stdout(predicate::str::contains("--check"));
+}
+
+#[test]
+fn test_cli_update_check_quiet() {
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .arg("--quiet")
+    .arg("update")
+    .arg("--check")
+    .assert()
+    .success();
+}
