@@ -55,7 +55,7 @@ Resumake CLI releases are cut directly from `main` and automated via
    git push origin vX.Y.Z
    ```
 
-6. **Automated CI Release**: Pushing the `v*` tag triggers
+6. **Automated CI Release**: Pushing the `v*.*.*` tag triggers
    `.github/workflows/release.yml`, which:
    - Compiles cross-platform binaries across Linux (x86_64), macOS (ARM64 &
      x86_64), and Windows (x86_64).
