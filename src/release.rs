@@ -194,8 +194,9 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
     return Err(ReleaseError::NoUpstreamBranch);
   }
 
-  let upstream_branch =
-    String::from_utf8_lossy(&upstream_check.stdout).trim().to_string();
+  let upstream_branch = String::from_utf8_lossy(&upstream_check.stdout)
+    .trim()
+    .to_string();
   if upstream_branch.is_empty() {
     return Err(ReleaseError::NoUpstreamBranch);
   }
@@ -244,7 +245,9 @@ pub fn get_latest_semver_tag(
 
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    return Err(ReleaseError::Git(format!("Failed to list git tags: {stderr}")));
+    return Err(ReleaseError::Git(format!(
+      "Failed to list git tags: {stderr}"
+    )));
   }
 
   let stdout = String::from_utf8_lossy(&output.stdout);
