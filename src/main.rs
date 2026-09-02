@@ -35,7 +35,10 @@ fn main() -> ExitCode {
   }
 }
 
-fn execute_command(command: Commands, quiet: bool) -> Result<(), ResumakeError> {
+fn execute_command(
+  command: Commands,
+  quiet: bool,
+) -> Result<(), ResumakeError> {
   match command {
     Commands::Build {
       content,
