@@ -4,15 +4,27 @@
 
 // Golden-Ratio Modular Scale relative to BASE_BODY
 #let calc-scale(base, theme) = {
-  let body = if "font_size" in theme { eval(str(theme.font_size)) } else if (
-    "body_size" in theme
-  ) { eval(str(theme.body_size)) } else { base }
-  let org = if "org_size" in theme { eval(str(theme.org_size)) } else { 12pt }
-  let sec = if "section_size" in theme { eval(str(theme.section_size)) } else {
-    13pt
+  let body = if "body_size" in theme {
+    eval(str(theme.body_size))
+  } else if "font_size" in theme {
+    eval(str(theme.font_size))
+  } else {
+    base
   }
-  let name = if "name_size" in theme { eval(str(theme.name_size)) } else {
-    25pt
+  let org = if "org_size" in theme {
+    eval(str(theme.org_size))
+  } else {
+    body * (12.0 / 11.5)
+  }
+  let sec = if "section_size" in theme {
+    eval(str(theme.section_size))
+  } else {
+    body * (13.0 / 11.5)
+  }
+  let name = if "name_size" in theme {
+    eval(str(theme.name_size))
+  } else {
+    body * (25.0 / 11.5)
   }
   (body: body, org: org, sec: sec, name: name)
 }
