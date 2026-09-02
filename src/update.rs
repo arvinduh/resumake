@@ -168,4 +168,11 @@ mod tests {
     let res = run_update(false, false, true);
     assert!(res.is_ok());
   }
+
+  #[test]
+  fn test_run_update_check_force_quiet() {
+    // In check mode with force = true and quiet = true, run_update succeeds gracefully
+    let res = run_update(true, true, true);
+    assert!(res.is_ok());
+  }
 }
