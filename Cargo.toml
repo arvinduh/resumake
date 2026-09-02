@@ -60,7 +60,6 @@ serde_yaml = "0.9"
 schemars = "1.2"
 jsonschema = "0.51"
 semver = "1.0"
-which = "8.0"
 colored = "3.0"
 comfy-table = { version = "8.0", features = ["custom_styling"] }
 sha2 = "0.11"
