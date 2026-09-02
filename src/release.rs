@@ -4,7 +4,6 @@ use crate::engine::{verify_content, DEFAULT_TEMPLATE};
 use crate::init::check_workflow_version_skew;
 use crate::schema::load_content_version;
 use colored::Colorize;
-use gix::bstr::ByteSlice;
 use semver::Version;
 use std::path::Path;
 use std::process::Command;
@@ -137,22 +136,19 @@ pub fn derive_actions_url(remote_url: &str) -> String {
 ///
 /// Returns a [`ReleaseError`] if working tree is dirty or git inspection fails.
 pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
-  let repo = gix::discover(repo_dir).map_err(|e| {
-    ReleaseError::Git(format!("Failed to open git repository: {e}"))
-  })?;
+  let output = Command::new("git")
+    .args(["status", "--porcelain"])
+    .current_dir(repo_dir)
+    .output()
+    .map_err(|e| ReleaseError::Git(format!("Failed to run git status: {e}")))?;
 
-  let status = repo.status(gix::progress::Discard).map_err(|e| {
-    ReleaseError::Git(format!("Failed to get repository status: {e}"))
-  })?;
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    return Err(ReleaseError::Git(format!("git status failed: {stderr}")));
+  }
 
-  let mut iter = status.into_iter(Vec::new()).map_err(|e| {
-    ReleaseError::Git(format!("Failed to inspect repository status: {e}"))
-  })?;
-
-  if let Some(item) = iter.next() {
-    let _ = item.map_err(|e| {
-      ReleaseError::Git(format!("Error during git status: {e}"))
-    })?;
+  let stdout = String::from_utf8_lossy(&output.stdout);
+  if !stdout.trim().is_empty() {
     return Err(ReleaseError::UncommittedChanges);
   }
 
@@ -165,61 +161,68 @@ pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
 ///
 /// Returns a [`ReleaseError`] if upstream branch is missing, commits are unpushed, or git fails.
 pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
-  let repo = gix::discover(repo_dir).map_err(|e| {
-    ReleaseError::Git(format!("Failed to open git repository: {e}"))
-  })?;
+  let repo_check = Command::new("git")
+    .args(["rev-parse", "--git-dir"])
+    .current_dir(repo_dir)
+    .output()
+    .map_err(|e| ReleaseError::Git(format!("Failed to run git: {e}")))?;
 
-  let head = repo
-    .head()
-    .map_err(|e| ReleaseError::Git(format!("Failed to resolve HEAD: {e}")))?;
-
-  let head_id = head.id().ok_or(ReleaseError::NoHeadCommit)?.detach();
-
-  let branch = head
-    .try_into_referent()
-    .ok_or(ReleaseError::NoUpstreamBranch)?;
-
-  let tracking_ref_name = branch
-    .remote_tracking_ref_name(gix::remote::Direction::Fetch)
-    .transpose()
-    .map_err(|e| {
-      ReleaseError::Git(format!(
-        "Failed to resolve upstream tracking branch: {e}"
-      ))
-    })?
-    .ok_or(ReleaseError::NoUpstreamBranch)?;
-
-  let upstream_ref = repo
-    .try_find_reference(tracking_ref_name.as_ref())
-    .map_err(|e| {
-      ReleaseError::Git(format!("Failed to find upstream reference: {e}"))
-    })?
-    .ok_or(ReleaseError::NoUpstreamBranch)?;
-
-  let upstream_id = upstream_ref
-    .into_fully_peeled_id()
-    .map_err(|e| {
-      ReleaseError::Git(format!("Failed to peel upstream reference: {e}"))
-    })?
-    .detach();
-
-  let walk = repo
-    .rev_walk([head_id])
-    .with_boundary([upstream_id])
-    .all()
-    .map_err(|e| {
-      ReleaseError::Git(format!("Failed to traverse commits: {e}"))
-    })?;
-
-  let mut count: u64 = 0;
-  for item in walk {
-    let _ = item
-      .map_err(|e| ReleaseError::Git(format!("Failed to walk commit: {e}")))?;
-    count += 1;
+  if !repo_check.status.success() {
+    return Err(ReleaseError::Git(format!(
+      "Failed to open git repository: {}",
+      String::from_utf8_lossy(&repo_check.stderr).trim()
+    )));
   }
 
-  if count > 0 {
-    return Err(ReleaseError::UnpushedCommits { count });
+  let head_check = Command::new("git")
+    .args(["rev-parse", "--verify", "HEAD"])
+    .current_dir(repo_dir)
+    .output()
+    .map_err(|e| ReleaseError::Git(format!("Failed to run git: {e}")))?;
+
+  if !head_check.status.success() {
+    return Err(ReleaseError::NoHeadCommit);
+  }
+
+  let upstream_check = Command::new("git")
+    .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+    .current_dir(repo_dir)
+    .output()
+    .map_err(|e| ReleaseError::Git(format!("Failed to run git: {e}")))?;
+
+  if !upstream_check.status.success() {
+    return Err(ReleaseError::NoUpstreamBranch);
+  }
+
+  let upstream_branch =
+    String::from_utf8_lossy(&upstream_check.stdout).trim().to_string();
+  if upstream_branch.is_empty() {
+    return Err(ReleaseError::NoUpstreamBranch);
+  }
+
+  let rev_list = Command::new("git")
+    .args(["rev-list", "--left-right", "--count", "HEAD...@{u}"])
+    .current_dir(repo_dir)
+    .output()
+    .map_err(|e| {
+      ReleaseError::Git(format!("Failed to run git rev-list: {e}"))
+    })?;
+
+  if !rev_list.status.success() {
+    let stderr = String::from_utf8_lossy(&rev_list.stderr).to_string();
+    return Err(ReleaseError::Git(format!(
+      "Failed to count unpushed commits: {stderr}"
+    )));
+  }
+
+  let output_str = String::from_utf8_lossy(&rev_list.stdout);
+  let counts: Vec<&str> = output_str.split_whitespace().collect();
+  if let Some(ahead_str) = counts.first() {
+    if let Ok(ahead) = ahead_str.parse::<u64>() {
+      if ahead > 0 {
+        return Err(ReleaseError::UnpushedCommits { count: ahead });
+      }
+    }
   }
 
   Ok(())
@@ -233,25 +236,25 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
 pub fn get_latest_semver_tag(
   repo_dir: &Path,
 ) -> Result<Option<Version>, ReleaseError> {
-  let repo = gix::discover(repo_dir).map_err(|e| {
-    ReleaseError::Git(format!("Failed to open git repository: {e}"))
-  })?;
+  let output = Command::new("git")
+    .args(["tag", "-l"])
+    .current_dir(repo_dir)
+    .output()
+    .map_err(|e| ReleaseError::Git(format!("Failed to run git tag: {e}")))?;
 
-  let references = repo
-    .references()
-    .map_err(|e| ReleaseError::Git(format!("Failed to get references: {e}")))?;
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    return Err(ReleaseError::Git(format!("Failed to list git tags: {stderr}")));
+  }
 
-  let tags = references
-    .tags()
-    .map_err(|e| ReleaseError::Git(format!("Failed to get tags: {e}")))?;
-
+  let stdout = String::from_utf8_lossy(&output.stdout);
   let mut highest: Option<Version> = None;
 
-  for tag in tags {
-    let tag = tag.map_err(|e| {
-      ReleaseError::Git(format!("Failed to read tag reference: {e}"))
-    })?;
-    let tag_name = tag.name().shorten().to_str().unwrap_or("");
+  for line in stdout.lines() {
+    let tag_name = line.trim();
+    if tag_name.is_empty() {
+      continue;
+    }
     if let Ok(ver) = parse_version(tag_name) {
       match &highest {
         Some(cur) if ver > *cur => {
@@ -295,20 +298,31 @@ pub fn check_semver_monotonicity(
 ///
 /// Returns a [`ReleaseError`] if git repository cannot be opened or origin URL is not set.
 pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, ReleaseError> {
-  let repo = gix::discover(repo_dir).map_err(|e| {
-    ReleaseError::Git(format!("Failed to open git repository: {e}"))
-  })?;
+  let output = Command::new("git")
+    .args(["remote", "get-url", "origin"])
+    .current_dir(repo_dir)
+    .output()
+    .map_err(|e| {
+      ReleaseError::Git(format!("Failed to run git remote get-url: {e}"))
+    })?;
 
-  let remote = repo
-    .find_remote("origin")
-    .map_err(|e| ReleaseError::RemoteError(e.to_string()))?;
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if stderr.contains("No such remote")
+      || stderr.contains("not found")
+      || stderr.contains("fatal:")
+    {
+      return Err(ReleaseError::NoRemoteUrl);
+    }
+    return Err(ReleaseError::RemoteError(stderr.trim().to_string()));
+  }
 
-  let url = remote
-    .url(gix::remote::Direction::Fetch)
-    .or_else(|| remote.url(gix::remote::Direction::Push))
-    .ok_or(ReleaseError::NoRemoteUrl)?;
+  let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+  if url.is_empty() {
+    return Err(ReleaseError::NoRemoteUrl);
+  }
 
-  Ok(url.to_bstring().to_string())
+  Ok(url)
 }
 
 /// Runs the complete release pipeline: pre-flight checks, tag creation, and push.

@@ -70,11 +70,6 @@ thiserror = "2.0"
 anyhow = "1.0"
 axoupdater = { version = "0.9", features = ["blocking"] }
 tokio = { version = "1", default-features = false, features = ["rt", "net"] }
-gix = { version = "0.87", default-features = false, features = [
-  "revision",
-  "sha1",
-  "status",
-] }
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
 typst = "0.13"

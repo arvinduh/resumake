@@ -238,8 +238,14 @@ pub enum InitError {
 
 /// Checks if the target directory is inside an existing git work tree.
 pub fn is_inside_git_repo(dir: &Path) -> bool {
-  gix::discover(dir)
-    .map(|repo| repo.workdir().is_some())
+  std::process::Command::new("git")
+    .args(["rev-parse", "--is-inside-work-tree"])
+    .current_dir(dir)
+    .output()
+    .map(|output| {
+      output.status.success()
+        && String::from_utf8_lossy(&output.stdout).trim() == "true"
+    })
     .unwrap_or(false)
 }
 
