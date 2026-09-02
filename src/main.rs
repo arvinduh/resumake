@@ -6,8 +6,9 @@ use notify_debouncer_mini::{
 };
 use resumake::cli::{Cli, Commands, TemplateCommands};
 use resumake::engine::{
-  eject_template, list_templates, TypstEngine, DEFAULT_TEMPLATE,
+  eject_template, list_templates, EngineError, TypstEngine, DEFAULT_TEMPLATE,
 };
+use resumake::error::{ResumakeError, WatchError};
 use resumake::init::{resolve_init_output, run_init, InitOptions};
 use resumake::release::run_release;
 use resumake::schema::{
@@ -34,7 +35,10 @@ fn main() -> ExitCode {
   }
 }
 
-fn execute_command(command: Commands, quiet: bool) -> anyhow::Result<()> {
+fn execute_command(
+  command: Commands,
+  quiet: bool,
+) -> Result<(), ResumakeError> {
   match command {
     Commands::Build {
       content,
@@ -138,11 +142,13 @@ fn run_build(
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
-) -> anyhow::Result<()> {
+) -> Result<(), ResumakeError> {
   if !content.exists() {
-    anyhow::bail!(
-      "Content file not found: '{}'. Run 'rsmk init' to create one.",
-      content.display()
+    return Err(
+      EngineError::ContentNotFound {
+        path: content.to_path_buf(),
+      }
+      .into(),
     );
   }
 
@@ -182,7 +188,7 @@ fn run_build(
   }
 
   if !report.is_pass() {
-    anyhow::bail!("Document failed strict single-page geometry constraints.");
+    return Err(EngineError::LayoutConstraintViolation.into());
   }
 
   Ok(())
@@ -195,9 +201,14 @@ fn run_check(
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
-) -> anyhow::Result<()> {
+) -> Result<(), ResumakeError> {
   if !content.exists() {
-    anyhow::bail!("Content file not found: '{}'", content.display());
+    return Err(
+      EngineError::ContentNotFound {
+        path: content.to_path_buf(),
+      }
+      .into(),
+    );
   }
 
   // 1. Schema check
@@ -227,9 +238,7 @@ fn run_check(
   }
 
   if !report.is_pass() {
-    anyhow::bail!(
-      "Dry-run check failed strict single-page layout constraints."
-    );
+    return Err(EngineError::LayoutConstraintViolation.into());
   }
 
   if !quiet {
@@ -244,24 +253,25 @@ fn setup_watcher(
   source: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
-) -> anyhow::Result<(
-  notify_debouncer_mini::Debouncer<
-    notify_debouncer_mini::notify::RecommendedWatcher,
-  >,
-  std::sync::mpsc::Receiver<DebounceEventResult>,
-)> {
+) -> Result<
+  (
+    notify_debouncer_mini::Debouncer<
+      notify_debouncer_mini::notify::RecommendedWatcher,
+    >,
+    std::sync::mpsc::Receiver<DebounceEventResult>,
+  ),
+  ResumakeError,
+> {
   let (tx, rx) = std::sync::mpsc::channel();
   let mut debouncer = new_debouncer(std::time::Duration::from_millis(200), tx)
-    .map_err(|e| anyhow::anyhow!("Failed to initialize file watcher: {e}"))?;
+    .map_err(WatchError::Init)?;
 
   debouncer
     .watcher()
     .watch(content, RecursiveMode::NonRecursive)
-    .map_err(|e| {
-      anyhow::anyhow!(
-        "Failed to watch content file '{}': {e}",
-        content.display()
-      )
+    .map_err(|e| WatchError::WatchPath {
+      path: content.to_path_buf(),
+      source: e,
     })?;
 
   let root = resumake::engine::find_project_root();
@@ -339,9 +349,14 @@ fn run_watch(
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
-) -> anyhow::Result<()> {
+) -> Result<(), ResumakeError> {
   if !content.exists() {
-    anyhow::bail!("Content file not found: '{}'", content.display());
+    return Err(
+      EngineError::ContentNotFound {
+        path: content.to_path_buf(),
+      }
+      .into(),
+    );
   }
 
   let output_pdf = match output {
@@ -419,9 +434,14 @@ fn run_check_watch(
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
-) -> anyhow::Result<()> {
+) -> Result<(), ResumakeError> {
   if !content.exists() {
-    anyhow::bail!("Content file not found: '{}'", content.display());
+    return Err(
+      EngineError::ContentNotFound {
+        path: content.to_path_buf(),
+      }
+      .into(),
+    );
   }
 
   print_info(&format!(
@@ -456,7 +476,7 @@ fn run_check_watch(
   Ok(())
 }
 
-fn run_template_list() -> anyhow::Result<()> {
+fn run_template_list() -> Result<(), ResumakeError> {
   let templates = list_templates();
   println!("Available templates:");
   for tpl in templates {
@@ -469,7 +489,7 @@ fn run_template_eject(
   name: &str,
   force: bool,
   quiet: bool,
-) -> anyhow::Result<()> {
+) -> Result<(), ResumakeError> {
   let target_dir = Path::new("templates").join(name);
   let ejected_files = eject_template(name, &target_dir, force)?;
 

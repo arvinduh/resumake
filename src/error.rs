@@ -6,6 +6,24 @@ pub use crate::release::ReleaseError;
 pub use crate::schema::SchemaError;
 pub use crate::telemetry::TelemetryError;
 pub use crate::update::UpdateError;
+use std::path::PathBuf;
+
+/// Errors originating from file watching and hot-reload debouncing.
+#[derive(thiserror::Error, Debug)]
+pub enum WatchError {
+  /// Failed to initialize file watcher.
+  #[error("Failed to initialize file watcher: {0}")]
+  Init(#[source] notify_debouncer_mini::notify::Error),
+  /// Failed to register watch path.
+  #[error("Failed to watch path '{}': {source}", path.display())]
+  WatchPath {
+    /// Target path.
+    path: PathBuf,
+    /// Underlying notify error.
+    #[source]
+    source: notify_debouncer_mini::notify::Error,
+  },
+}
 
 /// Unified top-level error enum covering all resumake subsystems.
 #[derive(thiserror::Error, Debug)]
@@ -28,4 +46,7 @@ pub enum ResumakeError {
   /// In-place binary update error.
   #[error(transparent)]
   Update(#[from] UpdateError),
+  /// File watching or hot-reload error.
+  #[error(transparent)]
+  Watch(#[from] WatchError),
 }
