@@ -67,7 +67,23 @@ or merge.
 ## 2. Commits & presubmit
 
 - Conventional Commits: `<type>(<scope>): <description> (Fixes #<issue>)`.
-- One logical change per commit — never bundle unrelated cleanups.
+- Super well-scoped, granular commits: every commit represents exactly one
+  logical change. PRs can be larger, but should be composed of multiple
+  distinct, atomic commits rather than monolithic lumps.
+- Architectural conventions:
+  - Use modern `mod_name.rs` (and `mod_name/`) layout, never `mod.rs`.
+  - Subsystem boundaries: `src/commands/` for CLI dispatch, `src/engine/` for
+    in-process Typst compilation, `src/utils/` for shared cross-cutting
+    plumbing, and domain models in `src/models.rs`, `src/schema.rs`,
+    `src/telemetry.rs`.
+  - Colocated domain errors: each subsystem defines its own domain errors,
+    aggregated into `ResumakeError` in `src/error.rs` with `Result<T>` alias and
+    classification helpers (`is_engine()`, `is_schema()`,
+    `is_layout_overflow()`, etc.).
+  - Use absolute imports (`crate::...`) across all internal modules.
+  - Zero internal re-exporting (`pub use crate::...`); only `src/lib.rs` exports
+    the public API.
+  - Control public visibility cleanly at the module level in `src/lib.rs`.
 - Progressive 2-tier quality gate:
   - **Tier 1 (Local pre-commit hook)**: `.githooks/pre-commit` (activated via
     `git config core.hooksPath .githooks`). Runs `fml fmt --staged` and
@@ -117,7 +133,9 @@ itself requires the user's explicit sign-off, always — an "ask first" item per
 
 **The orchestrator merges a PR once, in order:**
 
-1. Required status checks are green.
+1. Required status checks are green (monitor reactively via
+   `gh pr checks <PR_NUM> --watch` or `gh run watch` — never poll in ad-hoc
+   loops).
 2. All review conversations are resolved.
 3. Either: the change was trivial enough to skip §4's ceremony entirely, or §4's
    QA debate concluded with the reviewer's written sign-off as a PR comment.
