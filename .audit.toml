@@ -1,7 +1,0 @@
-[advisories]
-ignore = [
-  # quick-xml 0.36.2 is a transitive dependency pinned by typst 0.13.1 (via hayagriva 0.8.1 -> citationberg 0.5.0).
-  # Resumake does not parse untrusted CSL citation XML, making this non-exploitable.
-  "RUSTSEC-2026-0194",
-  "RUSTSEC-2026-0195",
-]
