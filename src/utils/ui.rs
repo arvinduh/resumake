@@ -221,6 +221,11 @@ pub fn print_info(msg: &str) {
   println!("{} {msg}", "[INFO]".blue().bold());
 }
 
+/// Prints a standardized warning status badge message.
+pub fn print_warning(msg: &str) {
+  println!("{} {msg}", "[WARN]".yellow().bold());
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
