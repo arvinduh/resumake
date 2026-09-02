@@ -1157,6 +1157,8 @@ fn test_cli_build_watch_recompiles_on_change() {
       "--output",
       output_pdf.to_str().unwrap(),
     ])
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped())
     .spawn()
     .expect("failed to spawn watch process");
 

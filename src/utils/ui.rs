@@ -194,6 +194,16 @@ pub fn build_telemetry_table(
   table
 }
 
+/// Formats the layout telemetry report table into a string using `comfy-table`.
+pub fn format_telemetry_table(
+  report: &TelemetryReport,
+  candidate_name: &str,
+  output_pdf: &str,
+  version: &str,
+) -> String {
+  build_telemetry_table(report, candidate_name, output_pdf, version).to_string()
+}
+
 /// Prints the formatted layout telemetry report table to terminal using `comfy-table`.
 pub fn print_telemetry_table(
   report: &TelemetryReport,
@@ -201,24 +211,50 @@ pub fn print_telemetry_table(
   output_pdf: &str,
   version: &str,
 ) {
-  let table =
-    build_telemetry_table(report, candidate_name, output_pdf, version);
-  println!("{table}");
+  println!(
+    "{}",
+    format_telemetry_table(report, candidate_name, output_pdf, version)
+  );
+}
+
+/// Formats a standardized success status badge message as a string.
+pub fn format_success(msg: &str) -> String {
+  format!("{} {msg}", "[PASS]".green().bold())
 }
 
 /// Prints a standardized success status badge message.
 pub fn print_success(msg: &str) {
-  println!("{} {msg}", "[PASS]".green().bold());
+  println!("{}", format_success(msg));
+}
+
+/// Formats a standardized failure status badge message as a string.
+pub fn format_error(msg: &str) -> String {
+  format!("{} {msg}", "[FAIL]".red().bold())
 }
 
 /// Prints a standardized failure status badge message.
 pub fn print_error(msg: &str) {
-  eprintln!("{} {msg}", "[FAIL]".red().bold());
+  eprintln!("{}", format_error(msg));
+}
+
+/// Formats a standardized informational status badge message as a string.
+pub fn format_info(msg: &str) -> String {
+  format!("{} {msg}", "[INFO]".blue().bold())
 }
 
 /// Prints a standardized informational status badge message.
 pub fn print_info(msg: &str) {
-  println!("{} {msg}", "[INFO]".blue().bold());
+  println!("{}", format_info(msg));
+}
+
+/// Formats a standardized warning status badge message as a string.
+pub fn format_warning(msg: &str) -> String {
+  format!("{} {msg}", "[WARN]".yellow().bold())
+}
+
+/// Prints a standardized warning status badge message.
+pub fn print_warning(msg: &str) {
+  println!("{}", format_warning(msg));
 }
 
 #[cfg(test)]
@@ -298,8 +334,13 @@ mod tests {
   fn test_doc_sample_output() {
     let report =
       TelemetryReport::new(1, 95.2, 0.38, Vec::new(), Vec::new(), Vec::new());
-    let table =
-      build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
-    println!("DOC SAMPLE:\n{table}");
+    let formatted = format_telemetry_table(
+      &report,
+      "Jane Doe",
+      "janedoe_resume.pdf",
+      "1.0.0",
+    );
+    assert!(formatted.contains("Jane Doe"));
+    assert!(formatted.contains("[PASS 1/1]"));
   }
 }

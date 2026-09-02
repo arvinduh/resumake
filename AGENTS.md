@@ -19,20 +19,18 @@ git config core.hooksPath .githooks
 ## Layout
 
 - `src/cli.rs` — CLI subcommand options, arguments, and clap parser
-- `src/engine.rs` — Core compilation pipeline, template extraction, and Typst
-  invocation
-- `src/init.rs` — Interactive project scaffolding, workflow provenance headers,
-  and refresh
+- `src/commands/` — CLI subcommand handlers (`build.rs`, `init.rs`,
+  `release.rs`, `template.rs`, `update.rs`)
+- `src/engine/` — In-process Typst engine orchestration, World implementation,
+  and template registry
+- `src/error.rs` — Crate-level error umbrella, Result alias, and classification
+  helpers
 - `src/models.rs` — Canonical Resume data structures, metadata, and serde models
-- `src/release.rs` — Automated pre-flight git assertions, SemVer 2.0
-  monotonicity, and release tagging
 - `src/schema.rs` — JSON Schema generator, validation logic, and drift
   verification
 - `src/telemetry.rs` — Strict 1-page layout geometry calculations, overflow, and
   wrap checks
-- `src/ui.rs` — Visual terminal diagnostics, table formatting, and color output
-- `src/update.rs` — `rsmk update` in-place binary self-update via the
-  `axoupdater` crate and cargo-dist receipts
+- `src/utils/` — Shared cross-cutting utilities (`git.rs`, `ui.rs`, `fs.rs`)
 - `src/embedded/` — Built-in templates (`classic/`), workflow templates, and
   initialization assets
 - `docs/` — Architecture documentation, guides, and ADRs (see `docs/INDEX.md`)
@@ -54,11 +52,33 @@ git config core.hooksPath .githooks
 
 - Commits: `type(scope): description (Fixes #issue)`, Conventional Commits
   style.
+- Granular, atomic commits: every commit must be super well-scoped and represent
+  exactly one logical change. While PRs can be larger, they should be composed
+  of multiple clean, atomic commits.
 - Maintain telemetry contracts: all templates must emit `<pageinfo>` and route
   bullets through `<bulletinfo>`.
 - Schema stability: `src/models.rs` is canonical. `resume.schema.json` is never
   committed — the release workflows generate it from the models with
   `cargo run --example generate-schema` and publish it as a release asset.
+- Modern module architecture: use `mod_name.rs` (and `mod_name/` for submodules)
+  — never `mod.rs` files.
+- Subsystem boundaries: keep CLI commands in `src/commands/`, compilation in
+  `src/engine/`, shared plumbing in `src/utils/`, and domain models in
+  `src/models.rs`, `src/schema.rs`, `src/telemetry.rs`.
+- Colocated domain errors: each subsystem defines its own domain errors,
+  aggregated into the crate umbrella `ResumakeError` in `src/error.rs` with the
+  `Result<T>` alias and classification helpers.
+- Absolute import hierarchy: use absolute paths (`crate::...`) for all internal
+  crate imports.
+- Zero internal re-exporting: never use `pub use crate::...` within internal
+  submodules. Only `src/lib.rs` exports the public API surface.
+- Visibility boundaries: keep internal engine, CLI, and scaffolding logic
+  cleanly scoped at the module declaration level in `src/lib.rs`.
+- In-process Typst engine: never invoke external `typst` CLI binaries;
+  compilation and telemetry are strictly evaluated in-process via Typst crates.
+- CI monitoring: use `gh pr checks <PR> --watch` (or `gh run watch`) instead of
+  manual polling loops to stream live status and reactively block until
+  pass/fail.
 - Always run the freshly built binary (`cargo run -q -- ...`), never a stale
   global `resumake`/`rsmk` on PATH.
 

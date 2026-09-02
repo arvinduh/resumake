@@ -617,7 +617,7 @@ sections:
     assert!(default_release.contains("uses: actions/checkout@v4"));
     assert!(default_release.contains("uses: arvinduh/resumake/setup@v1"));
     assert!(default_release.contains("run: rsmk build"));
-    assert!(default_release.contains("uses: softprops/action-gh-release@v2"));
+    assert!(default_release.contains("uses: softprops/action-gh-release@v3"));
     assert!(default_release.contains(r#"files: "*.pdf""#));
 
     // Ensure it is valid YAML

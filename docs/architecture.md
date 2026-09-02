@@ -31,17 +31,16 @@ graph TD
 
 ## 2. Module Responsibilities
 
-| Module          | Source File                               | Purpose                                                                                                             |
-| :-------------- | :---------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
-| **`models`**    | [`src/models.rs`](../src/models.rs)       | Serde data models, JSON Schema generation (`schemars`), extensible `meta.extra` map, and default value derivations. |
-| **`schema`**    | [`src/schema.rs`](../src/schema.rs)       | In-process schema validation, JSON Schema generation, and workflow template generators.                             |
-| **`engine`**    | [`src/engine.rs`](../src/engine.rs)       | Named template registry, template ejection, resolution, and Typst compiler process orchestration.                   |
-| **`init`**      | [`src/init.rs`](../src/init.rs)           | Interactive scaffolding wizard, git config management, SHA-256 workflow provenance stamping and refresh.            |
-| **`release`**   | [`src/release.rs`](../src/release.rs)     | Automated pre-flight git assertions, SemVer 2.0 monotonicity checks, and atomic tag creation & push.                |
-| **`telemetry`** | [`src/telemetry.rs`](../src/telemetry.rs) | Queries `<pageinfo>`/`<bulletinfo>` metadata and evaluates fill ratio and wrap heuristics.                          |
-| **`ui`**        | [`src/ui.rs`](../src/ui.rs)               | Zero-dependency terminal formatting, ANSI boxed badges, and error diagnostics.                                      |
-| **`update`**    | [`src/update.rs`](../src/update.rs)       | In-place binary self-update via `axoupdater` and `cargo-dist` release receipts.                                     |
-| **`cli`**       | [`src/cli.rs`](../src/cli.rs)             | Clap command parsing, dispatching, and file-watching event loops.                                                   |
+| Module          | Source File                               | Purpose                                                                                                                |
+| :-------------- | :---------------------------------------- | :--------------------------------------------------------------------------------------------------------------------- |
+| **`models`**    | [`src/models.rs`](../src/models.rs)       | Serde data models, JSON Schema generation (`schemars`), extensible `meta.extra` map, and default value derivations.    |
+| **`schema`**    | [`src/schema.rs`](../src/schema.rs)       | In-process schema validation, JSON Schema generation, and workflow template generators.                                |
+| **`engine`**    | [`src/engine/`](../src/engine)            | In-process Typst engine orchestration, World virtual filesystem, font discovery, and template registry.                |
+| **`commands`**  | [`src/commands/`](../src/commands)        | CLI subcommand implementations (`build.rs`, `init.rs`, `release.rs`, `template.rs`, `update.rs`).                      |
+| **`telemetry`** | [`src/telemetry.rs`](../src/telemetry.rs) | Queries `<pageinfo>`/`<bulletinfo>` metadata and evaluates fill ratio and wrap heuristics.                             |
+| **`utils`**     | [`src/utils/`](../src/utils)              | Cross-cutting utilities: centralized git operations (`git.rs`), terminal UI (`ui.rs`), and filesystem tools (`fs.rs`). |
+| **`error`**     | [`src/error.rs`](../src/error.rs)         | Crate-level error umbrella (`ResumakeError`), `Result` alias, and ergonomic classification helpers.                    |
+| **`cli`**       | [`src/cli.rs`](../src/cli.rs)             | Clap command options and argument parsing definitions.                                                                 |
 
 ---
 

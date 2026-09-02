@@ -1,5 +1,5 @@
 name: "Setup Resumake (rsmk)"
-description: "Install the rsmk CLI compiler and Typst engine"
+description: "Install the rsmk CLI compiler"
 inputs:
   version:
     description: "Version of rsmk to install (e.g. 0.1.1, latest)"
@@ -8,8 +8,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup Typst compiler
-      uses: typst-community/setup-typst@v5
     - name: Install rsmk
       shell: bash
       env:

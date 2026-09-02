@@ -1,7 +1,7 @@
 //! Release orchestration, pre-flight repository and semver verification, and tag management.
 
+use crate::commands::init::check_workflow_version_skew;
 use crate::engine::{verify_content, DEFAULT_TEMPLATE};
-use crate::init::check_workflow_version_skew;
 use crate::schema::load_content_version;
 use colored::Colorize;
 use semver::Version;

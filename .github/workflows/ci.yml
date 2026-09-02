@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -30,11 +30,6 @@ jobs:
 
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
-
-      - name: Install Node (for Prettier & Markdownlint)
-        uses: actions/setup-node@v7
-        with:
-          node-version: "lts/*"
 
       - name: Install Formality (fml)
         run: |
@@ -58,7 +53,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install prebuilt cargo-audit
         uses: taiki-e/install-action@cargo-audit
@@ -74,16 +69,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
-
-      - name: Setup Typst compiler
-        uses: typst-community/setup-typst@v5
 
       - name: Run test suite
         run: cargo test --all-targets

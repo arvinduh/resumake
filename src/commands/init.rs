@@ -4,7 +4,7 @@
 use crate::schema::{
   generate_ci_workflow, generate_init_template, generate_release_workflow,
 };
-use crate::ui::{print_error, print_info, print_success};
+use crate::utils::ui::{print_error, print_info, print_success};
 use std::fs;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
