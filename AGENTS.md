@@ -79,6 +79,9 @@ git config core.hooksPath .githooks
 - CI monitoring: use `gh pr checks <PR> --watch` (or `gh run watch`) instead of
   manual polling loops to stream live status and reactively block until
   pass/fail.
+- Release boundaries: `rsmk release` is strictly an end-user command for résumé
+  repositories containing `content.yaml`. Resumake crate releases are cut by
+  pushing a `v*` tag directly to `main` (driven by `cargo-dist`).
 - Always run the freshly built binary (`cargo run -q -- ...`), never a stale
   global `resumake`/`rsmk` on PATH.
 

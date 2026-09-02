@@ -1,87 +1,111 @@
 # Release Procedure
 
-This document describes how a versioned release of `resumake` is cut and
-published.
+This document explains how releases work in the Resumake ecosystem, clearly
+distinguishing between **developer releases** of the `resumake` compiler binary
+itself and **end-user releases** of personal résumé repositories.
 
 ---
 
-## Overview
+## 1. Developer Releases (`resumake` CLI & Crate)
 
-Releases are cut from `main` and are driven by
-[Conventional Commits](https://www.conventionalcommits.org/). GitHub Releases
-automatically derives structured release notes directly from merged pull
-requests and conventional commit history on tag push.
+Resumake CLI releases are cut directly from `main` and automated via
+`cargo-dist` in `.github/workflows/release.yml`.
+
+> [!IMPORTANT] The CLI command `rsmk release` is strictly for **end users** in a
+> résumé workspace containing `content.yaml`. Developers cutting a release of
+> `resumake` itself must **never** invoke `rsmk release` in the compiler
+> repository.
+
+### Step-by-Step Developer Release
+
+1. **Verify Presubmit**: Ensure all linters, formatting checks, and tests pass:
+
+   ```sh
+   fml fmt --check
+   fml lint
+   cargo test --all-targets
+   cargo doc --no-deps
+   ```
+
+2. **Verify Cargo-Dist Plan**: Confirm that `cargo-dist` builds clean binary
+   targets and installers:
+
+   ```sh
+   dist plan
+   ```
+
+3. **Bump Version**: Update `version` in `Cargo.toml` and synchronize
+   `Cargo.lock`:
+
+   ```sh
+   git add Cargo.toml Cargo.lock
+   git commit -m "chore(release): bump version to vX.Y.Z"
+   ```
+
+4. **Merge to `main`**: Open a pull request, wait for all CI checks to turn
+   green, and merge to `main`.
+
+5. **Tag and Push**: Create an annotated semver tag on `main` and push to
+   GitHub:
+
+   ```sh
+   git checkout main
+   git pull origin main
+   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
+
+6. **Automated CI Release**: Pushing the `v*` tag triggers
+   `.github/workflows/release.yml`, which:
+   - Compiles cross-platform binaries across Linux (x86_64), macOS (ARM64 &
+     x86_64), and Windows (x86_64).
+   - Generates standalone compressed archives and fast 1-line shell/PowerShell
+     installers (`resumake-installer.sh`, `resumake-installer.ps1`).
+   - Generates the canonical JSON Schema (`cargo run --example generate-schema`)
+     and attaches `resume.schema.json` as a release asset.
+   - Publishes the GitHub Release with automated changelog notes derived from
+     merged pull requests.
 
 ---
 
-## Step-by-Step Procedure
+## 2. User Résumé Releases (`rsmk release`)
 
-### 1. Confirm `main` is Releasable
+End users who maintain their personal résumé using Resumake (scaffolded via
+`rsmk init`) use `rsmk release` to cut versions of their résumé PDF.
 
-Ensure all formatters, linters, tests, and documentation builds pass:
+### What `rsmk release` Does
 
-```sh
-fml fmt --check
-fml lint
-cargo test --all-targets
-cargo doc --no-deps
-```
+When an end user runs `rsmk release` in their résumé repository:
 
-### 2. Bump the Version
-
-Update `version` in `Cargo.toml` and commit:
-
-```sh
-git add Cargo.toml Cargo.lock
-git commit -m "chore(release): bump version to vX.Y.Z"
-```
-
-### 3. Tag and Push the Binary Release
-
-You can cut the release using `rsmk release` with automated pre-flight checks:
+1. **Schema Version Extraction**: Reads `meta.version` from their
+   `content.yaml`.
+2. **Workflow Drift Check**: Warns if the repo's `.github/workflows/` are out of
+   date with the installed CLI version.
+3. **Clean Tree Check**: Verifies there are no uncommitted changes.
+4. **Upstream Sync Check**: Verifies the local branch is up to date with
+   `origin`.
+5. **SemVer Monotonicity**: Verifies `meta.version` is strictly greater than all
+   prior git tags in the repository.
+6. **Strict 1-Page Layout Validation**: Runs an in-memory layout check
+   (`rsmk build --check`) to guarantee single-page geometry before publishing.
+7. **Atomic Tag & Push**: Creates tag `vX.Y.Z` and pushes it to GitHub,
+   triggering their personal GitHub Actions workflow to build and attach their
+   compiled PDF to a GitHub Release.
 
 ```sh
+# Dry run pre-flight check without creating tags
+rsmk release --dry-run
+
+# Cut and publish resume release
 rsmk release
 ```
 
-`rsmk release` automatically runs pre-flight verifications before creating or
-pushing tags:
-
-1. **Clean working tree**: verifies no uncommitted changes exist.
-2. **Upstream sync**: verifies the branch tracks origin with 0 unpushed commits.
-3. **Semver monotonicity**: checks `meta.version` is valid and strictly newer
-   than existing git tags.
-4. **Pre-flight check**: runs `rsmk build --check` in-memory.
-5. **Atomic Tag & Push**: creates annotated tag `vX.Y.Z` and pushes to origin
-   (bypassed on `--dry-run`).
-
-Alternatively, manual tag and push:
-
-```sh
-git tag -a vX.Y.Z -m "vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-Pushing the `v*` tag triggers `.github/workflows/release.yml` (managed by
-`cargo-dist`), which:
-
-1. Plans and orchestrates multi-platform compilation across Linux (x86_64),
-   macOS (ARM64 & Intel), and Windows (x86_64).
-2. Generates standalone archives, checksums, and clean 1-line installers
-   (`resumake-installer.sh`, `resumake-installer.ps1`).
-3. Compiles the canonical JSON Schema (`cargo run --example generate-schema`)
-   and attaches `resume.schema.json` as a release asset.
-4. Creates the GitHub Release with generated release notes, manifests, and
-   binaries.
-
 ---
 
-## Schema Releases (`s*`)
+## 3. Schema Releases (`s*`)
 
 Schema releases publish JSON schema versions (e.g. `s1.0`, `s1.1`) independently
-of CLI binary patches, matching Formality's release model:
-
-### 1. Tag and Push Schema Release
+of CLI binary patches:
 
 ```sh
 git tag -a sX.Y -m "Schema sX.Y"
@@ -90,10 +114,7 @@ git push origin sX.Y
 
 Pushing an `s*` tag triggers `.github/workflows/schema.yml`, which:
 
-1. Sets `make_latest: false` so schema releases **never** displace the binary
-   release from `/releases/latest` or confuse update checkers.
-2. Attaches the `resume.schema.json` committed at the repo root (kept current by
-   the schema drift test) to the release — it checks out the tag and uploads the
-   file, with no Rust build.
+1. Sets `make_latest: false` so schema releases never displace binary releases.
+2. Uploads `resume.schema.json` as a release asset.
 3. Makes the schema available at the permanent URL:
    `https://github.com/arvinduh/resumake/releases/download/sX.Y/resume.schema.json`
