@@ -1,0 +1,364 @@
+//! Handlers for `rsmk build`, watch mode, and check mode.
+
+use crate::engine::EngineError;
+use crate::engine::TypstEngine;
+use crate::error::{ResumakeError, WatchError};
+use crate::schema::{
+  derive_output_filename, load_content_name, load_content_version,
+  validate_schema_auto,
+};
+use crate::telemetry::evaluate_telemetry;
+use crate::utils::fs::find_project_root;
+use crate::utils::ui::{
+  print_error, print_info, print_success, print_telemetry_table,
+};
+use notify_debouncer_mini::{
+  new_debouncer, notify::RecursiveMode, DebounceEventResult,
+};
+use std::path::Path;
+
+/// Runs `rsmk build` to compile the document to a PDF and verify layout telemetry.
+pub fn run_build(
+  content: &Path,
+  template_name: &str,
+  source: Option<&Path>,
+  output: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+  quiet: bool,
+) -> Result<(), ResumakeError> {
+  if !content.exists() {
+    return Err(
+      EngineError::ContentNotFound {
+        path: content.to_path_buf(),
+      }
+      .into(),
+    );
+  }
+
+  // 1. Validate schema
+  validate_schema_auto(content, schema)?;
+
+  // 2. Resolve paths
+  let engine = TypstEngine::new(font_path)?;
+  let resolved_template = engine.resolve_template(template_name, source)?;
+  let output_pdf = match output {
+    Some(out) => out.to_path_buf(),
+    None => derive_output_filename(content),
+  };
+
+  // 3. Compile document
+  engine.compile(&resolved_template, content, &output_pdf)?;
+
+  // 4. Query telemetry
+  let page_json =
+    engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
+  let bullets_json =
+    engine.query_metadata(&resolved_template, content, "<bulletinfo>")?;
+  let report = evaluate_telemetry(&page_json, &bullets_json)?;
+
+  let name =
+    load_content_name(content).unwrap_or_else(|_| "Candidate".to_string());
+  let version =
+    load_content_version(content).unwrap_or_else(|_| "1.0.0".to_string());
+
+  if !quiet {
+    print_telemetry_table(
+      &report,
+      &name,
+      &output_pdf.to_string_lossy(),
+      &version,
+    );
+  }
+
+  if !report.is_pass() {
+    return Err(EngineError::LayoutConstraintViolation.into());
+  }
+
+  Ok(())
+}
+
+/// Runs `rsmk build --check` to verify schema and layout geometry without generating a PDF.
+pub fn run_check(
+  content: &Path,
+  template_name: &str,
+  source: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+  quiet: bool,
+) -> Result<(), ResumakeError> {
+  if !content.exists() {
+    return Err(
+      EngineError::ContentNotFound {
+        path: content.to_path_buf(),
+      }
+      .into(),
+    );
+  }
+
+  // 1. Schema check
+  validate_schema_auto(content, schema)?;
+
+  // 2. Layout telemetry check
+  let engine = TypstEngine::new(font_path)?;
+  let resolved_template = engine.resolve_template(template_name, source)?;
+  let page_json =
+    engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
+  let bullets_json =
+    engine.query_metadata(&resolved_template, content, "<bulletinfo>")?;
+  let report = evaluate_telemetry(&page_json, &bullets_json)?;
+
+  let name =
+    load_content_name(content).unwrap_or_else(|_| "Candidate".to_string());
+  let version =
+    load_content_version(content).unwrap_or_else(|_| "1.0.0".to_string());
+
+  if !quiet {
+    print_telemetry_table(
+      &report,
+      &name,
+      "[dry-run: no PDF written]",
+      &version,
+    );
+  }
+
+  if !report.is_pass() {
+    return Err(EngineError::LayoutConstraintViolation.into());
+  }
+
+  if !quiet {
+    print_success("Dry-run check passed: schema & single-page layout valid.");
+  }
+  Ok(())
+}
+
+fn setup_watcher(
+  content: &Path,
+  template_name: &str,
+  source: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+) -> Result<
+  (
+    notify_debouncer_mini::Debouncer<
+      notify_debouncer_mini::notify::RecommendedWatcher,
+    >,
+    std::sync::mpsc::Receiver<DebounceEventResult>,
+  ),
+  ResumakeError,
+> {
+  let (tx, rx) = std::sync::mpsc::channel();
+  let mut debouncer = new_debouncer(std::time::Duration::from_millis(200), tx)
+    .map_err(WatchError::Init)?;
+
+  debouncer
+    .watcher()
+    .watch(content, RecursiveMode::NonRecursive)
+    .map_err(|e| WatchError::WatchPath {
+      path: content.to_path_buf(),
+      source: e,
+    })?;
+
+  let root = find_project_root();
+
+  if let Some(src) = source {
+    if src.exists() {
+      if src.is_dir() {
+        let _ = debouncer.watcher().watch(src, RecursiveMode::Recursive);
+      } else {
+        let _ = debouncer.watcher().watch(src, RecursiveMode::NonRecursive);
+        if let Some(parent) = src
+          .parent()
+          .filter(|p| !p.as_os_str().is_empty() && p.exists())
+        {
+          let _ = debouncer.watcher().watch(parent, RecursiveMode::Recursive);
+        }
+      }
+    }
+  }
+
+  if let Ok(engine) = TypstEngine::new(font_path) {
+    if let Ok(resolved) = engine.resolve_template(template_name, source) {
+      if resolved.exists() {
+        if let Some(parent) = resolved
+          .parent()
+          .filter(|p| !p.as_os_str().is_empty() && p.exists())
+        {
+          let _ = debouncer.watcher().watch(parent, RecursiveMode::Recursive);
+        }
+      }
+    }
+    if let Some(ref font_dir) = engine.font_path {
+      if font_dir.exists() && font_dir.is_dir() {
+        let _ = debouncer
+          .watcher()
+          .watch(font_dir, RecursiveMode::Recursive);
+      }
+    }
+  }
+
+  let templates_dir = root.join("templates");
+  if templates_dir.exists() && templates_dir.is_dir() {
+    let _ = debouncer
+      .watcher()
+      .watch(&templates_dir, RecursiveMode::Recursive);
+  }
+
+  if let Some(s) = schema {
+    if s.exists() {
+      let _ = debouncer.watcher().watch(s, RecursiveMode::NonRecursive);
+    }
+  } else {
+    for candidate in &["resume.schema.json", "schema.json"] {
+      let p = root.join(candidate);
+      if p.exists() {
+        let _ = debouncer.watcher().watch(&p, RecursiveMode::NonRecursive);
+      }
+    }
+  }
+
+  if let Some(f) = font_path {
+    if f.exists() && f.is_dir() {
+      let _ = debouncer.watcher().watch(f, RecursiveMode::Recursive);
+    }
+  }
+
+  Ok((debouncer, rx))
+}
+
+/// Runs `rsmk build --watch` to continuously recompile on file changes.
+pub fn run_watch(
+  content: &Path,
+  template_name: &str,
+  source: Option<&Path>,
+  output: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+  quiet: bool,
+) -> Result<(), ResumakeError> {
+  if !content.exists() {
+    return Err(
+      EngineError::ContentNotFound {
+        path: content.to_path_buf(),
+      }
+      .into(),
+    );
+  }
+
+  let output_pdf = match output {
+    Some(out) => out.to_path_buf(),
+    None => derive_output_filename(content),
+  };
+
+  print_info(&format!(
+    "Watching '{}' -> '{}'. Press Ctrl+C to stop.",
+    content.display(),
+    output_pdf.display()
+  ));
+
+  let (_debouncer, rx) =
+    setup_watcher(content, template_name, source, schema, font_path)?;
+
+  if let Err(err) = run_build(
+    content,
+    template_name,
+    source,
+    Some(&output_pdf),
+    schema,
+    font_path,
+    quiet,
+  ) {
+    print_error(&format!("{err}"));
+  }
+
+  let canonical_output = output_pdf.canonicalize().ok();
+
+  for events_res in rx {
+    match events_res {
+      Ok(events) => {
+        let has_relevant_change = events.iter().any(|event| {
+          if let Some(ref canon_out) = canonical_output {
+            if let Ok(canon_event) = event.path.canonicalize() {
+              if &canon_event == canon_out {
+                return false;
+              }
+            }
+          }
+          if event.path == output_pdf {
+            return false;
+          }
+          true
+        });
+
+        if has_relevant_change {
+          if let Err(err) = run_build(
+            content,
+            template_name,
+            source,
+            Some(&output_pdf),
+            schema,
+            font_path,
+            quiet,
+          ) {
+            print_error(&format!("{err}"));
+          }
+        }
+      }
+      Err(err) => {
+        print_error(&format!("Watch error: {err}"));
+      }
+    }
+  }
+
+  Ok(())
+}
+
+/// Runs `rsmk build --check --watch` to continuously verify layout on file changes.
+pub fn run_check_watch(
+  content: &Path,
+  template_name: &str,
+  source: Option<&Path>,
+  schema: Option<&Path>,
+  font_path: Option<&Path>,
+  quiet: bool,
+) -> Result<(), ResumakeError> {
+  if !content.exists() {
+    return Err(
+      EngineError::ContentNotFound {
+        path: content.to_path_buf(),
+      }
+      .into(),
+    );
+  }
+
+  print_info(&format!(
+    "Watching '{}' in check mode. Press Ctrl+C to stop.",
+    content.display()
+  ));
+
+  let (_debouncer, rx) =
+    setup_watcher(content, template_name, source, schema, font_path)?;
+
+  if let Err(err) =
+    run_check(content, template_name, source, schema, font_path, quiet)
+  {
+    print_error(&format!("{err}"));
+  }
+
+  for events_res in rx {
+    match events_res {
+      Ok(_events) => {
+        if let Err(err) =
+          run_check(content, template_name, source, schema, font_path, quiet)
+        {
+          print_error(&format!("{err}"));
+        }
+      }
+      Err(err) => {
+        print_error(&format!("Watch error: {err}"));
+      }
+    }
+  }
+
+  Ok(())
+}
