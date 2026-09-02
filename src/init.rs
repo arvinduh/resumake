@@ -368,9 +368,6 @@ pub fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
 
 /// Checks if GitHub CLI `gh` is installed and authenticated.
 pub fn is_gh_authenticated(dir: &Path) -> bool {
-  if which::which("gh").is_err() {
-    return false;
-  }
   std::process::Command::new("gh")
     .args(["auth", "status"])
     .current_dir(dir)
