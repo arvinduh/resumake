@@ -1,7 +1,6 @@
 //! Handlers for `rsmk build`, watch mode, and check mode.
 
-use crate::engine::EngineError;
-use crate::engine::TypstEngine;
+use crate::engine::{query_doc_metadata, EngineError, TypstEngine};
 use crate::error::{ResumakeError, WatchError};
 use crate::schema::{
   derive_output_filename, load_content_name, load_content_version,
@@ -47,14 +46,15 @@ pub fn run_build(
     None => derive_output_filename(content),
   };
 
-  // 3. Compile document
-  engine.compile(&resolved_template, content, &output_pdf)?;
+  // 3. Compile document once in-memory
+  let doc = engine.compile_paged(&resolved_template, content)?;
 
-  // 4. Query telemetry
-  let page_json =
-    engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
-  let bullets_json =
-    engine.query_metadata(&resolved_template, content, "<bulletinfo>")?;
+  // 4. Render PDF directly from the in-memory document
+  engine.render_pdf(&doc, &output_pdf)?;
+
+  // 5. Query telemetry directly from the same in-memory document
+  let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
+  let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
   let report = evaluate_telemetry(&page_json, &bullets_json)?;
 
   let name =
@@ -102,10 +102,9 @@ pub fn run_check(
   // 2. Layout telemetry check
   let engine = TypstEngine::new(font_path)?;
   let resolved_template = engine.resolve_template(template_name, source)?;
-  let page_json =
-    engine.query_metadata(&resolved_template, content, "<pageinfo>")?;
-  let bullets_json =
-    engine.query_metadata(&resolved_template, content, "<bulletinfo>")?;
+  let doc = engine.compile_paged(&resolved_template, content)?;
+  let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
+  let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
   let report = evaluate_telemetry(&page_json, &bullets_json)?;
 
   let name =
