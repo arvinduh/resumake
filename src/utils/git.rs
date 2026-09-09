@@ -29,6 +29,14 @@ pub enum GitError {
     /// Number of unpushed commits.
     count: u64,
   },
+  /// No URL configured for git remote origin.
+  #[error(
+    "git remote get-url origin failed: no URL found for remote 'origin'"
+  )]
+  NoRemoteUrl,
+  /// Error querying git remote origin URL.
+  #[error("git remote get-url origin failed: {0}")]
+  RemoteError(String),
   /// Failed to spawn git process.
   #[error("Failed to spawn git process: {0}")]
   Spawn(#[source] std::io::Error),
@@ -231,12 +239,94 @@ pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, GitError> {
 
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    return Err(GitError::Command(format!(
-      "Failed to get remote origin URL: {stderr}"
-    )));
+    if stderr.contains("No such remote")
+      || stderr.contains("not found")
+      || stderr.contains("fatal:")
+    {
+      return Err(GitError::NoRemoteUrl);
+    }
+    return Err(GitError::RemoteError(stderr.trim().to_string()));
   }
 
-  Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+  let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+  if url.is_empty() {
+    return Err(GitError::NoRemoteUrl);
+  }
+
+  Ok(url)
+}
+
+/// Creates an annotated git tag with the specified tag name and message.
+///
+/// # Errors
+/// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
+pub fn create_annotated_tag(
+  repo_dir: &Path,
+  tag: &str,
+  message: &str,
+) -> Result<(), GitError> {
+  let output = Command::new("git")
+    .arg("tag")
+    .arg("-a")
+    .arg(tag)
+    .arg("-m")
+    .arg(message)
+    .current_dir(repo_dir)
+    .output()
+    .map_err(GitError::Spawn)?;
+
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    return Err(GitError::Failed { stderr });
+  }
+
+  Ok(())
+}
+
+/// Pushes a git tag to a remote repository.
+///
+/// # Errors
+/// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
+pub fn push_tag(
+  repo_dir: &Path,
+  remote: &str,
+  tag: &str,
+) -> Result<(), GitError> {
+  let output = Command::new("git")
+    .arg("push")
+    .arg(remote)
+    .arg(tag)
+    .current_dir(repo_dir)
+    .output()
+    .map_err(GitError::Spawn)?;
+
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    return Err(GitError::Failed { stderr });
+  }
+
+  Ok(())
+}
+
+/// Deletes a local git tag.
+///
+/// # Errors
+/// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
+pub fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), GitError> {
+  let output = Command::new("git")
+    .arg("tag")
+    .arg("-d")
+    .arg(tag)
+    .current_dir(repo_dir)
+    .output()
+    .map_err(GitError::Spawn)?;
+
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    return Err(GitError::Failed { stderr });
+  }
+
+  Ok(())
 }
 
 /// Checks if GitHub CLI `gh` is installed and authenticated.
@@ -265,4 +355,76 @@ pub fn create_repo_and_push(dir: &Path) -> Result<(), GitError> {
   }
 
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use tempfile::TempDir;
+
+  fn setup_test_repo(dir: &Path) {
+    Command::new("git")
+      .arg("init")
+      .current_dir(dir)
+      .output()
+      .unwrap();
+    Command::new("git")
+      .args(["config", "user.name", "Test User"])
+      .current_dir(dir)
+      .output()
+      .unwrap();
+    Command::new("git")
+      .args(["config", "user.email", "test@example.com"])
+      .current_dir(dir)
+      .output()
+      .unwrap();
+    Command::new("git")
+      .args(["config", "commit.gpgsign", "false"])
+      .current_dir(dir)
+      .output()
+      .unwrap();
+  }
+
+  #[test]
+  fn test_is_inside_work_tree_and_init() {
+    let temp = TempDir::new().unwrap();
+    let dir = temp.path();
+
+    assert!(!is_inside_work_tree(dir));
+
+    init_repo(dir).unwrap();
+    assert!(is_inside_work_tree(dir));
+
+    let nested = dir.join("sub").join("nested");
+    std::fs::create_dir_all(&nested).unwrap();
+    assert!(is_inside_work_tree(&nested));
+  }
+
+  #[test]
+  fn test_create_and_delete_annotated_tag() {
+    let temp = TempDir::new().unwrap();
+    let dir = temp.path();
+    setup_test_repo(dir);
+
+    let file = dir.join("file.txt");
+    std::fs::write(&file, "initial").unwrap();
+    Command::new("git")
+      .args(["add", "."])
+      .current_dir(dir)
+      .output()
+      .unwrap();
+    Command::new("git")
+      .args(["commit", "-m", "init"])
+      .current_dir(dir)
+      .output()
+      .unwrap();
+
+    assert!(create_annotated_tag(dir, "v1.0.0", "Release 1.0.0").is_ok());
+    let latest = get_latest_semver_tag(dir).unwrap();
+    assert_eq!(latest, Some(Version::parse("1.0.0").unwrap()));
+
+    assert!(delete_tag(dir, "v1.0.0").is_ok());
+    let latest_after_del = get_latest_semver_tag(dir).unwrap();
+    assert_eq!(latest_after_del, None);
+  }
 }
