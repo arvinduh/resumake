@@ -930,13 +930,13 @@ fn test_cli_init_update_clean_workflows() {
   // Old 0.0.1 workflow
   let old_ci_body = resumake::schema::generate_ci_workflow(Some("0.0.1"));
   let old_ci_stamped =
-    resumake::init::stamp_provenance_header(&old_ci_body, "0.0.1");
+    resumake::utils::fs::stamp_provenance_header(&old_ci_body, "0.0.1");
   fs::write(&ci_path, old_ci_stamped).unwrap();
 
   let old_release_body =
     resumake::schema::generate_release_workflow(Some("0.0.1"));
   let old_release_stamped =
-    resumake::init::stamp_provenance_header(&old_release_body, "0.0.1");
+    resumake::utils::fs::stamp_provenance_header(&old_release_body, "0.0.1");
   fs::write(&release_path, old_release_stamped).unwrap();
 
   Command::cargo_bin("rsmk")
@@ -1016,7 +1016,7 @@ fn test_cli_init_update_never_modifies_content_yaml() {
   let ci_path = workflows_dir.join("ci.yml");
   let old_ci_body = resumake::schema::generate_ci_workflow(Some("0.0.1"));
   let old_ci_stamped =
-    resumake::init::stamp_provenance_header(&old_ci_body, "0.0.1");
+    resumake::utils::fs::stamp_provenance_header(&old_ci_body, "0.0.1");
   fs::write(&ci_path, old_ci_stamped).unwrap();
 
   // Run update

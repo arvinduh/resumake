@@ -3,10 +3,10 @@
 use crate::commands::init::check_workflow_version_skew;
 use crate::engine::{verify_content, DEFAULT_TEMPLATE};
 use crate::schema::load_content_version;
+use crate::utils::git::{create_annotated_tag, delete_tag, push_tag, GitError};
 use colored::Colorize;
 use semver::Version;
 use std::path::Path;
-use std::process::Command;
 
 /// Errors originating from release pipeline and semver verification.
 #[derive(thiserror::Error, Debug)]
@@ -90,6 +90,22 @@ pub enum ReleaseError {
   Io(#[from] std::io::Error),
 }
 
+impl From<GitError> for ReleaseError {
+  fn from(err: GitError) -> Self {
+    match err {
+      GitError::UncommittedChanges => Self::UncommittedChanges,
+      GitError::NoHeadCommit => Self::NoHeadCommit,
+      GitError::NoUpstreamBranch => Self::NoUpstreamBranch,
+      GitError::UnpushedCommits { count } => Self::UnpushedCommits { count },
+      GitError::NoRemoteUrl => Self::NoRemoteUrl,
+      GitError::RemoteError(s) => Self::RemoteError(s),
+      GitError::Command(s) => Self::Git(s),
+      GitError::Spawn(e) => Self::Io(e),
+      GitError::Failed { stderr } => Self::Git(stderr),
+    }
+  }
+}
+
 /// Parses a version string into a [`Version`].
 ///
 /// Supports optional leading `'v'`/`'V'`.
@@ -135,24 +151,10 @@ pub fn derive_actions_url(remote_url: &str) -> String {
 /// # Errors
 ///
 /// Returns a [`ReleaseError`] if working tree is dirty or git inspection fails.
+#[inline]
 pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
-  let output = Command::new("git")
-    .args(["status", "--porcelain"])
-    .current_dir(repo_dir)
-    .output()
-    .map_err(|e| ReleaseError::Git(format!("Failed to run git status: {e}")))?;
-
-  if !output.status.success() {
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    return Err(ReleaseError::Git(format!("git status failed: {stderr}")));
-  }
-
-  let stdout = String::from_utf8_lossy(&output.stdout);
-  if !stdout.trim().is_empty() {
-    return Err(ReleaseError::UncommittedChanges);
-  }
-
-  Ok(())
+  crate::utils::git::check_working_tree_clean(repo_dir)
+    .map_err(ReleaseError::from)
 }
 
 /// Verifies that the current branch tracks an upstream remote branch and has 0 unpushed commits.
@@ -160,73 +162,9 @@ pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
 /// # Errors
 ///
 /// Returns a [`ReleaseError`] if upstream branch is missing, commits are unpushed, or git fails.
+#[inline]
 pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
-  let repo_check = Command::new("git")
-    .args(["rev-parse", "--git-dir"])
-    .current_dir(repo_dir)
-    .output()
-    .map_err(|e| ReleaseError::Git(format!("Failed to run git: {e}")))?;
-
-  if !repo_check.status.success() {
-    return Err(ReleaseError::Git(format!(
-      "Failed to open git repository: {}",
-      String::from_utf8_lossy(&repo_check.stderr).trim()
-    )));
-  }
-
-  let head_check = Command::new("git")
-    .args(["rev-parse", "--verify", "HEAD"])
-    .current_dir(repo_dir)
-    .output()
-    .map_err(|e| ReleaseError::Git(format!("Failed to run git: {e}")))?;
-
-  if !head_check.status.success() {
-    return Err(ReleaseError::NoHeadCommit);
-  }
-
-  let upstream_check = Command::new("git")
-    .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-    .current_dir(repo_dir)
-    .output()
-    .map_err(|e| ReleaseError::Git(format!("Failed to run git: {e}")))?;
-
-  if !upstream_check.status.success() {
-    return Err(ReleaseError::NoUpstreamBranch);
-  }
-
-  let upstream_branch = String::from_utf8_lossy(&upstream_check.stdout)
-    .trim()
-    .to_string();
-  if upstream_branch.is_empty() {
-    return Err(ReleaseError::NoUpstreamBranch);
-  }
-
-  let rev_list = Command::new("git")
-    .args(["rev-list", "--left-right", "--count", "HEAD...@{u}"])
-    .current_dir(repo_dir)
-    .output()
-    .map_err(|e| {
-      ReleaseError::Git(format!("Failed to run git rev-list: {e}"))
-    })?;
-
-  if !rev_list.status.success() {
-    let stderr = String::from_utf8_lossy(&rev_list.stderr).to_string();
-    return Err(ReleaseError::Git(format!(
-      "Failed to count unpushed commits: {stderr}"
-    )));
-  }
-
-  let output_str = String::from_utf8_lossy(&rev_list.stdout);
-  let counts: Vec<&str> = output_str.split_whitespace().collect();
-  if let Some(ahead_str) = counts.first() {
-    if let Ok(ahead) = ahead_str.parse::<u64>() {
-      if ahead > 0 {
-        return Err(ReleaseError::UnpushedCommits { count: ahead });
-      }
-    }
-  }
-
-  Ok(())
+  crate::utils::git::check_upstream_synced(repo_dir).map_err(ReleaseError::from)
 }
 
 /// Retrieves all existing semver git tags in the repository and returns the highest version, if any.
@@ -234,44 +172,11 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
 /// # Errors
 ///
 /// Returns a [`ReleaseError`] if git tag inspection fails.
+#[inline]
 pub fn get_latest_semver_tag(
   repo_dir: &Path,
 ) -> Result<Option<Version>, ReleaseError> {
-  let output = Command::new("git")
-    .args(["tag", "-l"])
-    .current_dir(repo_dir)
-    .output()
-    .map_err(|e| ReleaseError::Git(format!("Failed to run git tag: {e}")))?;
-
-  if !output.status.success() {
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    return Err(ReleaseError::Git(format!(
-      "Failed to list git tags: {stderr}"
-    )));
-  }
-
-  let stdout = String::from_utf8_lossy(&output.stdout);
-  let mut highest: Option<Version> = None;
-
-  for line in stdout.lines() {
-    let tag_name = line.trim();
-    if tag_name.is_empty() {
-      continue;
-    }
-    if let Ok(ver) = parse_version(tag_name) {
-      match &highest {
-        Some(cur) if ver > *cur => {
-          highest = Some(ver);
-        }
-        None => {
-          highest = Some(ver);
-        }
-        _ => {}
-      }
-    }
-  }
-
-  Ok(highest)
+  crate::utils::git::get_latest_semver_tag(repo_dir).map_err(ReleaseError::from)
 }
 
 /// Validates that `target_ver` is strictly newer than any existing git semver tag.
@@ -300,32 +205,9 @@ pub fn check_semver_monotonicity(
 /// # Errors
 ///
 /// Returns a [`ReleaseError`] if git repository cannot be opened or origin URL is not set.
+#[inline]
 pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, ReleaseError> {
-  let output = Command::new("git")
-    .args(["remote", "get-url", "origin"])
-    .current_dir(repo_dir)
-    .output()
-    .map_err(|e| {
-      ReleaseError::Git(format!("Failed to run git remote get-url: {e}"))
-    })?;
-
-  if !output.status.success() {
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if stderr.contains("No such remote")
-      || stderr.contains("not found")
-      || stderr.contains("fatal:")
-    {
-      return Err(ReleaseError::NoRemoteUrl);
-    }
-    return Err(ReleaseError::RemoteError(stderr.trim().to_string()));
-  }
-
-  let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-  if url.is_empty() {
-    return Err(ReleaseError::NoRemoteUrl);
-  }
-
-  Ok(url)
+  crate::utils::git::get_remote_origin_url(repo_dir).map_err(ReleaseError::from)
 }
 
 /// Runs the complete release pipeline: pre-flight checks, tag creation, and push.
@@ -408,47 +290,28 @@ pub fn run_release(
   let default_msg = format!("v{target_ver}");
   let tag_msg = message.unwrap_or(&default_msg);
 
-  let tag_output = Command::new("git")
-    .arg("tag")
-    .arg("-a")
-    .arg(&tag_name)
-    .arg("-m")
-    .arg(tag_msg)
-    .current_dir(repo_dir)
-    .output()
-    .map_err(ReleaseError::GitTagSpawn)?;
-
-  if !tag_output.status.success() {
-    let stderr = String::from_utf8_lossy(&tag_output.stderr).to_string();
-    return Err(ReleaseError::GitTagFailed {
-      tag: tag_name,
-      stderr: stderr.trim().to_string(),
-    });
-  }
+  create_annotated_tag(repo_dir, &tag_name, tag_msg).map_err(|e| match e {
+    GitError::Spawn(err) => ReleaseError::GitTagSpawn(err),
+    GitError::Failed { stderr } => ReleaseError::GitTagFailed {
+      tag: tag_name.clone(),
+      stderr,
+    },
+    other => ReleaseError::Git(other.to_string()),
+  })?;
 
   if !quiet {
     println!("\n  {} created tag v{target_ver}", "✓".green());
   }
 
-  let push_output = Command::new("git")
-    .arg("push")
-    .arg("origin")
-    .arg(&tag_name)
-    .current_dir(repo_dir)
-    .output()
-    .map_err(ReleaseError::GitPushSpawn)?;
-
-  if !push_output.status.success() {
-    let stderr = String::from_utf8_lossy(&push_output.stderr).to_string();
-    let _ = Command::new("git")
-      .arg("tag")
-      .arg("-d")
-      .arg(&tag_name)
-      .current_dir(repo_dir)
-      .output();
-    return Err(ReleaseError::GitPushFailed {
-      tag: tag_name,
-      stderr: stderr.trim().to_string(),
+  if let Err(e) = push_tag(repo_dir, "origin", &tag_name) {
+    let _ = delete_tag(repo_dir, &tag_name);
+    return Err(match e {
+      GitError::Spawn(err) => ReleaseError::GitPushSpawn(err),
+      GitError::Failed { stderr } => ReleaseError::GitPushFailed {
+        tag: tag_name,
+        stderr,
+      },
+      other => ReleaseError::Git(other.to_string()),
     });
   }
 
@@ -466,6 +329,7 @@ pub fn run_release(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::process::Command;
 
   #[test]
   fn test_semver_parse_and_display() {
