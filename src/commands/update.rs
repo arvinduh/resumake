@@ -26,17 +26,6 @@ fn say(quiet: bool, msg: &str) {
   }
 }
 
-/// Queries the latest available version on GitHub Releases asynchronously using a single-threaded runtime.
-fn query_latest_github_version(
-  updater: &mut AxoUpdater,
-) -> Result<Option<Version>, UpdateError> {
-  let rt = tokio::runtime::Builder::new_current_thread()
-    .enable_all()
-    .build()?;
-  let latest = rt.block_on(updater.query_new_version())?.cloned();
-  Ok(latest)
-}
-
 /// Entry point for the `update` subcommand.
 ///
 /// # Errors
@@ -70,49 +59,24 @@ pub fn run_update(
   }
 
   let current_version_str = env!("CARGO_PKG_VERSION");
-  let current_version = Version::parse(current_version_str).ok();
 
   if check {
-    if let Ok(is_needed) = updater.is_update_needed_sync() {
-      if is_needed {
+    match updater.is_update_needed_sync() {
+      Ok(true) => {
         say(
           quiet,
           "A newer rsmk is available. Run `rsmk update` to upgrade.",
         );
-      } else {
+      }
+      Ok(false) => {
         say(
           quiet,
           &format!("rsmk is up to date (v{current_version_str})."),
         );
       }
-    } else if let Ok(Some(latest_ver)) =
-      query_latest_github_version(&mut updater)
-    {
-      if let Some(ref cur) = current_version {
-        if &latest_ver > cur {
-          say(
-            quiet,
-            &format!(
-              "A newer rsmk is available: v{latest_ver} (currently running v{cur}). Run `rsmk update` to upgrade."
-            ),
-          );
-        } else {
-          say(
-            quiet,
-            &format!("rsmk is up to date (v{current_version_str})."),
-          );
-        }
-      } else {
-        say(
-          quiet,
-          &format!("Latest available rsmk release is v{latest_ver}."),
-        );
+      Err(e) => {
+        say(quiet, &format!("Could not check for updates: {e}"));
       }
-    } else {
-      say(
-        quiet,
-        &format!("rsmk is up to date (v{current_version_str})."),
-      );
     }
     return Ok(());
   }

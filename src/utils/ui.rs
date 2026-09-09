@@ -317,8 +317,9 @@ mod tests {
       }],
       Vec::new(),
     );
-    let table =
+    let mut table =
       build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
+    table.set_width(120);
     let output = table.to_string();
     assert!(output.contains("[FAIL 2/1]"));
     assert!(output.contains("[OVERFLOW]"));
