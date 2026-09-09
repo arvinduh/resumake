@@ -7,14 +7,8 @@ pub mod template;
 pub mod update;
 
 use crate::cli::{Commands, TemplateCommands};
-use crate::commands::build::{
-  run_build, run_check, run_check_watch, run_watch,
-};
-use crate::commands::init::{resolve_init_output, run_init, InitOptions};
-use crate::commands::release::run_release;
-use crate::commands::template::{run_template_eject, run_template_list};
-use crate::commands::update::run_update;
-use crate::engine::templates::DEFAULT_TEMPLATE;
+use crate::commands::init::InitOptions;
+use crate::engine::templates;
 use crate::error::ResumakeError;
 
 /// Dispatches a parsed CLI command to its specific handler.
@@ -33,10 +27,11 @@ pub fn execute_command(
       schema,
       font_path,
     } => {
-      let template_name = template.as_deref().unwrap_or(DEFAULT_TEMPLATE);
+      let template_name =
+        template.as_deref().unwrap_or(templates::DEFAULT_TEMPLATE);
       if watch {
         if check {
-          run_check_watch(
+          build::run_check_watch(
             &content,
             template_name,
             source.as_deref(),
@@ -45,7 +40,7 @@ pub fn execute_command(
             quiet,
           )
         } else {
-          run_watch(
+          build::run_watch(
             &content,
             template_name,
             source.as_deref(),
@@ -56,7 +51,7 @@ pub fn execute_command(
           )
         }
       } else if check {
-        run_check(
+        build::run_check(
           &content,
           template_name,
           source.as_deref(),
@@ -65,7 +60,7 @@ pub fn execute_command(
           quiet,
         )
       } else {
-        run_build(
+        build::run_build(
           &content,
           template_name,
           source.as_deref(),
@@ -86,8 +81,8 @@ pub fn execute_command(
       update,
     } => {
       let resolved_output =
-        resolve_init_output(dest.as_deref(), output.as_deref());
-      run_init(InitOptions {
+        init::resolve_init_output(dest.as_deref(), output.as_deref());
+      init::run_init(InitOptions {
         name: name.as_deref(),
         output: &resolved_output,
         force,
@@ -103,16 +98,22 @@ pub fn execute_command(
       message,
       dry_run,
       skip_build,
-    } => run_release(&content, message.as_deref(), dry_run, skip_build, quiet)
-      .map_err(Into::into),
+    } => release::run_release(
+      &content,
+      message.as_deref(),
+      dry_run,
+      skip_build,
+      quiet,
+    )
+    .map_err(Into::into),
     Commands::Template(args) => match args.command {
-      TemplateCommands::List => run_template_list(),
+      TemplateCommands::List => template::run_template_list(),
       TemplateCommands::Eject { name, force } => {
-        run_template_eject(&name, force, quiet)
+        template::run_template_eject(&name, force, quiet)
       }
     },
     Commands::Update { check, force } => {
-      run_update(check, force, quiet).map_err(Into::into)
+      update::run_update(check, force, quiet).map_err(Into::into)
     }
   }
 }

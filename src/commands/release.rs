@@ -1,9 +1,11 @@
 //! Release orchestration, pre-flight repository and semver verification, and tag management.
 
-use crate::commands::init::check_workflow_version_skew;
-use crate::engine::{verify_content, DEFAULT_TEMPLATE};
-use crate::schema::load_content_version;
-use crate::utils::git::{create_annotated_tag, delete_tag, push_tag, GitError};
+use crate::commands::init;
+use crate::engine;
+use crate::engine::error::EngineError;
+use crate::engine::templates::DEFAULT_TEMPLATE;
+use crate::schema::{self, SchemaError};
+use crate::utils::git::{self, GitError};
 use colored::Colorize;
 use semver::Version;
 use std::path::Path;
@@ -81,10 +83,10 @@ pub enum ReleaseError {
   },
   /// Schema inspection error.
   #[error(transparent)]
-  Schema(#[from] crate::schema::SchemaError),
+  Schema(#[from] SchemaError),
   /// Engine compilation or verification error.
   #[error(transparent)]
-  Engine(#[from] crate::engine::EngineError),
+  Engine(#[from] EngineError),
   /// Underlying I/O error.
   #[error("I/O error: {0}")]
   Io(#[from] std::io::Error),
@@ -153,8 +155,7 @@ pub fn derive_actions_url(remote_url: &str) -> String {
 /// Returns a [`ReleaseError`] if working tree is dirty or git inspection fails.
 #[inline]
 pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
-  crate::utils::git::check_working_tree_clean(repo_dir)
-    .map_err(ReleaseError::from)
+  git::check_working_tree_clean(repo_dir).map_err(ReleaseError::from)
 }
 
 /// Verifies that the current branch tracks an upstream remote branch and has 0 unpushed commits.
@@ -164,7 +165,7 @@ pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
 /// Returns a [`ReleaseError`] if upstream branch is missing, commits are unpushed, or git fails.
 #[inline]
 pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
-  crate::utils::git::check_upstream_synced(repo_dir).map_err(ReleaseError::from)
+  git::check_upstream_synced(repo_dir).map_err(ReleaseError::from)
 }
 
 /// Retrieves all existing semver git tags in the repository and returns the highest version, if any.
@@ -176,7 +177,7 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
 pub fn get_latest_semver_tag(
   repo_dir: &Path,
 ) -> Result<Option<Version>, ReleaseError> {
-  crate::utils::git::get_latest_semver_tag(repo_dir).map_err(ReleaseError::from)
+  git::get_latest_semver_tag(repo_dir).map_err(ReleaseError::from)
 }
 
 /// Validates that `target_ver` is strictly newer than any existing git semver tag.
@@ -207,7 +208,7 @@ pub fn check_semver_monotonicity(
 /// Returns a [`ReleaseError`] if git repository cannot be opened or origin URL is not set.
 #[inline]
 pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, ReleaseError> {
-  crate::utils::git::get_remote_origin_url(repo_dir).map_err(ReleaseError::from)
+  git::get_remote_origin_url(repo_dir).map_err(ReleaseError::from)
 }
 
 /// Runs the complete release pipeline: pre-flight checks, tag creation, and push.
@@ -234,10 +235,10 @@ pub fn run_release(
   };
 
   // 1. Read and validate version from content.yaml
-  let raw_version = load_content_version(content_path)?;
+  let raw_version = schema::load_content_version(content_path)?;
   let target_ver = parse_version(&raw_version)?;
 
-  check_workflow_version_skew(repo_dir, env!("CARGO_PKG_VERSION"));
+  init::check_workflow_version_skew(repo_dir, env!("CARGO_PKG_VERSION"));
 
   if !quiet {
     println!("Résumé Release v{target_ver}\n");
@@ -270,7 +271,7 @@ pub fn run_release(
 
   // Pre-flight check 4: Build / layout check
   if !skip_build {
-    verify_content(content_path, DEFAULT_TEMPLATE, None, None, None)?;
+    engine::verify_content(content_path, DEFAULT_TEMPLATE, None, None, None)?;
     if !quiet {
       println!(
         "  {} pre-flight check passed (rsmk build --check)",
@@ -290,21 +291,23 @@ pub fn run_release(
   let default_msg = format!("v{target_ver}");
   let tag_msg = message.unwrap_or(&default_msg);
 
-  create_annotated_tag(repo_dir, &tag_name, tag_msg).map_err(|e| match e {
-    GitError::Spawn(err) => ReleaseError::GitTagSpawn(err),
-    GitError::Failed { stderr } => ReleaseError::GitTagFailed {
-      tag: tag_name.clone(),
-      stderr,
+  git::create_annotated_tag(repo_dir, &tag_name, tag_msg).map_err(
+    |e| match e {
+      GitError::Spawn(err) => ReleaseError::GitTagSpawn(err),
+      GitError::Failed { stderr } => ReleaseError::GitTagFailed {
+        tag: tag_name.clone(),
+        stderr,
+      },
+      other => ReleaseError::Git(other.to_string()),
     },
-    other => ReleaseError::Git(other.to_string()),
-  })?;
+  )?;
 
   if !quiet {
     println!("\n  {} created tag v{target_ver}", "✓".green());
   }
 
-  if let Err(e) = push_tag(repo_dir, "origin", &tag_name) {
-    let _ = delete_tag(repo_dir, &tag_name);
+  if let Err(e) = git::push_tag(repo_dir, "origin", &tag_name) {
+    let _ = git::delete_tag(repo_dir, &tag_name);
     return Err(match e {
       GitError::Spawn(err) => ReleaseError::GitPushSpawn(err),
       GitError::Failed { stderr } => ReleaseError::GitPushFailed {

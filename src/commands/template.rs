@@ -1,12 +1,12 @@
 //! Handlers for `rsmk template list` and `rsmk template eject`.
 
-use crate::engine::templates::{eject_template, list_templates};
+use crate::engine::templates;
 use crate::error::ResumakeError;
 use std::path::Path;
 
 /// Runs `rsmk template list`.
 pub fn run_template_list() -> Result<(), ResumakeError> {
-  let templates = list_templates();
+  let templates = templates::list_templates();
   println!("Available templates:");
   for tpl in templates {
     println!("  - {tpl}");
@@ -21,7 +21,7 @@ pub fn run_template_eject(
   quiet: bool,
 ) -> Result<(), ResumakeError> {
   let target_dir = Path::new("templates").join(name);
-  let ejected_files = eject_template(name, &target_dir, force)?;
+  let ejected_files = templates::eject_template(name, &target_dir, force)?;
 
   if !quiet {
     println!("✓ Ejected template '{name}' to ./templates/{name}/");

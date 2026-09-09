@@ -1,18 +1,10 @@
 //! Initialization logic for scaffolding new résumé projects, git repositories,
 //! and GitHub Actions workflows.
 
-use crate::schema::{
-  generate_ci_workflow, generate_init_template, generate_release_workflow,
-};
-use crate::utils::fs::{
-  extract_provenance_and_body, generate_unified_diff, sha256_hex,
-  stamp_provenance_header,
-};
-use crate::utils::git::{
-  create_repo_and_push, init_repo, is_inside_work_tree, GitError,
-};
-use crate::utils::ui::{print_error, print_info, print_success};
-use std::fs;
+use crate::schema;
+use crate::utils::fs;
+use crate::utils::git::{self, GitError};
+use crate::utils::ui;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
@@ -82,7 +74,7 @@ pub fn resolve_init_output(
 
 /// Returns true when `dir` exists and contains at least one entry.
 fn dir_has_entries(dir: &Path) -> bool {
-  match fs::read_dir(dir) {
+  match std::fs::read_dir(dir) {
     Ok(mut entries) => entries.next().is_some(),
     Err(_) => false,
   }
@@ -184,7 +176,7 @@ pub enum InitError {
 /// Checks if the target directory is inside an existing git work tree.
 #[inline]
 pub fn is_inside_git_repo(dir: &Path) -> bool {
-  is_inside_work_tree(dir)
+  git::is_inside_work_tree(dir)
 }
 
 /// Initializes a new git repository in the target directory.
@@ -193,7 +185,7 @@ pub fn is_inside_git_repo(dir: &Path) -> bool {
 ///
 /// Returns an [`InitError`] if `git init` cannot be spawned or fails.
 pub fn init_git_repo(dir: &Path) -> Result<bool, InitError> {
-  init_repo(dir).map(|()| true).map_err(|e| match e {
+  git::init_repo(dir).map(|()| true).map_err(|e| match e {
     GitError::Spawn(io) => InitError::GitSpawn(io),
     GitError::Failed { stderr } => InitError::GitFailed { stderr },
     other => InitError::GitFailed {
@@ -210,7 +202,8 @@ pub fn init_git_repo(dir: &Path) -> Result<bool, InitError> {
 pub fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
   let gitignore_path = dir.join(".gitignore");
   let mut existing = if gitignore_path.exists() {
-    fs::read_to_string(&gitignore_path).map_err(InitError::GitIgnoreRead)?
+    std::fs::read_to_string(&gitignore_path)
+      .map_err(InitError::GitIgnoreRead)?
   } else {
     String::new()
   };
@@ -238,7 +231,8 @@ pub fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
   }
 
   if modified || !gitignore_path.exists() {
-    fs::write(&gitignore_path, existing).map_err(InitError::GitIgnoreWrite)?;
+    std::fs::write(&gitignore_path, existing)
+      .map_err(InitError::GitIgnoreWrite)?;
   }
   Ok(())
 }
@@ -251,7 +245,7 @@ pub fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
 pub fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
   let gitattributes_path = dir.join(".gitattributes");
   let mut existing = if gitattributes_path.exists() {
-    fs::read_to_string(&gitattributes_path)
+    std::fs::read_to_string(&gitattributes_path)
       .map_err(InitError::GitAttributesRead)?
   } else {
     String::new()
@@ -270,7 +264,7 @@ pub fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
   }
 
   if modified || !gitattributes_path.exists() {
-    fs::write(&gitattributes_path, existing)
+    std::fs::write(&gitattributes_path, existing)
       .map_err(InitError::GitAttributesWrite)?;
   }
   Ok(())
@@ -283,23 +277,25 @@ pub fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
 /// Returns an [`InitError`] if creating directories or writing workflow files fails.
 pub fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
   let workflows_dir = dir.join(".github").join("workflows");
-  fs::create_dir_all(&workflows_dir).map_err(InitError::WorkflowsDirCreate)?;
+  std::fs::create_dir_all(&workflows_dir)
+    .map_err(InitError::WorkflowsDirCreate)?;
 
   let version = env!("CARGO_PKG_VERSION");
 
   let ci_path = workflows_dir.join("ci.yml");
   if !ci_path.exists() || force {
-    let ci_content = generate_ci_workflow(None);
-    let ci_with_header = stamp_provenance_header(&ci_content, version);
-    fs::write(&ci_path, ci_with_header).map_err(InitError::CiWorkflowWrite)?;
+    let ci_content = schema::generate_ci_workflow(None);
+    let ci_with_header = fs::stamp_provenance_header(&ci_content, version);
+    std::fs::write(&ci_path, ci_with_header)
+      .map_err(InitError::CiWorkflowWrite)?;
   }
 
   let release_path = workflows_dir.join("release.yml");
   if !release_path.exists() || force {
-    let release_content = generate_release_workflow(None);
+    let release_content = schema::generate_release_workflow(None);
     let release_with_header =
-      stamp_provenance_header(&release_content, version);
-    fs::write(&release_path, release_with_header)
+      fs::stamp_provenance_header(&release_content, version);
+    std::fs::write(&release_path, release_with_header)
       .map_err(InitError::ReleaseWorkflowWrite)?;
   }
 
@@ -309,7 +305,7 @@ pub fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
 /// Checks if GitHub CLI `gh` is installed and authenticated.
 #[inline]
 pub fn is_gh_authenticated(dir: &Path) -> bool {
-  crate::utils::git::is_gh_authenticated(dir)
+  git::is_gh_authenticated(dir)
 }
 
 /// Handles interactive GitHub repository creation or prints remote setup guidance.
@@ -329,16 +325,18 @@ pub fn handle_github_remote(dir: &Path, quiet: bool) {
     if io::stdin().read_line(&mut input).is_ok() {
       let trimmed = input.trim().to_lowercase();
       if trimmed == "y" || trimmed == "yes" {
-        match create_repo_and_push(dir) {
+        match git::create_repo_and_push(dir) {
           Ok(()) => {
-            print_success("GitHub repository created and pushed successfully.");
+            ui::print_success(
+              "GitHub repository created and pushed successfully.",
+            );
             return;
           }
           Err(GitError::Spawn(e)) => {
-            print_error(&format!("Error running gh CLI: {e}"));
+            ui::print_error(&format!("Error running gh CLI: {e}"));
           }
           Err(_) => {
-            print_error("Failed to create GitHub repository via gh CLI.");
+            ui::print_error("Failed to create GitHub repository via gh CLI.");
           }
         }
       }
@@ -371,27 +369,28 @@ pub fn update_workflows(
   quiet: bool,
 ) -> Result<(), InitError> {
   let workflows_dir = dir.join(".github").join("workflows");
-  fs::create_dir_all(&workflows_dir).map_err(InitError::WorkflowsDirCreate)?;
+  std::fs::create_dir_all(&workflows_dir)
+    .map_err(InitError::WorkflowsDirCreate)?;
 
   let version = env!("CARGO_PKG_VERSION");
   let workflow_specs: [(&str, String); 2] = [
-    ("ci.yml", generate_ci_workflow(None)),
-    ("release.yml", generate_release_workflow(None)),
+    ("ci.yml", schema::generate_ci_workflow(None)),
+    ("release.yml", schema::generate_release_workflow(None)),
   ];
 
   for (filename, raw_template) in workflow_specs {
     let path = workflows_dir.join(filename);
-    let new_with_header = stamp_provenance_header(&raw_template, version);
+    let new_with_header = fs::stamp_provenance_header(&raw_template, version);
 
     if !path.exists() {
-      fs::write(&path, &new_with_header).map_err(|source| {
+      std::fs::write(&path, &new_with_header).map_err(|source| {
         InitError::WorkflowWrite {
           path: path.clone(),
           source,
         }
       })?;
       if !quiet {
-        print_success(&format!(
+        ui::print_success(&format!(
           "Created workflow '{}' pinned to rsmk v{version}",
           path.display()
         ));
@@ -399,17 +398,18 @@ pub fn update_workflows(
       continue;
     }
 
-    let existing =
-      fs::read_to_string(&path).map_err(|source| InitError::WorkflowRead {
+    let existing = std::fs::read_to_string(&path).map_err(|source| {
+      InitError::WorkflowRead {
         path: path.clone(),
         source,
-      })?;
+      }
+    })?;
 
-    let is_clean = match extract_provenance_and_body(&existing) {
+    let is_clean = match fs::extract_provenance_and_body(&existing) {
       Some((recorded_hash, body)) => {
-        let actual_hash = sha256_hex(body.as_bytes());
+        let actual_hash = fs::sha256_hex(body.as_bytes());
         let actual_hash_normalized =
-          sha256_hex(body.replace("\r\n", "\n").as_bytes());
+          fs::sha256_hex(body.replace("\r\n", "\n").as_bytes());
         actual_hash.eq_ignore_ascii_case(recorded_hash)
           || actual_hash_normalized.eq_ignore_ascii_case(recorded_hash)
       }
@@ -417,7 +417,7 @@ pub fn update_workflows(
     };
 
     if is_clean || force {
-      fs::write(&path, &new_with_header).map_err(|source| {
+      std::fs::write(&path, &new_with_header).map_err(|source| {
         InitError::WorkflowWrite {
           path: path.clone(),
           source,
@@ -429,7 +429,7 @@ pub fn update_workflows(
         } else {
           "Updated"
         };
-        print_success(&format!(
+        ui::print_success(&format!(
           "{prefix} workflow '{}' to rsmk v{version}",
           path.display()
         ));
@@ -440,7 +440,7 @@ pub fn update_workflows(
           "warning: Workflow '{}' has local modifications; skipping update. Use --force to overwrite.",
           path.display()
         );
-        let diff = generate_unified_diff(
+        let diff = fs::generate_unified_diff(
           &path.display().to_string(),
           &existing,
           &new_with_header,
@@ -461,7 +461,7 @@ pub fn check_workflow_version_skew(repo_dir: &Path, local_version: &str) {
     return;
   }
 
-  let entries = match fs::read_dir(&workflows_dir) {
+  let entries = match std::fs::read_dir(&workflows_dir) {
     Ok(entries) => entries,
     Err(_) => return,
   };
@@ -473,7 +473,7 @@ pub fn check_workflow_version_skew(repo_dir: &Path, local_version: &str) {
     let path = entry.path();
     if let Some(ext) = path.extension() {
       if ext == "yml" || ext == "yaml" {
-        if let Ok(content) = fs::read_to_string(&path) {
+        if let Ok(content) = std::fs::read_to_string(&path) {
           for line in content.lines() {
             let trimmed = line.trim();
             if let Some(rest) = trimmed.strip_prefix("version:") {
@@ -530,31 +530,31 @@ pub fn run_init(opts: InitOptions) -> Result<(), InitError> {
   }
 
   let candidate_name = resolve_candidate_name(opts.name);
-  let template_content = generate_init_template(&candidate_name);
+  let template_content = schema::generate_init_template(&candidate_name);
 
   if !base_dir.exists() {
-    fs::create_dir_all(base_dir)?;
+    std::fs::create_dir_all(base_dir)?;
   }
 
-  fs::write(opts.output, template_content)?;
+  std::fs::write(opts.output, template_content)?;
   if !opts.quiet {
-    print_success(&format!(
+    ui::print_success(&format!(
       "Initialized new résumé content scaffold at '{}'",
       opts.output.display()
     ));
   }
 
   if !opts.no_git {
-    if !is_inside_work_tree(base_dir) {
-      match init_repo(base_dir) {
+    if !git::is_inside_work_tree(base_dir) {
+      match git::init_repo(base_dir) {
         Ok(()) => {
           if !opts.quiet {
-            print_success("Initialized Git repository");
+            ui::print_success("Initialized Git repository");
           }
         }
         Err(e) => {
           if !opts.quiet {
-            print_info(&format!("Skipping 'git init': {e}"));
+            ui::print_info(&format!("Skipping 'git init': {e}"));
           }
         }
       }
@@ -562,7 +562,7 @@ pub fn run_init(opts: InitOptions) -> Result<(), InitError> {
     ensure_gitignore(base_dir)?;
     ensure_gitattributes(base_dir)?;
     if !opts.quiet {
-      print_success("Created .gitignore and .gitattributes");
+      ui::print_success("Created .gitignore and .gitattributes");
     }
   }
 
@@ -571,7 +571,7 @@ pub fn run_init(opts: InitOptions) -> Result<(), InitError> {
   // --no-git can add them later with `rsmk init --update`.
   if opts.no_git {
     if !opts.no_workflows && !opts.quiet {
-      print_info(
+      ui::print_info(
         "Skipping GitHub Actions workflows (--no-git). Run `rsmk init --update` \
          from the project directory to add CI/Release workflows later.",
       );
@@ -579,7 +579,9 @@ pub fn run_init(opts: InitOptions) -> Result<(), InitError> {
   } else if !opts.no_workflows {
     scaffold_workflows(base_dir, opts.force)?;
     if !opts.quiet {
-      print_success("Created GitHub Actions workflows in .github/workflows/");
+      ui::print_success(
+        "Created GitHub Actions workflows in .github/workflows/",
+      );
     }
   }
 
@@ -598,15 +600,15 @@ mod tests {
   #[test]
   fn test_sha256_hex() {
     assert_eq!(
-      sha256_hex(b""),
+      fs::sha256_hex(b""),
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
     assert_eq!(
-      sha256_hex(b"abc"),
+      fs::sha256_hex(b"abc"),
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
     assert_eq!(
-      sha256_hex(b"The quick brown fox jumps over the lazy dog"),
+      fs::sha256_hex(b"The quick brown fox jumps over the lazy dog"),
       "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
     );
   }
@@ -614,7 +616,7 @@ mod tests {
   #[test]
   fn test_stamp_provenance_header() {
     let content = "name: CI\n";
-    let stamped = stamp_provenance_header(content, "0.1.0");
+    let stamped = fs::stamp_provenance_header(content, "0.1.0");
     assert!(stamped.contains("# Generated by rsmk 0.1.0."));
     assert!(stamped.contains("# rsmk:generated sha256="));
     assert!(stamped.ends_with("name: CI\n"));
@@ -626,23 +628,24 @@ mod tests {
     let dir = temp.path();
 
     ensure_gitignore(dir).unwrap();
-    let gitignore = fs::read_to_string(dir.join(".gitignore")).unwrap();
+    let gitignore = std::fs::read_to_string(dir.join(".gitignore")).unwrap();
     assert!(gitignore.contains("*.pdf"));
     assert!(gitignore.contains(".resumake/"));
 
     // Running again does not duplicate lines
     ensure_gitignore(dir).unwrap();
-    let gitignore2 = fs::read_to_string(dir.join(".gitignore")).unwrap();
+    let gitignore2 = std::fs::read_to_string(dir.join(".gitignore")).unwrap();
     assert_eq!(gitignore, gitignore2);
 
     ensure_gitattributes(dir).unwrap();
-    let gitattributes = fs::read_to_string(dir.join(".gitattributes")).unwrap();
+    let gitattributes =
+      std::fs::read_to_string(dir.join(".gitattributes")).unwrap();
     assert!(gitattributes.contains("* text=auto eol=lf"));
 
     // Running again does not duplicate
     ensure_gitattributes(dir).unwrap();
     let gitattributes2 =
-      fs::read_to_string(dir.join(".gitattributes")).unwrap();
+      std::fs::read_to_string(dir.join(".gitattributes")).unwrap();
     assert_eq!(gitattributes, gitattributes2);
   }
 
@@ -659,12 +662,12 @@ mod tests {
     assert!(ci_path.exists());
     assert!(release_path.exists());
 
-    let ci_content = fs::read_to_string(ci_path).unwrap();
+    let ci_content = std::fs::read_to_string(ci_path).unwrap();
     assert!(ci_content.contains("# Generated by rsmk"));
     assert!(ci_content.contains("# rsmk:generated sha256="));
     assert!(ci_content.contains("name: CI"));
 
-    let rel_content = fs::read_to_string(release_path).unwrap();
+    let rel_content = std::fs::read_to_string(release_path).unwrap();
     assert!(rel_content.contains("# Generated by rsmk"));
     assert!(rel_content.contains("# rsmk:generated sha256="));
     assert!(rel_content.contains("name: Release"));
@@ -673,27 +676,27 @@ mod tests {
   #[test]
   fn test_extract_provenance_and_body() {
     let content = "name: CI\non: [push]\n";
-    let stamped = stamp_provenance_header(content, "0.1.0");
-    let (hash, body) = extract_provenance_and_body(&stamped).unwrap();
-    assert_eq!(hash, sha256_hex(content.as_bytes()));
+    let stamped = fs::stamp_provenance_header(content, "0.1.0");
+    let (hash, body) = fs::extract_provenance_and_body(&stamped).unwrap();
+    assert_eq!(hash, fs::sha256_hex(content.as_bytes()));
     assert_eq!(body, content);
 
     // Test with CRLF
     let stamped_crlf = stamped.replace('\n', "\r\n");
     let (hash_crlf, body_crlf) =
-      extract_provenance_and_body(&stamped_crlf).unwrap();
-    assert_eq!(hash_crlf, sha256_hex(content.as_bytes()));
+      fs::extract_provenance_and_body(&stamped_crlf).unwrap();
+    assert_eq!(hash_crlf, fs::sha256_hex(content.as_bytes()));
     assert_eq!(body_crlf.replace("\r\n", "\n"), content);
 
     // Test missing header
-    assert_eq!(extract_provenance_and_body("name: CI\n"), None);
+    assert_eq!(fs::extract_provenance_and_body("name: CI\n"), None);
   }
 
   #[test]
   fn test_generate_unified_diff() {
     let old_text = "line1\nline2\nline3\n";
     let new_text = "line1\nline2_modified\nline3\nline4\n";
-    let diff = generate_unified_diff("test.yml", old_text, new_text);
+    let diff = fs::generate_unified_diff("test.yml", old_text, new_text);
     assert!(diff.contains("--- test.yml (current)"));
     assert!(diff.contains("+++ test.yml (target)"));
     assert!(diff.contains("-line2"));
@@ -706,32 +709,32 @@ mod tests {
     let temp = TempDir::new().unwrap();
     let dir = temp.path();
     let workflows_dir = dir.join(".github").join("workflows");
-    fs::create_dir_all(&workflows_dir).unwrap();
+    std::fs::create_dir_all(&workflows_dir).unwrap();
 
     let ci_path = workflows_dir.join("ci.yml");
     let release_path = workflows_dir.join("release.yml");
 
     // 1. Scaffold initial workflows with version 0.0.1
-    let old_ci_body = generate_ci_workflow(Some("0.0.1"));
-    let old_ci_stamped = stamp_provenance_header(&old_ci_body, "0.0.1");
-    fs::write(&ci_path, old_ci_stamped).unwrap();
+    let old_ci_body = schema::generate_ci_workflow(Some("0.0.1"));
+    let old_ci_stamped = fs::stamp_provenance_header(&old_ci_body, "0.0.1");
+    std::fs::write(&ci_path, old_ci_stamped).unwrap();
 
-    let old_release_body = generate_release_workflow(Some("0.0.1"));
+    let old_release_body = schema::generate_release_workflow(Some("0.0.1"));
     let old_release_stamped =
-      stamp_provenance_header(&old_release_body, "0.0.1");
-    fs::write(&release_path, old_release_stamped).unwrap();
+      fs::stamp_provenance_header(&old_release_body, "0.0.1");
+    std::fs::write(&release_path, old_release_stamped).unwrap();
 
     // 2. Clean update should update both to current version
     update_workflows(dir, false, true).unwrap();
 
     let current_version = env!("CARGO_PKG_VERSION");
-    let updated_ci = fs::read_to_string(&ci_path).unwrap();
+    let updated_ci = std::fs::read_to_string(&ci_path).unwrap();
     assert!(
       updated_ci.contains(&format!("Generated by rsmk {current_version}"))
     );
     assert!(updated_ci.contains(&format!("version: \"{current_version}\"")));
 
-    let updated_release = fs::read_to_string(&release_path).unwrap();
+    let updated_release = std::fs::read_to_string(&release_path).unwrap();
     assert!(
       updated_release.contains(&format!("Generated by rsmk {current_version}"))
     );
@@ -742,16 +745,16 @@ mod tests {
     // 3. User modifies CI workflow
     let modified_ci =
       format!("{updated_ci}\n      - run: echo 'custom step'\n");
-    fs::write(&ci_path, &modified_ci).unwrap();
+    std::fs::write(&ci_path, &modified_ci).unwrap();
 
     // Update without force should skip CI and keep user modification
     update_workflows(dir, false, true).unwrap();
-    let ci_after_skip = fs::read_to_string(&ci_path).unwrap();
+    let ci_after_skip = std::fs::read_to_string(&ci_path).unwrap();
     assert_eq!(ci_after_skip, modified_ci);
 
     // Update with force should overwrite CI
     update_workflows(dir, true, true).unwrap();
-    let ci_after_force = fs::read_to_string(&ci_path).unwrap();
+    let ci_after_force = std::fs::read_to_string(&ci_path).unwrap();
     assert!(!ci_after_force.contains("custom step"));
     assert!(
       ci_after_force.contains(&format!("Generated by rsmk {current_version}"))
@@ -763,14 +766,16 @@ mod tests {
     let temp = TempDir::new().unwrap();
     let dir = temp.path();
     let content_file = dir.join("content.yaml");
-    fs::write(&content_file, "custom content").unwrap();
+    std::fs::write(&content_file, "custom content").unwrap();
 
     let workflows_dir = dir.join(".github").join("workflows");
-    fs::create_dir_all(&workflows_dir).unwrap();
+    std::fs::create_dir_all(&workflows_dir).unwrap();
     let ci_path = workflows_dir.join("ci.yml");
-    let old_ci =
-      stamp_provenance_header(&generate_ci_workflow(Some("0.0.1")), "0.0.1");
-    fs::write(&ci_path, old_ci).unwrap();
+    let old_ci = fs::stamp_provenance_header(
+      &schema::generate_ci_workflow(Some("0.0.1")),
+      "0.0.1",
+    );
+    std::fs::write(&ci_path, old_ci).unwrap();
 
     run_init(InitOptions {
       name: None,
@@ -784,10 +789,13 @@ mod tests {
     .unwrap();
 
     // Verify content.yaml untouched
-    assert_eq!(fs::read_to_string(&content_file).unwrap(), "custom content");
+    assert_eq!(
+      std::fs::read_to_string(&content_file).unwrap(),
+      "custom content"
+    );
 
     // Verify CI workflow updated
-    let updated_ci = fs::read_to_string(&ci_path).unwrap();
+    let updated_ci = std::fs::read_to_string(&ci_path).unwrap();
     let current_version = env!("CARGO_PKG_VERSION");
     assert!(
       updated_ci.contains(&format!("Generated by rsmk {current_version}"))
@@ -805,7 +813,7 @@ mod tests {
     assert!(is_inside_git_repo(dir));
 
     let subdir = dir.join("sub").join("nested");
-    fs::create_dir_all(&subdir).unwrap();
+    std::fs::create_dir_all(&subdir).unwrap();
     assert!(is_inside_git_repo(&subdir));
 
     let non_existent = dir.join("does_not_exist");

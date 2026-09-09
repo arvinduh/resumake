@@ -1,7 +1,7 @@
 //! In-process JSON Schema validation, version extraction, and schema
 //! export for content.yaml.
 
-use crate::models::generate_builtin_schema;
+use crate::models;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -155,7 +155,7 @@ pub fn validate_schema_auto(
         }
       })?
     }
-    _ => generate_builtin_schema(),
+    _ => models::generate_builtin_schema(),
   };
 
   // Step 2: Read and deserialize the content YAML file into a serde_json::Value
@@ -202,7 +202,7 @@ pub fn validate_schema_auto(
 pub fn export_builtin_schema(
   output_path: Option<&Path>,
 ) -> Result<String, SchemaError> {
-  let schema_json = generate_builtin_schema();
+  let schema_json = models::generate_builtin_schema();
   let schema_str = serde_json::to_string_pretty(&schema_json)
     .map_err(SchemaError::JsonSerialize)?;
 

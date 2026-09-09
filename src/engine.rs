@@ -2,16 +2,10 @@ pub mod error;
 pub mod templates;
 pub mod world;
 
-pub use error::EngineError;
-pub use templates::{
-  eject_template, embedded_templates, find_embedded_template,
-  known_template_names, list_templates, list_templates_in, EmbeddedTemplate,
-  TemplateFile, TemplateInfo, DEFAULT_TEMPLATE,
-};
-pub use world::{discover_font_dir, format_diagnostics, ResumakeWorld};
-
-use crate::schema::validate_schema_auto;
-use crate::telemetry::{evaluate_telemetry, TelemetryReport};
+use crate::engine::error::EngineError;
+use crate::engine::world::ResumakeWorld;
+use crate::schema;
+use crate::telemetry::{self, TelemetryReport};
 use std::fs;
 use std::path::{Path, PathBuf};
 use typst::foundations::{Label, Selector};
@@ -34,7 +28,7 @@ impl TypstEngine {
   /// Returns [`EngineError`] if font directory search fails.
   pub fn new(font_override: Option<&Path>) -> Result<Self, EngineError> {
     let root_path = crate::utils::fs::find_project_root();
-    let font_path = discover_font_dir(&root_path, font_override)?;
+    let font_path = world::discover_font_dir(&root_path, font_override)?;
     Ok(Self {
       font_path,
       root_path,
@@ -84,13 +78,13 @@ impl TypstEngine {
       return Ok(custom_single);
     }
 
-    if let Some(_template) = find_embedded_template(template_name) {
+    if let Some(_template) = templates::find_embedded_template(template_name) {
       return Ok(PathBuf::from(format!("{template_name}/main.typ")));
     }
 
     Err(EngineError::TemplateNotFound {
       name: template_name.to_string(),
-      known: known_template_names(),
+      known: templates::known_template_names(),
     })
   }
 
@@ -112,7 +106,7 @@ impl TypstEngine {
 
     let result = typst::compile(&world);
     let doc = result.output.map_err(|diags| {
-      let stderr = format_diagnostics(&world, &diags);
+      let stderr = world::format_diagnostics(&world, &diags);
       EngineError::CompilationFailed { stderr }
     })?;
 
@@ -239,14 +233,14 @@ pub fn verify_content(
     });
   }
 
-  validate_schema_auto(content, schema)?;
+  schema::validate_schema_auto(content, schema)?;
 
   let engine = TypstEngine::new(font_path)?;
   let resolved_template = engine.resolve_template(template_name, source)?;
   let doc = engine.compile_paged(&resolved_template, content)?;
   let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
   let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
-  let report = evaluate_telemetry(&page_json, &bullets_json)?;
+  let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)?;
 
   if !report.is_pass() {
     return Err(EngineError::LayoutConstraintViolation);
@@ -268,7 +262,9 @@ mod tests {
       root_path: temp.path().to_path_buf(),
     };
 
-    let resolved = engine.resolve_template(DEFAULT_TEMPLATE, None).unwrap();
+    let resolved = engine
+      .resolve_template(templates::DEFAULT_TEMPLATE, None)
+      .unwrap();
     assert_eq!(resolved, PathBuf::from("classic/main.typ"));
   }
 
@@ -288,7 +284,7 @@ mod tests {
 
   #[test]
   fn test_embedded_templates_discovery() {
-    let templates = embedded_templates();
+    let templates = templates::embedded_templates();
     assert!(!templates.is_empty());
     let classic = templates
       .iter()
@@ -317,8 +313,8 @@ mod tests {
       "lines",
     ];
 
-    let classic =
-      find_embedded_template("classic").expect("classic template must exist");
+    let classic = templates::find_embedded_template("classic")
+      .expect("classic template must exist");
     for block in blocks {
       assert!(
         classic.entry.contains(&format!("blocks/{block}.typ")),
@@ -332,7 +328,7 @@ mod tests {
     let temp = TempDir::new().unwrap();
     let templates_dir = temp.path().join("templates");
 
-    let list = list_templates_in(&templates_dir);
+    let list = templates::list_templates_in(&templates_dir);
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].name, "classic");
     assert!(list[0].is_builtin);
@@ -345,7 +341,7 @@ mod tests {
     fs::write(templates_dir.join("ignore.txt"), "text\n").unwrap();
     fs::create_dir_all(templates_dir.join(".hidden")).unwrap();
 
-    let list2 = list_templates_in(&templates_dir);
+    let list2 = templates::list_templates_in(&templates_dir);
     assert_eq!(list2.len(), 4);
     assert_eq!(list2[0].name, "classic");
     assert!(list2[0].is_builtin);
@@ -362,15 +358,16 @@ mod tests {
     let temp = TempDir::new().unwrap();
     let target = temp.path().join("templates").join("classic");
 
-    let files = eject_template("classic", &target, false).unwrap();
+    let files = templates::eject_template("classic", &target, false).unwrap();
     assert!(files.contains(&"main.typ".to_string()));
     assert!(files.contains(&"tokens.typ".to_string()));
     assert!(files.contains(&"primitives.typ".to_string()));
 
-    let err = eject_template("classic", &target, false).unwrap_err();
+    let err = templates::eject_template("classic", &target, false).unwrap_err();
     assert!(matches!(err, EngineError::DestinationAlreadyExists { .. }));
 
-    let files_force = eject_template("classic", &target, true).unwrap();
+    let files_force =
+      templates::eject_template("classic", &target, true).unwrap();
     assert_eq!(files, files_force);
   }
 
@@ -378,7 +375,7 @@ mod tests {
   fn test_eject_template_rejects_unknown_name() {
     let temp = TempDir::new().unwrap();
     let target = temp.path().join("templates").join("fake");
-    let err = eject_template("fake", &target, false).unwrap_err();
+    let err = templates::eject_template("fake", &target, false).unwrap_err();
     assert!(matches!(err, EngineError::TemplateNotFound { .. }));
   }
 
@@ -439,7 +436,7 @@ sections:
       )
       .expect("bulletinfo query must succeed");
 
-    let report = evaluate_telemetry(&page_json, &bullets_json)
+    let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)
       .expect("Telemetry evaluation must succeed");
     assert!(report.is_pass());
     assert_eq!(report.page_count, 1);
@@ -475,7 +472,7 @@ sections:
     let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")
       .expect("bulletinfo query must succeed");
 
-    let report = evaluate_telemetry(&page_json, &bullets_json)
+    let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)
       .expect("Telemetry evaluation must succeed");
     assert!(report.is_pass());
     assert_eq!(report.page_count, 1);

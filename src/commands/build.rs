@@ -1,16 +1,13 @@
 //! Handlers for `rsmk build`, watch mode, and check mode.
 
-use crate::engine::{query_doc_metadata, EngineError, TypstEngine};
+use crate::engine;
+use crate::engine::error::EngineError;
+use crate::engine::TypstEngine;
 use crate::error::{ResumakeError, WatchError};
-use crate::schema::{
-  derive_output_filename, load_content_name, load_content_version,
-  validate_schema_auto,
-};
-use crate::telemetry::evaluate_telemetry;
-use crate::utils::fs::find_project_root;
-use crate::utils::ui::{
-  print_error, print_info, print_success, print_telemetry_table,
-};
+use crate::schema;
+use crate::telemetry;
+use crate::utils::fs;
+use crate::utils::ui;
 use notify_debouncer_mini::{
   new_debouncer, notify::RecursiveMode, DebounceEventResult,
 };
@@ -36,14 +33,14 @@ pub fn run_build(
   }
 
   // 1. Validate schema
-  validate_schema_auto(content, schema)?;
+  schema::validate_schema_auto(content, schema)?;
 
   // 2. Resolve paths
   let engine = TypstEngine::new(font_path)?;
   let resolved_template = engine.resolve_template(template_name, source)?;
   let output_pdf = match output {
     Some(out) => out.to_path_buf(),
-    None => derive_output_filename(content),
+    None => schema::derive_output_filename(content),
   };
 
   // 3. Compile document once in-memory
@@ -53,17 +50,17 @@ pub fn run_build(
   engine.render_pdf(&doc, &output_pdf)?;
 
   // 5. Query telemetry directly from the same in-memory document
-  let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
-  let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
-  let report = evaluate_telemetry(&page_json, &bullets_json)?;
+  let page_json = engine::query_doc_metadata(&doc, "<pageinfo>")?;
+  let bullets_json = engine::query_doc_metadata(&doc, "<bulletinfo>")?;
+  let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)?;
 
-  let name =
-    load_content_name(content).unwrap_or_else(|_| "Candidate".to_string());
-  let version =
-    load_content_version(content).unwrap_or_else(|_| "1.0.0".to_string());
+  let name = schema::load_content_name(content)
+    .unwrap_or_else(|_| "Candidate".to_string());
+  let version = schema::load_content_version(content)
+    .unwrap_or_else(|_| "1.0.0".to_string());
 
   if !quiet {
-    print_telemetry_table(
+    ui::print_telemetry_table(
       &report,
       &name,
       &output_pdf.to_string_lossy(),
@@ -97,23 +94,23 @@ pub fn run_check(
   }
 
   // 1. Schema check
-  validate_schema_auto(content, schema)?;
+  schema::validate_schema_auto(content, schema)?;
 
   // 2. Layout telemetry check
   let engine = TypstEngine::new(font_path)?;
   let resolved_template = engine.resolve_template(template_name, source)?;
   let doc = engine.compile_paged(&resolved_template, content)?;
-  let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
-  let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
-  let report = evaluate_telemetry(&page_json, &bullets_json)?;
+  let page_json = engine::query_doc_metadata(&doc, "<pageinfo>")?;
+  let bullets_json = engine::query_doc_metadata(&doc, "<bulletinfo>")?;
+  let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)?;
 
-  let name =
-    load_content_name(content).unwrap_or_else(|_| "Candidate".to_string());
-  let version =
-    load_content_version(content).unwrap_or_else(|_| "1.0.0".to_string());
+  let name = schema::load_content_name(content)
+    .unwrap_or_else(|_| "Candidate".to_string());
+  let version = schema::load_content_version(content)
+    .unwrap_or_else(|_| "1.0.0".to_string());
 
   if !quiet {
-    print_telemetry_table(
+    ui::print_telemetry_table(
       &report,
       &name,
       "[dry-run: no PDF written]",
@@ -126,7 +123,9 @@ pub fn run_check(
   }
 
   if !quiet {
-    print_success("Dry-run check passed: schema & single-page layout valid.");
+    ui::print_success(
+      "Dry-run check passed: schema & single-page layout valid.",
+    );
   }
   Ok(())
 }
@@ -158,7 +157,7 @@ fn setup_watcher(
       source: e,
     })?;
 
-  let root = find_project_root();
+  let root = fs::find_project_root();
 
   if let Some(src) = source {
     if src.exists() {
@@ -246,10 +245,10 @@ pub fn run_watch(
 
   let output_pdf = match output {
     Some(out) => out.to_path_buf(),
-    None => derive_output_filename(content),
+    None => schema::derive_output_filename(content),
   };
 
-  print_info(&format!(
+  ui::print_info(&format!(
     "Watching '{}' -> '{}'. Press Ctrl+C to stop.",
     content.display(),
     output_pdf.display()
@@ -267,7 +266,7 @@ pub fn run_watch(
     font_path,
     quiet,
   ) {
-    print_error(&format!("{err}"));
+    ui::print_error(&format!("{err}"));
   }
 
   let canonical_output = output_pdf.canonicalize().ok();
@@ -299,12 +298,12 @@ pub fn run_watch(
             font_path,
             quiet,
           ) {
-            print_error(&format!("{err}"));
+            ui::print_error(&format!("{err}"));
           }
         }
       }
       Err(err) => {
-        print_error(&format!("Watch error: {err}"));
+        ui::print_error(&format!("Watch error: {err}"));
       }
     }
   }
@@ -330,7 +329,7 @@ pub fn run_check_watch(
     );
   }
 
-  print_info(&format!(
+  ui::print_info(&format!(
     "Watching '{}' in check mode. Press Ctrl+C to stop.",
     content.display()
   ));
@@ -341,7 +340,7 @@ pub fn run_check_watch(
   if let Err(err) =
     run_check(content, template_name, source, schema, font_path, quiet)
   {
-    print_error(&format!("{err}"));
+    ui::print_error(&format!("{err}"));
   }
 
   for events_res in rx {
@@ -350,11 +349,11 @@ pub fn run_check_watch(
         if let Err(err) =
           run_check(content, template_name, source, schema, font_path, quiet)
         {
-          print_error(&format!("{err}"));
+          ui::print_error(&format!("{err}"));
         }
       }
       Err(err) => {
-        print_error(&format!("Watch error: {err}"));
+        ui::print_error(&format!("Watch error: {err}"));
       }
     }
   }
