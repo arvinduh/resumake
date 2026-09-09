@@ -119,6 +119,48 @@ impl TypstEngine {
     Ok(doc)
   }
 
+  /// Renders a compiled [`PagedDocument`] to PDF bytes and writes to `output_path`.
+  ///
+  /// # Errors
+  /// Returns [`EngineError`] if PDF rendering fails or writing to disk fails.
+  pub fn render_pdf(
+    &self,
+    doc: &PagedDocument,
+    output_path: &Path,
+  ) -> Result<(), EngineError> {
+    let pdf_bytes = typst_pdf::pdf(doc, &typst_pdf::PdfOptions::default())
+      .map_err(|diags| {
+        let stderr = diags
+          .iter()
+          .map(|d| {
+            let severity = match d.severity {
+              typst::diag::Severity::Error => "error",
+              typst::diag::Severity::Warning => "warning",
+            };
+            let location = if let Some(id) = d.span.id() {
+              format!("{}: ", id.vpath().as_rooted_path().display())
+            } else {
+              String::new()
+            };
+            let mut msg = format!("{location}{severity}: {}", d.message);
+            for hint in &d.hints {
+              msg.push_str(&format!("\n  = hint: {hint}"));
+            }
+            msg
+          })
+          .collect::<Vec<_>>()
+          .join("\n");
+        EngineError::CompilationFailed { stderr }
+      })?;
+
+    if let Some(parent) = output_path.parent() {
+      fs::create_dir_all(parent)?;
+    }
+    fs::write(output_path, pdf_bytes)?;
+
+    Ok(())
+  }
+
   /// Compiles a document to PDF bytes and writes to `output_path`.
   ///
   /// # Errors
@@ -130,25 +172,7 @@ impl TypstEngine {
     output_path: &Path,
   ) -> Result<(), EngineError> {
     let doc = self.compile_paged(template_path, content_path)?;
-    let pdf_bytes = typst_pdf::pdf(&doc, &typst_pdf::PdfOptions::default())
-      .map_err(|diags| {
-        let world = ResumakeWorld::new(
-          self.root_path.clone(),
-          template_path.to_path_buf(),
-          content_path.to_path_buf(),
-          self.font_path.clone(),
-        )
-        .unwrap();
-        let stderr = format_diagnostics(&world, &diags);
-        EngineError::CompilationFailed { stderr }
-      })?;
-
-    if let Some(parent) = output_path.parent() {
-      fs::create_dir_all(parent)?;
-    }
-    fs::write(output_path, pdf_bytes)?;
-
-    Ok(())
+    self.render_pdf(&doc, output_path)
   }
 
   /// Compiles document in-memory and queries metadata values for `selector`.
@@ -413,6 +437,42 @@ sections:
         &content_path,
         "<bulletinfo>",
       )
+      .expect("bulletinfo query must succeed");
+
+    let report = evaluate_telemetry(&page_json, &bullets_json)
+      .expect("Telemetry evaluation must succeed");
+    assert!(report.is_pass());
+    assert_eq!(report.page_count, 1);
+  }
+
+  #[test]
+  fn test_typst_engine_render_pdf_and_query_doc_metadata() {
+    let temp = TempDir::new().unwrap();
+    let root = temp.path();
+    let content_path = root.join("content.yaml");
+    let output_pdf = root.join("output.pdf");
+
+    fs::write(&content_path, "meta:\n  name: Test\n").unwrap();
+
+    let engine = TypstEngine {
+      font_path: None,
+      root_path: root.to_path_buf(),
+    };
+
+    let doc = engine
+      .compile_paged(&PathBuf::from("classic/main.typ"), &content_path)
+      .expect("Paged compilation must succeed");
+
+    engine
+      .render_pdf(&doc, &output_pdf)
+      .expect("PDF rendering must succeed");
+
+    assert!(output_pdf.exists());
+    assert!(fs::metadata(&output_pdf).unwrap().len() > 1000);
+
+    let page_json = query_doc_metadata(&doc, "<pageinfo>")
+      .expect("pageinfo query must succeed");
+    let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")
       .expect("bulletinfo query must succeed");
 
     let report = evaluate_telemetry(&page_json, &bullets_json)
