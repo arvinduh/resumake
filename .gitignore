@@ -53,6 +53,7 @@ crash.dump
 
 # --- Agentic Workflows & Tool Scratches ---
 /.artifacts/
+/.worktrees/
 # .agents/orchestrate.md and .agents/start.md are the committed process
 # files every harness/human references directly - must ship with the
 # repo. Only ignore other loose scratch files dropped in .agents/.
