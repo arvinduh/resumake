@@ -49,7 +49,7 @@ pub enum GitError {
 }
 
 /// Checks if the target directory is inside an existing git work tree.
-pub fn is_inside_work_tree(dir: &Path) -> bool {
+pub(crate) fn is_inside_work_tree(dir: &Path) -> bool {
   Command::new("git")
     .args(["rev-parse", "--is-inside-work-tree"])
     .current_dir(dir)
@@ -65,7 +65,7 @@ pub fn is_inside_work_tree(dir: &Path) -> bool {
 ///
 /// # Errors
 /// Returns a [`GitError`] if `git init` cannot be spawned or fails.
-pub fn init_repo(dir: &Path) -> Result<(), GitError> {
+pub(crate) fn init_repo(dir: &Path) -> Result<(), GitError> {
   let output = Command::new("git")
     .arg("init")
     .current_dir(dir)
@@ -83,7 +83,9 @@ pub fn init_repo(dir: &Path) -> Result<(), GitError> {
 ///
 /// # Errors
 /// Returns a [`GitError`] if working tree is dirty or git inspection fails.
-pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), GitError> {
+pub(crate) fn check_working_tree_clean(
+  repo_dir: &Path,
+) -> Result<(), GitError> {
   let output = Command::new("git")
     .args(["status", "--porcelain"])
     .current_dir(repo_dir)
@@ -107,7 +109,7 @@ pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), GitError> {
 ///
 /// # Errors
 /// Returns a [`GitError`] if upstream branch is missing, commits are unpushed, or git fails.
-pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
+pub(crate) fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
   let repo_check = Command::new("git")
     .args(["rev-parse", "--git-dir"])
     .current_dir(repo_dir)
@@ -180,7 +182,7 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
 ///
 /// # Errors
 /// Returns a [`GitError`] if git tag inspection fails.
-pub fn get_latest_semver_tag(
+pub(crate) fn get_latest_semver_tag(
   repo_dir: &Path,
 ) -> Result<Option<Version>, GitError> {
   let output = Command::new("git")
@@ -228,7 +230,9 @@ pub fn get_latest_semver_tag(
 ///
 /// # Errors
 /// Returns a [`GitError`] if git repository cannot be opened or origin URL is not set.
-pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, GitError> {
+pub(crate) fn get_remote_origin_url(
+  repo_dir: &Path,
+) -> Result<String, GitError> {
   let output = Command::new("git")
     .args(["remote", "get-url", "origin"])
     .current_dir(repo_dir)
@@ -260,7 +264,7 @@ pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, GitError> {
 ///
 /// # Errors
 /// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
-pub fn create_annotated_tag(
+pub(crate) fn create_annotated_tag(
   repo_dir: &Path,
   tag: &str,
   message: &str,
@@ -287,7 +291,7 @@ pub fn create_annotated_tag(
 ///
 /// # Errors
 /// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
-pub fn push_tag(
+pub(crate) fn push_tag(
   repo_dir: &Path,
   remote: &str,
   tag: &str,
@@ -312,7 +316,7 @@ pub fn push_tag(
 ///
 /// # Errors
 /// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
-pub fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), GitError> {
+pub(crate) fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), GitError> {
   let output = Command::new("git")
     .arg("tag")
     .arg("-d")
@@ -330,7 +334,7 @@ pub fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), GitError> {
 }
 
 /// Checks if GitHub CLI `gh` is installed and authenticated.
-pub fn is_gh_authenticated(dir: &Path) -> bool {
+pub(crate) fn is_gh_authenticated(dir: &Path) -> bool {
   Command::new("gh")
     .args(["auth", "status"])
     .current_dir(dir)
@@ -343,7 +347,7 @@ pub fn is_gh_authenticated(dir: &Path) -> bool {
 ///
 /// # Errors
 /// Returns a [`GitError`] if repository creation fails.
-pub fn create_repo_and_push(dir: &Path) -> Result<(), GitError> {
+pub(crate) fn create_repo_and_push(dir: &Path) -> Result<(), GitError> {
   let status = Command::new("gh")
     .args(["repo", "create", "--source=.", "--push"])
     .current_dir(dir)

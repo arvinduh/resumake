@@ -31,7 +31,7 @@ fn say(quiet: bool, msg: &str) {
 /// # Errors
 ///
 /// Returns an [`UpdateError`] if update checks or downloads fail.
-pub fn run_update(
+pub(crate) fn run_update(
   check: bool,
   force: bool,
   quiet: bool,

@@ -1,10 +1,10 @@
 //! CLI command orchestration and dispatcher.
 
-pub mod build;
-pub mod init;
-pub mod release;
-pub mod template;
-pub mod update;
+pub(crate) mod build;
+pub(crate) mod init;
+pub(crate) mod release;
+pub(crate) mod template;
+pub(crate) mod update;
 
 use crate::cli::{Commands, TemplateCommands};
 use crate::commands::init::InitOptions;

@@ -14,7 +14,7 @@ use notify_debouncer_mini::{
 use std::path::Path;
 
 /// Runs `rsmk build` to compile the document to a PDF and verify layout telemetry.
-pub fn run_build(
+pub(crate) fn run_build(
   content: &Path,
   template_name: &str,
   source: Option<&Path>,
@@ -76,7 +76,7 @@ pub fn run_build(
 }
 
 /// Runs `rsmk build --check` to verify schema and layout geometry without generating a PDF.
-pub fn run_check(
+pub(crate) fn run_check(
   content: &Path,
   template_name: &str,
   source: Option<&Path>,
@@ -186,7 +186,7 @@ fn setup_watcher(
         }
       }
     }
-    if let Some(ref font_dir) = engine.font_path {
+    if let Some(font_dir) = engine.font_path() {
       if font_dir.exists() && font_dir.is_dir() {
         let _ = debouncer
           .watcher()
@@ -225,7 +225,7 @@ fn setup_watcher(
 }
 
 /// Runs `rsmk build --watch` to continuously recompile on file changes.
-pub fn run_watch(
+pub(crate) fn run_watch(
   content: &Path,
   template_name: &str,
   source: Option<&Path>,
@@ -312,7 +312,7 @@ pub fn run_watch(
 }
 
 /// Runs `rsmk build --check --watch` to continuously verify layout on file changes.
-pub fn run_check_watch(
+pub(crate) fn run_check_watch(
   content: &Path,
   template_name: &str,
   source: Option<&Path>,
