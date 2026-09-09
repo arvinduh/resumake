@@ -17,14 +17,14 @@ execution lifecycle of the **Resumake** engine.
 graph TD
     YAML["User Data (content.yaml)"] --> VAL["In-Process Schema Validator (src/schema.rs)"]
     VAL --> MOD["Strongly-Typed Rust AST (src/models.rs)"]
-    VAL --> INIT["Project Scaffolding Engine (src/init.rs)"]
-    VAL --> REL["Release & Pre-flight Engine (src/release.rs)"]
+    VAL --> INIT["Project Scaffolding Engine (src/commands/init.rs)"]
+    VAL --> REL["Release & Pre-flight Engine (src/commands/release.rs)"]
     MOD --> ENG["Typst Template Orchestrator (src/engine.rs)"]
     EMB["Embedded Typst Blocks (src/embedded/)"] --> ENG
     ENG --> COMP["Typst Headless Compiler"]
     COMP --> PDF["Compiled PDF (output.pdf)"]
     PDF --> TEL["Telemetry Evaluator (src/telemetry.rs)"]
-    TEL --> UI["ANSI Terminal Badge UI (src/ui.rs)"]
+    TEL --> UI["ANSI Terminal Badge UI (src/utils/ui.rs)"]
 ```
 
 ---
@@ -54,17 +54,20 @@ graph TD
      before invoking any compiler.
 
 2. **Embedded Template Synthesis** — prepares the Typst inputs:
-   - Extracts embedded Typst template modules (`main.typ`, `tokens.typ`, and
-     `blocks/*.typ`) into a clean cache directory if not already cached.
+   - Loads embedded Typst template modules (`main.typ`, `tokens.typ`, and
+     `blocks/*.typ`) and user content directly into the in-process virtual
+     filesystem (`ResumakeWorld`), with zero disk extraction or caching.
    - Injects parsed `content.yaml` into the Typst rendering context.
 
-3. **Headless Compilation** — renders the PDF:
-   - Spawns the Typst compiler engine to render the vector PDF in under 100ms.
+3. **In-Process Compilation** — renders the PDF:
+   - Invokes `TypstEngine::compile_paged()` to compile directly to a
+     `PagedDocument` in memory, and exports vector PDF bytes.
 
 4. **Layout Telemetry Evaluation** — measures the result:
-   - Queries `<pageinfo>` and `<bulletinfo>` metadata directly from the compiled
-     document via `typst query` to determine page count, vertical fill, and
-     per-bullet wrap status.
+   - Queries `<pageinfo>` and `<bulletinfo>` metadata elements in-process
+     directly from the compiled `PagedDocument`'s introspector, without running
+     an external `typst` CLI subprocess, to determine page count, vertical fill,
+     and per-bullet wrap status.
    - Renders the boxed telemetry summary to the terminal.
 
 ---
