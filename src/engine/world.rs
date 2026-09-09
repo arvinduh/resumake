@@ -1,7 +1,7 @@
 //! Typst World implementation, virtual file system, font loader, and diagnostic formatting.
 
+use crate::engine::error::EngineError;
 use crate::engine::templates::{DEFAULT_TEMPLATE, TEMPLATES_DIR};
-use crate::engine::EngineError;
 use crate::utils::fs::normalize_posix_path;
 use std::collections::HashMap;
 use std::fs;

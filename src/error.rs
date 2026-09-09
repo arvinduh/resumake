@@ -3,7 +3,7 @@
 use crate::commands::init::InitError;
 use crate::commands::release::ReleaseError;
 use crate::commands::update::UpdateError;
-use crate::engine::EngineError;
+use crate::engine::error::EngineError;
 use crate::schema::SchemaError;
 use crate::telemetry::TelemetryError;
 use crate::utils::git::GitError;

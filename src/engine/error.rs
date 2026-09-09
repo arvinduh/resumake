@@ -1,6 +1,8 @@
 //! Errors originating from the Typst execution engine.
 
-use crate::utils::fs::display_path;
+use crate::schema::SchemaError;
+use crate::telemetry::TelemetryError;
+use crate::utils::fs;
 use std::path::PathBuf;
 
 /// Errors originating from the Typst execution engine.
@@ -35,14 +37,14 @@ pub enum EngineError {
   /// Destination directory already exists and `--force` was not specified.
   #[error(
     "Destination directory '{}' already exists. Use --force to overwrite.",
-    display_path(path)
+    fs::display_path(path)
   )]
   DestinationAlreadyExists {
     /// Destination directory path.
     path: PathBuf,
   },
   /// Content file was not found.
-  #[error("Content file not found: '{}'", display_path(path))]
+  #[error("Content file not found: '{}'", fs::display_path(path))]
   ContentNotFound {
     /// Path to content file.
     path: PathBuf,
@@ -52,10 +54,10 @@ pub enum EngineError {
   LayoutConstraintViolation,
   /// Schema validation error.
   #[error(transparent)]
-  Schema(#[from] crate::schema::SchemaError),
+  Schema(#[from] SchemaError),
   /// Telemetry error.
   #[error(transparent)]
-  Telemetry(#[from] crate::telemetry::TelemetryError),
+  Telemetry(#[from] TelemetryError),
   /// Underlying I/O error.
   #[error("I/O error: {0}")]
   Io(#[from] std::io::Error),

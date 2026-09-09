@@ -1,5 +1,6 @@
 //! Embedded and custom résumé template registry, discovery, and extraction.
 
+use crate::engine::error::EngineError;
 use include_dir::{include_dir, Dir};
 use std::fmt;
 use std::fs;
@@ -202,22 +203,22 @@ pub fn list_templates_in(templates_dir: &Path) -> Vec<TemplateInfo> {
 /// Extracts all embedded Typst component files for the template into `target_dir`.
 ///
 /// # Errors
-/// Returns [`crate::engine::EngineError::TemplateNotFound`] if `name` is not in the built-in registry.
-/// Returns [`crate::engine::EngineError::DestinationAlreadyExists`] if `target_dir` exists and `force` is false.
+/// Returns [`EngineError::TemplateNotFound`] if `name` is not in the built-in registry.
+/// Returns [`EngineError::DestinationAlreadyExists`] if `target_dir` exists and `force` is false.
 pub fn eject_template(
   name: &str,
   target_dir: &Path,
   force: bool,
-) -> Result<Vec<String>, crate::engine::EngineError> {
+) -> Result<Vec<String>, EngineError> {
   let template = find_embedded_template(name).ok_or_else(|| {
-    crate::engine::EngineError::TemplateNotFound {
+    EngineError::TemplateNotFound {
       name: name.to_string(),
       known: known_template_names(),
     }
   })?;
 
   if target_dir.exists() && !force {
-    return Err(crate::engine::EngineError::DestinationAlreadyExists {
+    return Err(EngineError::DestinationAlreadyExists {
       path: target_dir.to_path_buf(),
     });
   }

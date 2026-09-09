@@ -3,7 +3,7 @@
 //! this example to produce the schema fresh from the current types and
 //! publish it as a GitHub Release asset, so it cannot drift from the source.
 
-use resumake::schema::export_builtin_schema;
+use resumake::schema;
 use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
@@ -13,7 +13,7 @@ fn main() -> ExitCode {
   // the working directory the workflow invokes this from.
   let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("resume.schema.json");
 
-  let schema = match export_builtin_schema(None) {
+  let schema = match schema::export_builtin_schema(None) {
     Ok(schema) => schema,
     Err(err) => {
       eprintln!("error: failed to generate schema: {err}");
