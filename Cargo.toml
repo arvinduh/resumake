@@ -67,13 +67,15 @@ similar = "3.2"
 include_dir = "0.7"
 thiserror = "2.0"
 axoupdater = { version = "0.9", features = ["blocking"] }
-tokio = { version = "1", default-features = false, features = ["rt", "net"] }
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
 typst = "0.13"
 typst-pdf = "0.13"
 typst-syntax = "0.13"
-typst-kit = { version = "0.13", features = ["embed-fonts"] }
+typst-kit = { version = "0.13", default-features = false, features = [
+  "fonts",
+  "embed-fonts",
+] }
 
 
 [dev-dependencies]
