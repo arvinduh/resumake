@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 /// Options configuring the workspace initialization process.
 #[derive(Debug, Clone)]
-pub struct InitOptions<'a> {
+pub(crate) struct InitOptions<'a> {
   /// Explicit candidate name override.
   pub name: Option<&'a str>,
   /// Destination path for the new content file.
@@ -58,7 +58,7 @@ fn looks_like_file(path: &Path) -> bool {
 /// - `--output <path>`: used verbatim.
 /// - positional `<dest>`: a directory-like value scaffolds `<dest>/content.yaml`;
 ///   a `*.yaml` value is used verbatim as the file path.
-pub fn resolve_init_output(
+pub(crate) fn resolve_init_output(
   dest: Option<&Path>,
   output: Option<&Path>,
 ) -> PathBuf {
@@ -428,7 +428,10 @@ fn update_workflows(
 
 /// Inspects `.github/workflows/` for pinned `version: "<VER>"` values and emits a warning
 /// if any pinned version differs from `local_version`.
-pub fn check_workflow_version_skew(repo_dir: &Path, local_version: &str) {
+pub(crate) fn check_workflow_version_skew(
+  repo_dir: &Path,
+  local_version: &str,
+) {
   let workflows_dir = repo_dir.join(".github").join("workflows");
   if !workflows_dir.is_dir() {
     return;
@@ -477,7 +480,7 @@ pub fn check_workflow_version_skew(repo_dir: &Path, local_version: &str) {
 ///
 /// Returns an [`InitError`] if destination exists without force, destination directory is not empty,
 /// or file writing fails.
-pub fn run_init(opts: InitOptions) -> Result<(), InitError> {
+pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
   let base_dir = opts
     .output
     .parent()

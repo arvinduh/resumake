@@ -54,7 +54,7 @@ pub enum ReleaseError {
 /// # Errors
 ///
 /// Returns a [`ReleaseError`] if version string is empty or invalid semver.
-pub fn parse_version(s: &str) -> Result<Version, ReleaseError> {
+fn parse_version(s: &str) -> Result<Version, ReleaseError> {
   let s_trimmed = s.trim();
   let without_v = s_trimmed
     .strip_prefix('v')
@@ -155,7 +155,7 @@ fn get_remote_origin_url(repo_dir: &Path) -> Result<String, ReleaseError> {
 /// # Errors
 ///
 /// Returns a [`ReleaseError`] if any pre-flight verification, tagging, or pushing fails.
-pub fn run_release(
+pub(crate) fn run_release(
   content_path: &Path,
   message: Option<&str>,
   dry_run: bool,

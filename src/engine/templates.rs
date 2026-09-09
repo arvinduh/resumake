@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// A single Typst source file belonging to an embedded template.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateFile {
+pub(crate) struct TemplateFile {
   /// Path relative to the template root, using forward slashes.
   pub rel_path: String,
   /// Embedded file contents.
@@ -17,7 +17,7 @@ pub struct TemplateFile {
 
 /// A complete named résumé template bundled into the binary.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EmbeddedTemplate {
+pub(crate) struct EmbeddedTemplate {
   /// Registry name selected via `--template <name>` (e.g. `"classic"`).
   pub name: String,
   /// Entry point file, always extracted as `main.typ`.
@@ -27,7 +27,7 @@ pub struct EmbeddedTemplate {
 }
 
 /// Embedded directory containing all built-in résumé templates.
-pub static TEMPLATES_DIR: Dir<'_> =
+pub(crate) static TEMPLATES_DIR: Dir<'_> =
   include_dir!("$CARGO_MANIFEST_DIR/src/embedded/templates");
 
 fn relative_posix_path(path: &Path, root: &Path) -> String {
@@ -71,7 +71,7 @@ fn collect_template_files(
 }
 
 /// Discovers all embedded templates compiled into the binary from `src/embedded/templates/`.
-pub fn embedded_templates() -> Vec<EmbeddedTemplate> {
+pub(crate) fn embedded_templates() -> Vec<EmbeddedTemplate> {
   let mut templates = Vec::new();
   for dir in TEMPLATES_DIR.dirs() {
     let name = dir
@@ -104,12 +104,12 @@ pub fn embedded_templates() -> Vec<EmbeddedTemplate> {
 pub const DEFAULT_TEMPLATE: &str = "classic";
 
 /// Looks up a bundled template by registry name.
-pub fn find_embedded_template(name: &str) -> Option<EmbeddedTemplate> {
+pub(crate) fn find_embedded_template(name: &str) -> Option<EmbeddedTemplate> {
   embedded_templates().into_iter().find(|t| t.name == name)
 }
 
 /// Lists the names of all bundled templates, for error messages.
-pub fn known_template_names() -> Vec<String> {
+pub(crate) fn known_template_names() -> Vec<String> {
   embedded_templates().into_iter().map(|t| t.name).collect()
 }
 

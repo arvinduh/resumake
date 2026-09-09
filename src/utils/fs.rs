@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 /// Computes the SHA-256 hash of a byte slice and returns it as a lowercase hex string.
-pub fn sha256_hex(data: &[u8]) -> String {
+pub(crate) fn sha256_hex(data: &[u8]) -> String {
   use sha2::{Digest, Sha256};
 
   let digest = Sha256::digest(data);
@@ -24,7 +24,9 @@ pub fn stamp_provenance_header(content: &str, version: &str) -> String {
 }
 
 /// Extracts the SHA-256 hash from `# rsmk:generated sha256=<HASH>` and the body below the header.
-pub fn extract_provenance_and_body(content: &str) -> Option<(&str, &str)> {
+pub(crate) fn extract_provenance_and_body(
+  content: &str,
+) -> Option<(&str, &str)> {
   let prefix = "# rsmk:generated sha256=";
   let idx = content.find(prefix)?;
   let after_prefix = &content[idx + prefix.len()..];
@@ -49,7 +51,7 @@ pub fn extract_provenance_and_body(content: &str) -> Option<(&str, &str)> {
 
 /// Generates a standard unified diff between two text documents, labelled
 /// `<filename> (current)` and `<filename> (target)`.
-pub fn generate_unified_diff(
+pub(crate) fn generate_unified_diff(
   filename: &str,
   old_content: &str,
   new_content: &str,
@@ -64,7 +66,7 @@ pub fn generate_unified_diff(
 }
 
 /// Normalizes a content file path into a POSIX virtual path relative to root.
-pub fn normalize_posix_path(root: &Path, content_path: &Path) -> String {
+pub(crate) fn normalize_posix_path(root: &Path, content_path: &Path) -> String {
   if let Ok(rel) = content_path.strip_prefix(root) {
     let s = rel.to_string_lossy().replace('\\', "/");
     let trimmed = s.trim_start_matches('/');
@@ -98,7 +100,7 @@ pub fn normalize_posix_path(root: &Path, content_path: &Path) -> String {
 }
 
 /// Finds the project root directory by searching upward for repository or document markers.
-pub fn find_project_root() -> PathBuf {
+pub(crate) fn find_project_root() -> PathBuf {
   let mut curr = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
   loop {
     if curr.join("resume.yaml").exists()
@@ -116,7 +118,7 @@ pub fn find_project_root() -> PathBuf {
 }
 
 /// Strips the Windows `\\?\` verbatim prefix (and the `UNC\` marker) from a path.
-pub fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
   let s = path.to_string_lossy();
   #[cfg(windows)]
   {

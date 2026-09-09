@@ -8,10 +8,10 @@ use std::path::{Path, PathBuf};
 const INIT_TEMPLATE_RAW: &str = include_str!("embedded/init_template.yaml");
 
 /// Raw embedded template for the GitHub Actions CI workflow stub.
-pub const CI_WORKFLOW_RAW: &str = include_str!("embedded/workflows/ci.yml");
+const CI_WORKFLOW_RAW: &str = include_str!("embedded/workflows/ci.yml");
 
 /// Raw embedded template for the GitHub Actions release workflow stub.
-pub const RELEASE_WORKFLOW_RAW: &str =
+const RELEASE_WORKFLOW_RAW: &str =
   include_str!("embedded/workflows/release.yml");
 
 fn format_validation_errors(errors: &[String]) -> String {

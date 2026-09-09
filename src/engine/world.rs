@@ -17,7 +17,7 @@ use typst_kit::fonts::FontSlot;
 
 /// In-process [`World`] implementation resolving embedded templates from memory,
 /// disk files from the project root, and system/custom fonts.
-pub struct ResumakeWorld {
+pub(crate) struct ResumakeWorld {
   library: LazyHash<Library>,
   book: LazyHash<FontBook>,
   fonts: Vec<FontSlot>,
@@ -38,7 +38,7 @@ impl ResumakeWorld {
   ///
   /// # Errors
   /// Returns [`EngineError`] if font initialization fails.
-  pub fn new(
+  pub(crate) fn new(
     root_path: PathBuf,
     template_path: PathBuf,
     content_path: PathBuf,
@@ -253,7 +253,7 @@ fn days_to_date(days_since_epoch: i64) -> Option<Datetime> {
 }
 
 /// Formats a list of [`SourceDiagnostic`] into a readable diagnostic string.
-pub fn format_diagnostics(
+pub(crate) fn format_diagnostics(
   world: &ResumakeWorld,
   diags: &[SourceDiagnostic],
 ) -> String {
@@ -295,7 +295,7 @@ pub fn format_diagnostics(
 ///
 /// # Errors
 /// Returns an [`EngineError::FontDirNotFound`] if a custom font path was provided but does not exist.
-pub fn discover_font_dir(
+pub(crate) fn discover_font_dir(
   root: &Path,
   user_override: Option<&Path>,
 ) -> Result<Option<PathBuf>, EngineError> {

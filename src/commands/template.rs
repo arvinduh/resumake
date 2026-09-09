@@ -5,7 +5,7 @@ use crate::error::ResumakeError;
 use std::path::Path;
 
 /// Runs `rsmk template list`.
-pub fn run_template_list() -> Result<(), ResumakeError> {
+pub(crate) fn run_template_list() -> Result<(), ResumakeError> {
   let templates = templates::list_templates();
   println!("Available templates:");
   for tpl in templates {
@@ -15,7 +15,7 @@ pub fn run_template_list() -> Result<(), ResumakeError> {
 }
 
 /// Runs `rsmk template eject`.
-pub fn run_template_eject(
+pub(crate) fn run_template_eject(
   name: &str,
   force: bool,
   quiet: bool,

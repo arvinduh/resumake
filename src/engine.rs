@@ -1,6 +1,6 @@
 pub mod error;
 pub mod templates;
-pub mod world;
+pub(crate) mod world;
 
 use crate::engine::error::EngineError;
 use crate::engine::world::ResumakeWorld;
@@ -15,10 +15,8 @@ use typst::Document;
 
 /// The core in-process Typst compiler facade.
 pub struct TypstEngine {
-  /// User override or auto-discovered font directory.
-  pub font_path: Option<PathBuf>,
-  /// The project root directory.
-  pub root_path: PathBuf,
+  font_path: Option<PathBuf>,
+  root_path: PathBuf,
 }
 
 impl TypstEngine {
@@ -33,6 +31,12 @@ impl TypstEngine {
       font_path,
       root_path,
     })
+  }
+
+  /// Returns the configured font directory, if any.
+  #[must_use]
+  pub fn font_path(&self) -> Option<&Path> {
+    self.font_path.as_deref()
   }
 
   /// Resolves the Typst entry file from `--template` and optional `--source`.
