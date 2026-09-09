@@ -80,34 +80,4 @@ impl ResumakeError {
   pub fn is_layout_overflow(&self) -> bool {
     matches!(self, Self::Engine(EngineError::LayoutConstraintViolation))
   }
-
-  /// Returns `true` if the error was caused by a Git or GitHub CLI operation.
-  #[inline]
-  pub fn is_git(&self) -> bool {
-    matches!(self, Self::Git(_))
-  }
-
-  /// Returns `true` if the error occurred during project initialization.
-  #[inline]
-  pub fn is_init(&self) -> bool {
-    matches!(self, Self::Init(_))
-  }
-
-  /// Returns `true` if the error occurred during release pipeline execution.
-  #[inline]
-  pub fn is_release(&self) -> bool {
-    matches!(self, Self::Release(_))
-  }
-
-  /// Returns `true` if the error occurred during binary self-update.
-  #[inline]
-  pub fn is_update(&self) -> bool {
-    matches!(self, Self::Update(_))
-  }
-
-  /// Returns `true` if the error was caused by an underlying I/O operation.
-  #[inline]
-  pub fn is_io(&self) -> bool {
-    matches!(self, Self::Io(_))
-  }
 }

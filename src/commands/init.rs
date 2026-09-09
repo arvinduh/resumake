@@ -81,7 +81,7 @@ fn dir_has_entries(dir: &Path) -> bool {
 }
 
 /// Resolves candidate name from CLI arguments or prompts interactively.
-pub fn resolve_candidate_name(name_arg: Option<&str>) -> String {
+fn resolve_candidate_name(name_arg: Option<&str>) -> String {
   if let Some(name) = name_arg {
     let trimmed = name.trim();
     if !trimmed.is_empty() {
@@ -120,78 +120,30 @@ pub enum InitError {
     /// Path to the non-empty directory.
     path: PathBuf,
   },
-  /// Failed to spawn the `git init` subprocess.
-  #[error("Failed to run 'git init': {0}")]
-  GitSpawn(#[source] std::io::Error),
-  /// The `git init` command exited with an error.
-  #[error("'git init' failed: {stderr}")]
-  GitFailed {
-    /// Stderr output from `git init`.
-    stderr: String,
-  },
-  /// Failed to read `.gitignore`.
-  #[error("Failed to read .gitignore: {0}")]
-  GitIgnoreRead(#[source] std::io::Error),
-  /// Failed to write `.gitignore`.
-  #[error("Failed to write .gitignore: {0}")]
-  GitIgnoreWrite(#[source] std::io::Error),
-  /// Failed to read `.gitattributes`.
-  #[error("Failed to read .gitattributes: {0}")]
-  GitAttributesRead(#[source] std::io::Error),
-  /// Failed to write `.gitattributes`.
-  #[error("Failed to write .gitattributes: {0}")]
-  GitAttributesWrite(#[source] std::io::Error),
-  /// Failed to create directory for workflows.
-  #[error("Failed to create workflows directory: {0}")]
-  WorkflowsDirCreate(#[source] std::io::Error),
-  /// Failed to read workflow file.
-  #[error("Failed to read workflow '{}': {source}", path.display())]
-  WorkflowRead {
-    /// Path to the workflow file.
+  /// Failed to read a file during initialization.
+  #[error("Failed to read file '{}': {source}", path.display())]
+  FileRead {
+    /// Path to the target file.
     path: PathBuf,
     /// Underlying I/O error.
     #[source]
     source: std::io::Error,
   },
-  /// Failed to write workflow file.
-  #[error("Failed to write workflow '{}': {source}", path.display())]
-  WorkflowWrite {
-    /// Path to the workflow file.
+  /// Failed to write a file during initialization.
+  #[error("Failed to write file '{}': {source}", path.display())]
+  FileWrite {
+    /// Path to the target file.
     path: PathBuf,
     /// Underlying I/O error.
     #[source]
     source: std::io::Error,
   },
-  /// Failed to write CI workflow file.
-  #[error("Failed to write CI workflow: {0}")]
-  CiWorkflowWrite(#[source] std::io::Error),
-  /// Failed to write Release workflow file.
-  #[error("Failed to write Release workflow: {0}")]
-  ReleaseWorkflowWrite(#[source] std::io::Error),
-  /// Underlying I/O error.
+  /// Git or GitHub CLI operation error.
+  #[error(transparent)]
+  Git(#[from] crate::utils::git::GitError),
+  /// Underlying standard I/O error.
   #[error("I/O error: {0}")]
   Io(#[from] std::io::Error),
-}
-
-/// Checks if the target directory is inside an existing git work tree.
-#[inline]
-pub fn is_inside_git_repo(dir: &Path) -> bool {
-  git::is_inside_work_tree(dir)
-}
-
-/// Initializes a new git repository in the target directory.
-///
-/// # Errors
-///
-/// Returns an [`InitError`] if `git init` cannot be spawned or fails.
-pub fn init_git_repo(dir: &Path) -> Result<bool, InitError> {
-  git::init_repo(dir).map(|()| true).map_err(|e| match e {
-    GitError::Spawn(io) => InitError::GitSpawn(io),
-    GitError::Failed { stderr } => InitError::GitFailed { stderr },
-    other => InitError::GitFailed {
-      stderr: other.to_string(),
-    },
-  })
 }
 
 /// Ensures `.gitignore` exists and ignores `*.pdf` and `.resumake/`.
@@ -199,11 +151,15 @@ pub fn init_git_repo(dir: &Path) -> Result<bool, InitError> {
 /// # Errors
 ///
 /// Returns an [`InitError`] if reading or writing `.gitignore` fails.
-pub fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
+fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
   let gitignore_path = dir.join(".gitignore");
   let mut existing = if gitignore_path.exists() {
-    std::fs::read_to_string(&gitignore_path)
-      .map_err(InitError::GitIgnoreRead)?
+    std::fs::read_to_string(&gitignore_path).map_err(|source| {
+      InitError::FileRead {
+        path: gitignore_path.clone(),
+        source,
+      }
+    })?
   } else {
     String::new()
   };
@@ -231,8 +187,12 @@ pub fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
   }
 
   if modified || !gitignore_path.exists() {
-    std::fs::write(&gitignore_path, existing)
-      .map_err(InitError::GitIgnoreWrite)?;
+    std::fs::write(&gitignore_path, existing).map_err(|source| {
+      InitError::FileWrite {
+        path: gitignore_path,
+        source,
+      }
+    })?;
   }
   Ok(())
 }
@@ -242,11 +202,15 @@ pub fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
 /// # Errors
 ///
 /// Returns an [`InitError`] if reading or writing `.gitattributes` fails.
-pub fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
+fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
   let gitattributes_path = dir.join(".gitattributes");
   let mut existing = if gitattributes_path.exists() {
-    std::fs::read_to_string(&gitattributes_path)
-      .map_err(InitError::GitAttributesRead)?
+    std::fs::read_to_string(&gitattributes_path).map_err(|source| {
+      InitError::FileRead {
+        path: gitattributes_path.clone(),
+        source,
+      }
+    })?
   } else {
     String::new()
   };
@@ -264,8 +228,12 @@ pub fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
   }
 
   if modified || !gitattributes_path.exists() {
-    std::fs::write(&gitattributes_path, existing)
-      .map_err(InitError::GitAttributesWrite)?;
+    std::fs::write(&gitattributes_path, existing).map_err(|source| {
+      InitError::FileWrite {
+        path: gitattributes_path,
+        source,
+      }
+    })?;
   }
   Ok(())
 }
@@ -275,10 +243,9 @@ pub fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
 /// # Errors
 ///
 /// Returns an [`InitError`] if creating directories or writing workflow files fails.
-pub fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
+fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
   let workflows_dir = dir.join(".github").join("workflows");
-  std::fs::create_dir_all(&workflows_dir)
-    .map_err(InitError::WorkflowsDirCreate)?;
+  std::fs::create_dir_all(&workflows_dir)?;
 
   let version = env!("CARGO_PKG_VERSION");
 
@@ -286,8 +253,12 @@ pub fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
   if !ci_path.exists() || force {
     let ci_content = schema::generate_ci_workflow(None);
     let ci_with_header = fs::stamp_provenance_header(&ci_content, version);
-    std::fs::write(&ci_path, ci_with_header)
-      .map_err(InitError::CiWorkflowWrite)?;
+    std::fs::write(&ci_path, ci_with_header).map_err(|source| {
+      InitError::FileWrite {
+        path: ci_path.clone(),
+        source,
+      }
+    })?;
   }
 
   let release_path = workflows_dir.join("release.yml");
@@ -295,8 +266,12 @@ pub fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
     let release_content = schema::generate_release_workflow(None);
     let release_with_header =
       fs::stamp_provenance_header(&release_content, version);
-    std::fs::write(&release_path, release_with_header)
-      .map_err(InitError::ReleaseWorkflowWrite)?;
+    std::fs::write(&release_path, release_with_header).map_err(|source| {
+      InitError::FileWrite {
+        path: release_path,
+        source,
+      }
+    })?;
   }
 
   Ok(())
@@ -304,12 +279,12 @@ pub fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
 
 /// Checks if GitHub CLI `gh` is installed and authenticated.
 #[inline]
-pub fn is_gh_authenticated(dir: &Path) -> bool {
+fn is_gh_authenticated(dir: &Path) -> bool {
   git::is_gh_authenticated(dir)
 }
 
 /// Handles interactive GitHub repository creation or prints remote setup guidance.
-pub fn handle_github_remote(dir: &Path, quiet: bool) {
+fn handle_github_remote(dir: &Path, quiet: bool) {
   if quiet {
     return;
   }
@@ -363,14 +338,13 @@ pub fn handle_github_remote(dir: &Path, quiet: bool) {
 /// # Errors
 ///
 /// Returns an [`InitError`] if creating directories or reading/writing workflow files fails.
-pub fn update_workflows(
+fn update_workflows(
   dir: &Path,
   force: bool,
   quiet: bool,
 ) -> Result<(), InitError> {
   let workflows_dir = dir.join(".github").join("workflows");
-  std::fs::create_dir_all(&workflows_dir)
-    .map_err(InitError::WorkflowsDirCreate)?;
+  std::fs::create_dir_all(&workflows_dir)?;
 
   let version = env!("CARGO_PKG_VERSION");
   let workflow_specs: [(&str, String); 2] = [
@@ -384,7 +358,7 @@ pub fn update_workflows(
 
     if !path.exists() {
       std::fs::write(&path, &new_with_header).map_err(|source| {
-        InitError::WorkflowWrite {
+        InitError::FileWrite {
           path: path.clone(),
           source,
         }
@@ -398,12 +372,11 @@ pub fn update_workflows(
       continue;
     }
 
-    let existing = std::fs::read_to_string(&path).map_err(|source| {
-      InitError::WorkflowRead {
+    let existing =
+      std::fs::read_to_string(&path).map_err(|source| InitError::FileRead {
         path: path.clone(),
         source,
-      }
-    })?;
+      })?;
 
     let is_clean = match fs::extract_provenance_and_body(&existing) {
       Some((recorded_hash, body)) => {
@@ -418,7 +391,7 @@ pub fn update_workflows(
 
     if is_clean || force {
       std::fs::write(&path, &new_with_header).map_err(|source| {
-        InitError::WorkflowWrite {
+        InitError::FileWrite {
           path: path.clone(),
           source,
         }
@@ -536,7 +509,12 @@ pub fn run_init(opts: InitOptions) -> Result<(), InitError> {
     std::fs::create_dir_all(base_dir)?;
   }
 
-  std::fs::write(opts.output, template_content)?;
+  std::fs::write(opts.output, template_content).map_err(|source| {
+    InitError::FileWrite {
+      path: opts.output.to_path_buf(),
+      source,
+    }
+  })?;
   if !opts.quiet {
     ui::print_success(&format!(
       "Initialized new résumé content scaffold at '{}'",
@@ -807,16 +785,16 @@ mod tests {
     let temp = TempDir::new().unwrap();
     let dir = temp.path();
 
-    assert!(!is_inside_git_repo(dir));
+    assert!(!git::is_inside_work_tree(dir));
 
-    init_git_repo(dir).unwrap();
-    assert!(is_inside_git_repo(dir));
+    git::init_repo(dir).unwrap();
+    assert!(git::is_inside_work_tree(dir));
 
     let subdir = dir.join("sub").join("nested");
     std::fs::create_dir_all(&subdir).unwrap();
-    assert!(is_inside_git_repo(&subdir));
+    assert!(git::is_inside_work_tree(&subdir));
 
     let non_existent = dir.join("does_not_exist");
-    assert!(!is_inside_git_repo(&non_existent));
+    assert!(!git::is_inside_work_tree(&non_existent));
   }
 }

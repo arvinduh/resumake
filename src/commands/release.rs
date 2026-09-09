@@ -25,21 +25,6 @@ pub enum ReleaseError {
     #[source]
     source: semver::Error,
   },
-  /// Git working tree contains uncommitted changes.
-  #[error("Working tree contains uncommitted changes. Please commit or stash them before releasing.")]
-  UncommittedChanges,
-  /// Repository HEAD has no commit.
-  #[error("HEAD has no commit.")]
-  NoHeadCommit,
-  /// Current branch has no upstream tracking branch configured.
-  #[error("Branch has no upstream tracking branch configured. Set an upstream remote branch before releasing.")]
-  NoUpstreamBranch,
-  /// Current branch has unpushed commits.
-  #[error("Branch has {count} unpushed commit(s). Push your commits to upstream before releasing.")]
-  UnpushedCommits {
-    /// Number of unpushed commits.
-    count: u64,
-  },
   /// Proposed version is not strictly newer than existing release tags.
   #[error("Version v{target} is not strictly newer than existing tag v{latest} (semver monotonicity check failed).")]
   NonMonotonicSemver {
@@ -48,39 +33,9 @@ pub enum ReleaseError {
     /// Highest existing tag version.
     latest: Version,
   },
-  /// Error querying git remote origin URL.
-  #[error("git remote get-url origin failed: {0}")]
-  RemoteError(String),
-  /// No URL configured for git remote origin.
-  #[error(
-    "git remote get-url origin failed: no URL found for remote 'origin'"
-  )]
-  NoRemoteUrl,
-  /// Error interacting with git repository.
-  #[error("Git error: {0}")]
-  Git(String),
-  /// Failed to spawn `git tag`.
-  #[error("Failed to run git tag: {0}")]
-  GitTagSpawn(#[source] std::io::Error),
-  /// `git tag` command failed with non-zero exit status.
-  #[error("Failed to create git tag '{tag}': {stderr}")]
-  GitTagFailed {
-    /// Tag name attempted.
-    tag: String,
-    /// Stderr output.
-    stderr: String,
-  },
-  /// Failed to spawn `git push`.
-  #[error("Failed to run git push: {0}")]
-  GitPushSpawn(#[source] std::io::Error),
-  /// `git push` command failed with non-zero exit status.
-  #[error("Failed to push tag '{tag}' to origin: {stderr}")]
-  GitPushFailed {
-    /// Tag name attempted.
-    tag: String,
-    /// Stderr output.
-    stderr: String,
-  },
+  /// Git or GitHub CLI operation error.
+  #[error(transparent)]
+  Git(#[from] GitError),
   /// Schema inspection error.
   #[error(transparent)]
   Schema(#[from] SchemaError),
@@ -90,22 +45,6 @@ pub enum ReleaseError {
   /// Underlying I/O error.
   #[error("I/O error: {0}")]
   Io(#[from] std::io::Error),
-}
-
-impl From<GitError> for ReleaseError {
-  fn from(err: GitError) -> Self {
-    match err {
-      GitError::UncommittedChanges => Self::UncommittedChanges,
-      GitError::NoHeadCommit => Self::NoHeadCommit,
-      GitError::NoUpstreamBranch => Self::NoUpstreamBranch,
-      GitError::UnpushedCommits { count } => Self::UnpushedCommits { count },
-      GitError::NoRemoteUrl => Self::NoRemoteUrl,
-      GitError::RemoteError(s) => Self::RemoteError(s),
-      GitError::Command(s) => Self::Git(s),
-      GitError::Spawn(e) => Self::Io(e),
-      GitError::Failed { stderr } => Self::Git(stderr),
-    }
-  }
 }
 
 /// Parses a version string into a [`Version`].
@@ -132,7 +71,7 @@ pub fn parse_version(s: &str) -> Result<Version, ReleaseError> {
 }
 
 /// Derives the GitHub Actions URL from a git remote URL.
-pub fn derive_actions_url(remote_url: &str) -> String {
+fn derive_actions_url(remote_url: &str) -> String {
   let trimmed = remote_url.trim();
   let stripped = trimmed.strip_suffix(".git").unwrap_or(trimmed);
 
@@ -154,7 +93,7 @@ pub fn derive_actions_url(remote_url: &str) -> String {
 ///
 /// Returns a [`ReleaseError`] if working tree is dirty or git inspection fails.
 #[inline]
-pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
+fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
   git::check_working_tree_clean(repo_dir).map_err(ReleaseError::from)
 }
 
@@ -164,7 +103,7 @@ pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
 ///
 /// Returns a [`ReleaseError`] if upstream branch is missing, commits are unpushed, or git fails.
 #[inline]
-pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
+fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
   git::check_upstream_synced(repo_dir).map_err(ReleaseError::from)
 }
 
@@ -174,7 +113,7 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
 ///
 /// Returns a [`ReleaseError`] if git tag inspection fails.
 #[inline]
-pub fn get_latest_semver_tag(
+fn get_latest_semver_tag(
   repo_dir: &Path,
 ) -> Result<Option<Version>, ReleaseError> {
   git::get_latest_semver_tag(repo_dir).map_err(ReleaseError::from)
@@ -185,7 +124,7 @@ pub fn get_latest_semver_tag(
 /// # Errors
 ///
 /// Returns a [`ReleaseError`] if `target_ver` is not strictly monotonic over existing tags.
-pub fn check_semver_monotonicity(
+fn check_semver_monotonicity(
   target_ver: &Version,
   repo_dir: &Path,
 ) -> Result<Option<Version>, ReleaseError> {
@@ -207,7 +146,7 @@ pub fn check_semver_monotonicity(
 ///
 /// Returns a [`ReleaseError`] if git repository cannot be opened or origin URL is not set.
 #[inline]
-pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, ReleaseError> {
+fn get_remote_origin_url(repo_dir: &Path) -> Result<String, ReleaseError> {
   git::get_remote_origin_url(repo_dir).map_err(ReleaseError::from)
 }
 
@@ -291,16 +230,7 @@ pub fn run_release(
   let default_msg = format!("v{target_ver}");
   let tag_msg = message.unwrap_or(&default_msg);
 
-  git::create_annotated_tag(repo_dir, &tag_name, tag_msg).map_err(
-    |e| match e {
-      GitError::Spawn(err) => ReleaseError::GitTagSpawn(err),
-      GitError::Failed { stderr } => ReleaseError::GitTagFailed {
-        tag: tag_name.clone(),
-        stderr,
-      },
-      other => ReleaseError::Git(other.to_string()),
-    },
-  )?;
+  git::create_annotated_tag(repo_dir, &tag_name, tag_msg)?;
 
   if !quiet {
     println!("\n  {} created tag v{target_ver}", "✓".green());
@@ -308,14 +238,7 @@ pub fn run_release(
 
   if let Err(e) = git::push_tag(repo_dir, "origin", &tag_name) {
     let _ = git::delete_tag(repo_dir, &tag_name);
-    return Err(match e {
-      GitError::Spawn(err) => ReleaseError::GitPushSpawn(err),
-      GitError::Failed { stderr } => ReleaseError::GitPushFailed {
-        tag: tag_name,
-        stderr,
-      },
-      other => ReleaseError::Git(other.to_string()),
-    });
+    return Err(e.into());
   }
 
   if !quiet {
