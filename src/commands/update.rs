@@ -1,5 +1,6 @@
 //! `rsmk update` — replace the running binary in place via axoupdater.
 
+use crate::utils::ui;
 use axoupdater::{AxoUpdater, ReleaseSource, ReleaseSourceType, Version};
 
 /// Errors originating from the self-update process.
@@ -16,13 +17,6 @@ pub enum UpdateError {
 impl From<axoupdater::AxoupdateError> for UpdateError {
   fn from(err: axoupdater::AxoupdateError) -> Self {
     Self::AxoUpdater(Box::new(err))
-  }
-}
-
-/// Print `msg` unless `quiet` is set.
-fn say(quiet: bool, msg: &str) {
-  if !quiet {
-    println!("{msg}");
   }
 }
 
@@ -63,37 +57,48 @@ pub(crate) fn run_update(
   if check {
     match updater.is_update_needed_sync() {
       Ok(true) => {
-        say(
-          quiet,
-          "A newer rsmk is available. Run `rsmk update` to upgrade.",
-        );
+        if !quiet {
+          ui::print_info(
+            "A newer rsmk is available. Run `rsmk update` to upgrade.",
+          );
+        }
       }
       Ok(false) => {
-        say(
-          quiet,
-          &format!("rsmk is up to date (v{current_version_str})."),
-        );
+        if !quiet {
+          ui::print_success(&format!(
+            "rsmk is up to date (v{current_version_str})."
+          ));
+        }
       }
       Err(e) => {
-        say(quiet, &format!("Could not check for updates: {e}"));
+        if !quiet {
+          ui::print_error(&format!("Could not check for updates: {e}"));
+        }
       }
     }
     return Ok(());
   }
 
-  say(quiet, "Checking for resumake updates...");
+  if !quiet {
+    ui::print_info("Checking for resumake updates...");
+  }
   match updater.run_sync() {
     Ok(Some(_res)) => {
-      say(quiet, "rsmk was updated successfully!");
+      if !quiet {
+        ui::print_success("rsmk was updated successfully!");
+      }
     }
     Ok(None) => {
-      say(
-        quiet,
-        &format!("rsmk is already up to date (v{current_version_str})."),
-      );
+      if !quiet {
+        ui::print_success(&format!(
+          "rsmk is already up to date (v{current_version_str})."
+        ));
+      }
     }
     Err(e) => {
-      say(quiet, &format!("[FAIL] Self-update failed: {e}"));
+      if !quiet {
+        ui::print_error(&format!("Self-update failed: {e}"));
+      }
     }
   }
 

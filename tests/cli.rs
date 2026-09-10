@@ -449,7 +449,7 @@ fn test_cli_template_eject_classic() {
     .assert()
     .success()
     .stdout(predicate::str::contains(
-      "✓ Ejected template 'classic' to ./templates/classic/",
+      "Ejected template 'classic' to ./templates/classic/",
     ))
     .stdout(predicate::str::contains("main.typ"))
     .stdout(predicate::str::contains("tokens.typ"))
@@ -502,7 +502,7 @@ fn test_cli_template_eject_collision_without_force() {
     .arg("--force")
     .assert()
     .success()
-    .stdout(predicate::str::contains("✓ Ejected template 'classic'"));
+    .stdout(predicate::str::contains("Ejected template 'classic'"));
 }
 
 #[test]
