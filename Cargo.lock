@@ -3005,7 +3005,6 @@ dependencies = [
  "comfy-table",
  "include_dir",
  "jsonschema",
- "notify",
  "notify-debouncer-mini",
  "predicates",
  "schemars 1.2.2",
@@ -3020,7 +3019,6 @@ dependencies = [
  "typst",
  "typst-kit",
  "typst-pdf",
- "typst-syntax",
 ]
 
 [[package]]
