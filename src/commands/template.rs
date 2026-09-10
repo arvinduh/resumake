@@ -25,7 +25,9 @@ pub(crate) fn run_template_eject(
   let ejected_files = templates::eject_template(name, &target_dir, force)?;
 
   if !quiet {
-    ui::print_success(&format!("Ejected template '{name}' to ./templates/{name}/"));
+    ui::print_success(&format!(
+      "Ejected template '{name}' to ./templates/{name}/"
+    ));
     for file in ejected_files {
       println!("  - {file}");
     }

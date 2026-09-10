@@ -193,7 +193,9 @@ fn setup_watcher(
   }
 
   if let Ok(engine) = TypstEngine::new(opts.font_path) {
-    if let Ok(resolved) = engine.resolve_template(opts.template_name, opts.source) {
+    if let Ok(resolved) =
+      engine.resolve_template(opts.template_name, opts.source)
+    {
       if resolved.exists() {
         if let Some(parent) = resolved
           .parent()

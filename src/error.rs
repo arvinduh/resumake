@@ -1,6 +1,6 @@
 //! Crate-level error types, result aliases, and classification helpers.
 
-pub use crate::commands::build::WatchError;
+use crate::commands::build::WatchError;
 use crate::commands::init::InitError;
 use crate::commands::release::ReleaseError;
 use crate::commands::update::UpdateError;
