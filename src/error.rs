@@ -1,5 +1,6 @@
 //! Crate-level error types, result aliases, and classification helpers.
 
+use crate::commands::build::WatchError;
 use crate::commands::init::InitError;
 use crate::commands::release::ReleaseError;
 use crate::commands::update::UpdateError;
@@ -7,27 +8,9 @@ use crate::engine::error::EngineError;
 use crate::schema::SchemaError;
 use crate::telemetry::TelemetryError;
 use crate::utils::git::GitError;
-use std::path::PathBuf;
 
 /// A specialized [`Result`](std::result::Result) type for Resumake operations.
 pub type Result<T, E = ResumakeError> = std::result::Result<T, E>;
-
-/// Errors originating from file watching and hot-reload debouncing.
-#[derive(thiserror::Error, Debug)]
-pub enum WatchError {
-  /// Failed to initialize file watcher.
-  #[error("Failed to initialize file watcher: {0}")]
-  Init(#[source] notify_debouncer_mini::notify::Error),
-  /// Failed to register watch path.
-  #[error("Failed to watch path '{}': {source}", path.display())]
-  WatchPath {
-    /// Target path.
-    path: PathBuf,
-    /// Underlying notify error.
-    #[source]
-    source: notify_debouncer_mini::notify::Error,
-  },
-}
 
 /// Unified umbrella error type covering all failures across Resumake subsystems.
 #[derive(thiserror::Error, Debug)]

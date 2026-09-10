@@ -1,6 +1,0 @@
-[build]
-# Default target directory. To share an incremental build cache across git
-# worktrees and avoid redundant build artifacts, set `CARGO_TARGET_DIR` in your
-# environment (e.g. `export CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/target"`).
-# Relative `target-dir` is resolved relative to the workspace root of each worktree.
-target-dir = "target"

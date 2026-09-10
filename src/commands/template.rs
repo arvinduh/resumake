@@ -2,6 +2,7 @@
 
 use crate::engine::templates;
 use crate::error::ResumakeError;
+use crate::utils::ui;
 use std::path::Path;
 
 /// Runs `rsmk template list`.
@@ -24,7 +25,9 @@ pub(crate) fn run_template_eject(
   let ejected_files = templates::eject_template(name, &target_dir, force)?;
 
   if !quiet {
-    println!("✓ Ejected template '{name}' to ./templates/{name}/");
+    ui::print_success(&format!(
+      "Ejected template '{name}' to ./templates/{name}/"
+    ));
     for file in ejected_files {
       println!("  - {file}");
     }
