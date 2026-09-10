@@ -87,38 +87,6 @@ fn derive_actions_url(remote_url: &str) -> String {
   }
 }
 
-/// Checks that the git working tree has no uncommitted or untracked changes.
-///
-/// # Errors
-///
-/// Returns a [`ReleaseError`] if working tree is dirty or git inspection fails.
-#[inline]
-fn check_working_tree_clean(repo_dir: &Path) -> Result<(), ReleaseError> {
-  git::check_working_tree_clean(repo_dir).map_err(ReleaseError::from)
-}
-
-/// Verifies that the current branch tracks an upstream remote branch and has 0 unpushed commits.
-///
-/// # Errors
-///
-/// Returns a [`ReleaseError`] if upstream branch is missing, commits are unpushed, or git fails.
-#[inline]
-fn check_upstream_synced(repo_dir: &Path) -> Result<(), ReleaseError> {
-  git::check_upstream_synced(repo_dir).map_err(ReleaseError::from)
-}
-
-/// Retrieves all existing semver git tags in the repository and returns the highest version, if any.
-///
-/// # Errors
-///
-/// Returns a [`ReleaseError`] if git tag inspection fails.
-#[inline]
-fn get_latest_semver_tag(
-  repo_dir: &Path,
-) -> Result<Option<Version>, ReleaseError> {
-  git::get_latest_semver_tag(repo_dir).map_err(ReleaseError::from)
-}
-
 /// Validates that `target_ver` is strictly newer than any existing git semver tag.
 ///
 /// # Errors
@@ -128,7 +96,7 @@ fn check_semver_monotonicity(
   target_ver: &Version,
   repo_dir: &Path,
 ) -> Result<Option<Version>, ReleaseError> {
-  let latest_tag = get_latest_semver_tag(repo_dir)?;
+  let latest_tag = git::get_latest_semver_tag(repo_dir)?;
   if let Some(ref latest) = latest_tag {
     if target_ver <= latest {
       return Err(ReleaseError::NonMonotonicSemver {
@@ -138,16 +106,6 @@ fn check_semver_monotonicity(
     }
   }
   Ok(latest_tag)
-}
-
-/// Gets the remote origin URL from git config.
-///
-/// # Errors
-///
-/// Returns a [`ReleaseError`] if git repository cannot be opened or origin URL is not set.
-#[inline]
-fn get_remote_origin_url(repo_dir: &Path) -> Result<String, ReleaseError> {
-  git::get_remote_origin_url(repo_dir).map_err(ReleaseError::from)
 }
 
 /// Runs the complete release pipeline: pre-flight checks, tag creation, and push.
@@ -184,13 +142,13 @@ pub(crate) fn run_release(
   }
 
   // Pre-flight check 1: Clean working tree
-  check_working_tree_clean(repo_dir)?;
+  git::check_working_tree_clean(repo_dir)?;
   if !quiet {
     println!("  {} working tree clean", "✓".green());
   }
 
   // Pre-flight check 2: Upstream sync
-  check_upstream_synced(repo_dir)?;
+  git::check_upstream_synced(repo_dir)?;
   if !quiet {
     println!(
       "  {} upstream branch synced (nothing unpushed)",
@@ -243,7 +201,7 @@ pub(crate) fn run_release(
 
   if !quiet {
     println!("  {} pushed tag to origin", "✓".green());
-    let remote_url = get_remote_origin_url(repo_dir)
+    let remote_url = git::get_remote_origin_url(repo_dir)
       .unwrap_or_else(|_| "https://github.com/arvinduh/resumake".to_string());
     let actions_url = derive_actions_url(&remote_url);
     println!("    Release workflow triggered: {actions_url}");
@@ -354,18 +312,18 @@ mod tests {
       .output()
       .unwrap();
 
-    assert!(check_working_tree_clean(dir).is_ok());
+    assert!(git::check_working_tree_clean(dir).is_ok());
 
     // Dirty with untracked file
     let untracked = dir.join("untracked.txt");
     std::fs::write(&untracked, "dirty").unwrap();
-    assert!(check_working_tree_clean(dir).is_err());
+    assert!(git::check_working_tree_clean(dir).is_err());
     std::fs::remove_file(&untracked).unwrap();
-    assert!(check_working_tree_clean(dir).is_ok());
+    assert!(git::check_working_tree_clean(dir).is_ok());
 
     // Dirty with modified file
     std::fs::write(&file, "modified").unwrap();
-    assert!(check_working_tree_clean(dir).is_err());
+    assert!(git::check_working_tree_clean(dir).is_err());
 
     // Staged change is also not clean
     Command::new("git")
@@ -373,7 +331,7 @@ mod tests {
       .current_dir(dir)
       .output()
       .unwrap();
-    assert!(check_working_tree_clean(dir).is_err());
+    assert!(git::check_working_tree_clean(dir).is_err());
   }
 
   #[test]
@@ -396,7 +354,7 @@ mod tests {
       .unwrap();
 
     // No tags yet
-    assert_eq!(get_latest_semver_tag(dir).unwrap(), None);
+    assert_eq!(git::get_latest_semver_tag(dir).unwrap(), None);
 
     // Add non-semver tag and semver tags
     Command::new("git")
@@ -420,7 +378,7 @@ mod tests {
       .output()
       .unwrap();
 
-    let latest = get_latest_semver_tag(dir).unwrap();
+    let latest = git::get_latest_semver_tag(dir).unwrap();
     assert_eq!(latest, Some(Version::parse("1.0.0").unwrap()));
 
     // Monotonicity check
@@ -441,7 +399,7 @@ mod tests {
     setup_test_repo(dir);
 
     // No remote
-    assert!(get_remote_origin_url(dir).is_err());
+    assert!(git::get_remote_origin_url(dir).is_err());
 
     // Add origin
     Command::new("git")
@@ -455,7 +413,7 @@ mod tests {
       .output()
       .unwrap();
 
-    let url = get_remote_origin_url(dir).unwrap();
+    let url = git::get_remote_origin_url(dir).unwrap();
     assert_eq!(url, "https://github.com/arvinduh/resumake.git");
   }
 
@@ -492,7 +450,7 @@ mod tests {
       .unwrap();
 
     // No upstream configured yet
-    assert!(check_upstream_synced(&work_dir).is_err());
+    assert!(git::check_upstream_synced(&work_dir).is_err());
 
     // Configure remote and push
     Command::new("git")
@@ -512,7 +470,7 @@ mod tests {
       .unwrap();
 
     // Synced upstream
-    assert!(check_upstream_synced(&work_dir).is_ok());
+    assert!(git::check_upstream_synced(&work_dir).is_ok());
 
     // Add unpushed commit
     std::fs::write(&file, "modified").unwrap();
@@ -527,7 +485,7 @@ mod tests {
       .output()
       .unwrap();
 
-    let res = check_upstream_synced(&work_dir);
+    let res = git::check_upstream_synced(&work_dir);
     assert!(res.is_err());
     assert!(res.unwrap_err().to_string().contains("1 unpushed commit"));
   }
