@@ -3,7 +3,7 @@
 use crate::engine;
 use crate::engine::error::EngineError;
 use crate::engine::TypstEngine;
-use crate::error::{ResumakeError, WatchError};
+use crate::error::ResumakeError;
 use crate::schema;
 use crate::telemetry;
 use crate::utils::fs;
@@ -11,7 +11,24 @@ use crate::utils::ui;
 use notify_debouncer_mini::{
   new_debouncer, notify::RecursiveMode, DebounceEventResult,
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Errors originating from file watching and hot-reload debouncing.
+#[derive(thiserror::Error, Debug)]
+pub enum WatchError {
+  /// Failed to initialize file watcher.
+  #[error("Failed to initialize file watcher: {0}")]
+  Init(#[source] notify_debouncer_mini::notify::Error),
+  /// Failed to register watch path.
+  #[error("Failed to watch path '{}': {source}", path.display())]
+  WatchPath {
+    /// Target path.
+    path: PathBuf,
+    /// Underlying notify error.
+    #[source]
+    source: notify_debouncer_mini::notify::Error,
+  },
+}
 
 /// Runs `rsmk build` to compile the document to a PDF and verify layout telemetry.
 pub(crate) fn run_build(
