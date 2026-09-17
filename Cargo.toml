@@ -23,12 +23,6 @@ pkg-fmt = "tar.gz"
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"
 
-[package.metadata.wix]
-upgrade-guid = "B5779AC4-341E-4BB0-9D71-D5DFCD8F8210"
-path-guid = "FA9E6B13-0C65-47C0-AAD7-FB0B8AC90A64"
-license = false
-eula = false
-
 # Config for 'dist'
 [workspace.metadata.dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
@@ -36,7 +30,7 @@ cargo-dist-version = "0.32.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
-installers = ["shell", "powershell", "msi"]
+installers = ["shell", "powershell"]
 # Skip checking whether the specified configuration files are up to date
 allow-dirty = ["ci"]
 # Target platforms to build apps for (Rust target-triple syntax)
