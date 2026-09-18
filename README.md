@@ -12,16 +12,16 @@
 
 - **Blazing Fast**: Native Rust binary compiling single-page résumés in under
   100ms.
-- **In-Process Schema Validation**: Validates YAML schemas before spawning any
-  compiler process.
-- **Strict Layout Telemetry**: Zero-emoji terminal diagnostics measuring page
-  count, vertical space fill percentage, and bullet wrapping.
-- **Standalone 5-Command Surface**: Complete lifecycle support via `build`,
-  `init`, `release`, `template`, and `update`.
-- **Zero-Dependency Engine**: Built-in modular Typst engine and design tokens
-  embedded directly in the binary.
-- **CI/CD Automation**: Embedded GitHub Actions workflows with automatic SHA-256
-  provenance tracking and release management.
+- **Zero Rust Required**: Prebuilt standalone binaries with instant 1-line
+  installation.
+- **In-Process Typst Engine**: Embedded compiler and modular templates—no
+  external Typst CLI or font downloads required.
+- **Strict Layout Telemetry**: Diagnostics measuring page count, vertical space
+  fill percentage, and bullet wrapping.
+- **In-Place Self-Updates**: Built-in `rsmk update` to automatically upgrade to
+  the latest release.
+- **Automated Résumé CI/CD**: Scaffolds GitHub Actions workflows to compile and
+  release your PDF automatically on tag.
 
 ---
 
@@ -29,7 +29,7 @@
 
 ### 1-Line Quick Install
 
-#### Linux & macOS
+#### macOS & Linux
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.sh | sh
@@ -42,25 +42,29 @@ irm https://github.com/arvinduh/resumake/releases/latest/download/resumake-insta
 ```
 
 Both installers download the release archive over HTTPS, verify checksums, and
-configure your binary path.
+configure your binary path (`~/.cargo/bin` or `%USERPROFILE%\.cargo\bin`).
 
-#### Pinned Version Install
+#### Direct Prebuilt Binaries
 
-```bash
-# Linux & macOS — install a pinned version
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/releases/download/v0.2.0/resumake-installer.sh | sh
-```
-
-```powershell
-# Windows — install a pinned version
-irm https://github.com/arvinduh/resumake/releases/download/v0.2.0/resumake-installer.ps1 | iex
-```
-
-### Direct Prebuilt Binaries
-
-Prebuilt standalone archives (`.zip` for Windows, `.tar.xz` for Linux and macOS)
+Standalone prebuilt archives (`.zip` for Windows, `.tar.xz` for Linux and macOS)
 are attached to every
 [GitHub Release](https://github.com/arvinduh/resumake/releases/latest).
+
+---
+
+## Updating
+
+To update your installed `rsmk` binary to the latest version at any time:
+
+```bash
+rsmk update
+```
+
+To verify if a new release is available without installing:
+
+```bash
+rsmk update --check
+```
 
 ---
 
@@ -75,41 +79,88 @@ rsmk init --name "Jane Doe"
 
 This scaffolds:
 
-- `content.yaml` configured with `Libertinus Serif` font.
-- `.gitignore` (ignoring compiled PDFs and cache artifacts).
-- `.gitattributes` (`* text=auto eol=lf`).
-- `.github/workflows/ci.yml` & `release.yml` with SHA-256 provenance headers.
+- `content.yaml`: Configured with starter sections and JSON Schema header.
+- `.gitignore`: Ignores generated PDF outputs and cache files.
+- `.gitattributes`: Normalizes line endings (`* text=auto eol=lf`).
+- `.github/workflows/`: CI verification and automated GitHub Release workflows.
 
-### 2. Live Recompilation & Geometry Feedback
+### 2. Edit Your Content (`content.yaml`)
 
-```bash
-rsmk build --watch
+Resumake separates your career content from styling. Edit `content.yaml`:
+
+```yaml
+# yaml-language-server: $schema=https://github.com/arvinduh/resumake/releases/download/s1.0/resume.schema.json
+meta:
+  name: "Jane Doe"
+  version: "1.0.0"
+  role: "Senior Software Engineer"
+  contact:
+    - name: "jane@example.com"
+      url: "mailto:jane@example.com"
+    - name: "github.com/janedoe"
+      url: "https://github.com/janedoe"
+    - name: "San Francisco, CA"
+
+sections:
+  - title: "Experience"
+    type: "experience"
+    items:
+      - company: "Acme Corp"
+        role: "Senior Software Engineer"
+        date: "2023 – Present"
+        location: "San Francisco, CA"
+        bullets:
+          - "Architected real-time streaming pipeline reducing latency by 40%."
+          - "Mentored 5 junior engineers and led technical design reviews."
+
+  - title: "Education"
+    type: "education"
+    items:
+      - institution: "University of California, Berkeley"
+        degree: "B.S. in Computer Science"
+        date: "2019 – 2023"
+
+  - title: "Skills"
+    type: "skills"
+    items:
+      - category: "Languages"
+        skills: ["Rust", "Python", "TypeScript", "Go"]
+      - category: "Infrastructure"
+        skills: ["Kubernetes", "Docker", "AWS", "Terraform"]
 ```
 
-Keep your PDF viewer open side-by-side. Every time you save `content.yaml`,
-Resumake re-renders the document and evaluates single-page geometry in <100ms.
+### 3. Compile Your Résumé
 
-### 3. Dry-Run Verification
+```bash
+rsmk build
+```
+
+Compiles your PDF (`janedoe_resume.pdf`) and displays layout telemetry metrics.
+
+### 4. Dry-Run Verification
 
 ```bash
 rsmk build --check
 ```
 
-Evaluates schema validity and layout constraints without writing a PDF to disk.
+Validates YAML schema and evaluates layout constraints without writing a PDF to
+disk.
 
-### 4. Tag & Cut a Release
+### 5. Tag & Publish a Résumé Release
 
 ```bash
 rsmk release
 ```
 
 Runs 5 automated pre-flight assertions (clean working tree, upstream sync,
-SemVer monotonicity, in-memory layout check) before creating and pushing git tag
+SemVer monotonicity, layout check) before creating and pushing git tag
 `v<version>` to trigger the GitHub Actions release workflow.
 
 ---
 
-## Telemetry Terminal Output
+## Layout Telemetry Diagnostics
+
+Every compile checks golden-ratio layout geometry:
 
 ```txt
 ───────────────────────────────────────────────────────────────────────
@@ -124,26 +175,32 @@ SemVer monotonicity, in-memory layout check) before creating and pushing git tag
 ───────────────────────────────────────────────────────────────────────
 ```
 
+- **Page Count Guard**: Strictly fails if content spills over to page 2.
+- **Vertical Fill Percentage**: Target between 90% and 98% for optimal white
+  space balance.
+- **Line Wrap Detector**: Highlights bullet points that wrap only one or two
+  orphan words onto a second line.
+
 ---
 
 ## CLI Command Surface
 
 ```bash
-# Core Compilation & Telemetry
+# Compilation & Telemetry
 rsmk build                      # Compile PDF and evaluate layout geometry
-rsmk build -c, --check          # Dry-run validation (0 files written)
-rsmk build -w, --watch          # Live file-watcher loop on YAML / Typst change
-rsmk build -t, --template <TPL> # Pick a template ('classic' or path to main.typ)
+rsmk build -c, --check          # Dry-run validation (no PDF written)
+rsmk build -t, --template <TPL> # Built-in template name (default: 'classic') or path
+rsmk build -o, --output <PDF>   # Custom output PDF path
 
-# Project Scaffolding & Lifecycle
-rsmk init                       # Interactive wizard: git + workflows + gh setup
-rsmk init <DEST>                # Scaffold into a directory (created if needed)
+# Project Scaffolding
+rsmk init                       # Interactive initialization wizard
+rsmk init <DEST>                # Scaffold into a directory
 rsmk init --name <NAME>         # Scaffold with specific candidate name
-rsmk init --no-git              # Content only — no repo, and no CI/Release workflows
-rsmk init -u, --update          # Add or refresh workflow stubs (SHA-256 provenance)
-rsmk init -f, --force           # Overwrite existing files; scaffold into a non-empty dir
+rsmk init --no-git              # Scaffold content.yaml only (no git repo / workflows)
+rsmk init -u, --update          # Add or refresh workflow stubs
+rsmk init -f, --force           # Overwrite existing files
 
-# Release Engine
+# Résumé Release
 rsmk release                    # Pre-flight assertions + tag meta.version + push
 rsmk release --dry-run          # Test pre-flight assertions without tagging
 rsmk release -m <MESSAGE>       # Custom annotated tag message
@@ -152,27 +209,32 @@ rsmk release -m <MESSAGE>       # Custom annotated tag message
 rsmk template list              # List built-in and local custom templates
 rsmk template eject classic     # Extract template tree to ./templates/classic/
 
-# Self-update
-rsmk update                     # Replace the binary with the latest release
-rsmk update --check             # Report whether a newer release exists
-rsmk update -f, --force         # Reinstall even if already up to date
+# Binary Self-Update
+rsmk update                     # In-place update to the latest release
+rsmk update --check             # Check if an update is available
+rsmk update -f, --force         # Force reinstallation of latest release
+
+# Schema (Tooling & Offline IDEs)
+rsmk schema                     # Print canonical JSON Schema to stdout
+rsmk schema -o <PATH>           # Export schema to a local file
 ```
 
 ---
 
-## Documentation Hub
+## Development
 
-Explore the complete documentation in the [`docs/`](docs/README.md) directory:
+Prerequisites: [Rust 1.80+](https://rustup.rs/)
 
-| Guide                                                 | Description                                                                    |
-| :---------------------------------------------------- | :----------------------------------------------------------------------------- |
-| **[Documentation Index](docs/INDEX.md)**              | Central sitemap for all documentation, specs, and orchestration files.         |
-| **[Getting Started](docs/getting-started.md)**        | Step-by-step tutorial from installation to cutting your first release.         |
-| **[YAML Schema Reference](docs/schema-guide.md)**     | Complete specification of all directives, metadata, and block sections.        |
-| **[Layout Telemetry Guide](docs/telemetry-guide.md)** | Learn how strict 1-page geometry, fill percentage, and wrap checks work.       |
-| **[System Architecture](docs/architecture.md)**       | Deep dive into the native Rust engine, embedded Typst compiler, and pipeline.  |
-| **[Release Procedure](docs/release.md)**              | Version tagging, git-cliff changelogs, and binary distribution workflow.       |
-| **[Contributing Guide](docs/contributing.md)**        | Code standards, local test suite, pre-commit setup, and Pull Request workflow. |
+```bash
+# Run unit tests
+cargo test --lib -q
+
+# Run clippy linter
+cargo clippy --all-targets -- -D warnings
+
+# Build binary
+cargo build --release
+```
 
 ---
 

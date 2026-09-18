@@ -119,7 +119,7 @@ pub enum SchemaError {
 /// `#[serde(deny_unknown_fields)]`, which `schemars` turns into
 /// `"additionalProperties": false` on the generated schema — so a renamed
 /// or misspelled field (the exact class of bug this attribute was added
-/// for — see `docs/schema-guide.md`) fails loudly here instead of being
+/// for) fails loudly here instead of being
 /// silently dropped, with no separate check needed beyond the schema
 /// itself. The same `additionalProperties: false` is what makes IDE YAML
 /// plugins flag it live, since they validate against this same schema.
