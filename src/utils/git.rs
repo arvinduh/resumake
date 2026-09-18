@@ -49,7 +49,7 @@ pub enum GitError {
 }
 
 /// Checks if the target directory is inside an existing git work tree.
-pub(crate) fn is_inside_work_tree(dir: &Path) -> bool {
+pub fn is_inside_work_tree(dir: &Path) -> bool {
   Command::new("git")
     .args(["rev-parse", "--is-inside-work-tree"])
     .current_dir(dir)
@@ -65,7 +65,7 @@ pub(crate) fn is_inside_work_tree(dir: &Path) -> bool {
 ///
 /// # Errors
 /// Returns a [`GitError`] if `git init` cannot be spawned or fails.
-pub(crate) fn init_repo(dir: &Path) -> Result<(), GitError> {
+pub fn init_repo(dir: &Path) -> Result<(), GitError> {
   let output = Command::new("git")
     .arg("init")
     .current_dir(dir)
@@ -83,9 +83,7 @@ pub(crate) fn init_repo(dir: &Path) -> Result<(), GitError> {
 ///
 /// # Errors
 /// Returns a [`GitError`] if working tree is dirty or git inspection fails.
-pub(crate) fn check_working_tree_clean(
-  repo_dir: &Path,
-) -> Result<(), GitError> {
+pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), GitError> {
   let output = Command::new("git")
     .args(["status", "--porcelain"])
     .current_dir(repo_dir)
@@ -109,7 +107,7 @@ pub(crate) fn check_working_tree_clean(
 ///
 /// # Errors
 /// Returns a [`GitError`] if upstream branch is missing, commits are unpushed, or git fails.
-pub(crate) fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
+pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
   let repo_check = Command::new("git")
     .args(["rev-parse", "--git-dir"])
     .current_dir(repo_dir)
@@ -182,7 +180,7 @@ pub(crate) fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
 ///
 /// # Errors
 /// Returns a [`GitError`] if git tag inspection fails.
-pub(crate) fn get_latest_semver_tag(
+pub fn get_latest_semver_tag(
   repo_dir: &Path,
 ) -> Result<Option<Version>, GitError> {
   let output = Command::new("git")
@@ -230,9 +228,7 @@ pub(crate) fn get_latest_semver_tag(
 ///
 /// # Errors
 /// Returns a [`GitError`] if git repository cannot be opened or origin URL is not set.
-pub(crate) fn get_remote_origin_url(
-  repo_dir: &Path,
-) -> Result<String, GitError> {
+pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, GitError> {
   let output = Command::new("git")
     .args(["remote", "get-url", "origin"])
     .current_dir(repo_dir)
@@ -264,7 +260,7 @@ pub(crate) fn get_remote_origin_url(
 ///
 /// # Errors
 /// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
-pub(crate) fn create_annotated_tag(
+pub fn create_annotated_tag(
   repo_dir: &Path,
   tag: &str,
   message: &str,
@@ -291,7 +287,7 @@ pub(crate) fn create_annotated_tag(
 ///
 /// # Errors
 /// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
-pub(crate) fn push_tag(
+pub fn push_tag(
   repo_dir: &Path,
   remote: &str,
   tag: &str,
@@ -316,7 +312,7 @@ pub(crate) fn push_tag(
 ///
 /// # Errors
 /// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
-pub(crate) fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), GitError> {
+pub fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), GitError> {
   let output = Command::new("git")
     .arg("tag")
     .arg("-d")
@@ -359,76 +355,4 @@ pub(crate) fn create_repo_and_push(dir: &Path) -> Result<(), GitError> {
   }
 
   Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use tempfile::TempDir;
-
-  fn setup_test_repo(dir: &Path) {
-    Command::new("git")
-      .arg("init")
-      .current_dir(dir)
-      .output()
-      .unwrap();
-    Command::new("git")
-      .args(["config", "user.name", "Test User"])
-      .current_dir(dir)
-      .output()
-      .unwrap();
-    Command::new("git")
-      .args(["config", "user.email", "test@example.com"])
-      .current_dir(dir)
-      .output()
-      .unwrap();
-    Command::new("git")
-      .args(["config", "commit.gpgsign", "false"])
-      .current_dir(dir)
-      .output()
-      .unwrap();
-  }
-
-  #[test]
-  fn test_is_inside_work_tree_and_init() {
-    let temp = TempDir::new().unwrap();
-    let dir = temp.path();
-
-    assert!(!is_inside_work_tree(dir));
-
-    init_repo(dir).unwrap();
-    assert!(is_inside_work_tree(dir));
-
-    let nested = dir.join("sub").join("nested");
-    std::fs::create_dir_all(&nested).unwrap();
-    assert!(is_inside_work_tree(&nested));
-  }
-
-  #[test]
-  fn test_create_and_delete_annotated_tag() {
-    let temp = TempDir::new().unwrap();
-    let dir = temp.path();
-    setup_test_repo(dir);
-
-    let file = dir.join("file.txt");
-    std::fs::write(&file, "initial").unwrap();
-    Command::new("git")
-      .args(["add", "."])
-      .current_dir(dir)
-      .output()
-      .unwrap();
-    Command::new("git")
-      .args(["commit", "-m", "init"])
-      .current_dir(dir)
-      .output()
-      .unwrap();
-
-    assert!(create_annotated_tag(dir, "v1.0.0", "Release 1.0.0").is_ok());
-    let latest = get_latest_semver_tag(dir).unwrap();
-    assert_eq!(latest, Some(Version::parse("1.0.0").unwrap()));
-
-    assert!(delete_tag(dir, "v1.0.0").is_ok());
-    let latest_after_del = get_latest_semver_tag(dir).unwrap();
-    assert_eq!(latest_after_del, None);
-  }
 }

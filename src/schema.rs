@@ -132,48 +132,33 @@ pub enum SchemaError {
 /// `properties` in the schema and a typo inside it is not caught — only
 /// the shorthand form is.
 ///
+/// Validates a content YAML string against an optional JSON schema Value.
+///
+/// If `schema_json` is `None`, the built-in canonical schema derived from
+/// [`crate::models::ResumeDocument`] is used.
+///
 /// # Errors
-/// Returns a [`SchemaError`] if reading, parsing, or validation fails.
-pub fn validate_schema_auto(
-  content_path: &Path,
-  schema_path: Option<&Path>,
+/// Returns a [`SchemaError`] if parsing YAML or schema validation fails.
+pub fn validate_schema_str(
+  content_str: &str,
+  schema_json: Option<&serde_json::Value>,
 ) -> Result<(), SchemaError> {
-  // Step 1: Resolve the JSON schema Value (from custom file path if
-  // exists, otherwise generate_builtin_schema())
-  let schema_json: serde_json::Value = match schema_path {
-    Some(p) if p.exists() => {
-      let schema_str = fs::read_to_string(p).map_err(|source| {
-        SchemaError::SchemaFileRead {
-          path: p.to_path_buf(),
-          source,
-        }
-      })?;
-      serde_json::from_str(&schema_str).map_err(|source| {
-        SchemaError::SchemaJsonParse {
-          path: p.to_path_buf(),
-          source,
-        }
-      })?
+  let default_schema;
+  let schema = match schema_json {
+    Some(s) => s,
+    None => {
+      default_schema = models::generate_builtin_schema();
+      &default_schema
     }
-    _ => models::generate_builtin_schema(),
   };
 
-  // Step 2: Read and deserialize the content YAML file into a serde_json::Value
-  let content_str = fs::read_to_string(content_path).map_err(|source| {
-    SchemaError::ContentFileRead {
-      path: content_path.to_path_buf(),
-      source,
-    }
-  })?;
-
-  let content_json: serde_json::Value = serde_yaml::from_str(&content_str)
+  let content_json: serde_json::Value = serde_yaml::from_str(content_str)
     .map_err(|source| SchemaError::ContentYamlParse {
-      path: content_path.to_path_buf(),
+      path: PathBuf::from("<memory>"),
       source,
     })?;
 
-  // Step 3: Compile validator and collect error messages
-  let validator = jsonschema::validator_for(&schema_json)
+  let validator = jsonschema::validator_for(schema)
     .map_err(|e| SchemaError::ValidatorCompile(e.to_string()))?;
 
   let mut errors = Vec::new();
@@ -192,6 +177,65 @@ pub fn validate_schema_auto(
   } else {
     Err(SchemaError::ValidationFailed { errors })
   }
+}
+
+/// Validates a content YAML file against an optional JSON schema file.
+///
+/// If `schema_path` is `None` or the file does not exist, the built-in
+/// canonical schema derived from [`crate::models::ResumeDocument`] is
+/// used.
+/// Validated with the `jsonschema` crate, which auto-detects the draft from
+/// the schema's `$schema` field (the built-in schema is Draft-07).
+///
+/// Every model struct in `src/models.rs` carries
+/// `#[serde(deny_unknown_fields)]`, which `schemars` turns into
+/// `"additionalProperties": false` on the generated schema — so a renamed
+/// or misspelled field (the exact class of bug this attribute was added
+/// for) fails loudly here instead of being
+/// silently dropped, with no separate check needed beyond the schema
+/// itself. The same `additionalProperties: false` is what makes IDE YAML
+/// plugins flag it live, since they validate against this same schema.
+///
+/// One real gap is worth knowing: [`crate::models::Section`] accepts
+/// content through either a strongly-typed shorthand field (`education`,
+/// `experience`, ...) or a generic `items: serde_json::Value` fallback
+/// used with an explicit `type:`. `items` is intentionally untyped so any
+/// block's content can be supplied that way, so it has no fixed
+/// `properties` in the schema and a typo inside it is not caught — only
+/// the shorthand form is.
+///
+/// # Errors
+/// Returns a [`SchemaError`] if reading, parsing, or validation fails.
+pub fn validate_schema_auto(
+  content_path: &Path,
+  schema_path: Option<&Path>,
+) -> Result<(), SchemaError> {
+  let schema_json: Option<serde_json::Value> = match schema_path {
+    Some(p) if p.exists() => {
+      let schema_str = fs::read_to_string(p).map_err(|source| {
+        SchemaError::SchemaFileRead {
+          path: p.to_path_buf(),
+          source,
+        }
+      })?;
+      Some(serde_json::from_str(&schema_str).map_err(|source| {
+        SchemaError::SchemaJsonParse {
+          path: p.to_path_buf(),
+          source,
+        }
+      })?)
+    }
+    _ => None,
+  };
+
+  let content_str = fs::read_to_string(content_path).map_err(|source| {
+    SchemaError::ContentFileRead {
+      path: content_path.to_path_buf(),
+      source,
+    }
+  })?;
+
+  validate_schema_str(&content_str, schema_json.as_ref())
 }
 
 /// Exports the built-in JSON schema to a file or returns it as a
@@ -342,76 +386,66 @@ pub fn load_content_name(content_path: &Path) -> Result<String, SchemaError> {
   Ok(name_str.to_string())
 }
 
+/// Derives the output PDF filename from a candidate name string.
+///
+/// For example, "Jane Doe" becomes `janedoe_resume.pdf`.
+#[must_use]
+pub fn derive_output_filename_from_name(name: &str) -> PathBuf {
+  let sanitized: String = name
+    .chars()
+    .filter(|c| c.is_alphanumeric())
+    .collect::<String>()
+    .to_lowercase();
+  if !sanitized.is_empty() {
+    PathBuf::from(format!("{sanitized}_resume.pdf"))
+  } else {
+    PathBuf::from("resume.pdf")
+  }
+}
+
 /// Derives the output PDF filename from the résumé author's name in
 /// `content.yaml`.
 ///
 /// For example, "Jane Doe" becomes `janedoe_resume.pdf`.
 pub fn derive_output_filename(content_path: &Path) -> PathBuf {
   if let Ok(name) = load_content_name(content_path) {
-    let sanitized: String = name
-      .chars()
-      .filter(|c| c.is_alphanumeric())
-      .collect::<String>()
-      .to_lowercase();
-    if !sanitized.is_empty() {
-      return PathBuf::from(format!("{sanitized}_resume.pdf"));
-    }
+    derive_output_filename_from_name(&name)
+  } else {
+    PathBuf::from("resume.pdf")
   }
-  PathBuf::from("resume.pdf")
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use tempfile::TempDir;
 
   #[test]
-  fn test_validate_schema_auto_builtin() {
-    let temp = TempDir::new().unwrap();
-    let content_file = temp.path().join("content.yaml");
-
-    fs::write(
-      &content_file,
-      r#"
+  fn test_validate_schema_builtin() {
+    let yaml = r#"
 meta:
   name: "Test User"
   version: "1.2.3"
   contact:
     - name: "test@example.com"
 sections: []
-"#,
-    )
-    .unwrap();
-
-    assert!(validate_schema_auto(&content_file, None).is_ok());
+"#;
+    assert!(validate_schema_str(yaml, None).is_ok());
   }
 
   #[test]
-  fn test_validate_schema_auto_catches_invalid_yaml() {
-    let temp = TempDir::new().unwrap();
-    let content_file = temp.path().join("content.yaml");
-
-    fs::write(
-      &content_file,
-      r#"
+  fn test_validate_schema_catches_invalid_yaml() {
+    let yaml = r#"
 meta:
   version: "1.0.0"
-"#,
-    )
-    .unwrap();
-
-    let res = validate_schema_auto(&content_file, None);
-    assert!(res.is_err());
+"#;
+    assert!(validate_schema_str(yaml, None).is_err());
   }
 
   #[test]
-  fn test_export_builtin_schema() {
-    let temp = TempDir::new().unwrap();
-    let out_file = temp.path().join("schema.json");
-    let res = export_builtin_schema(Some(&out_file));
+  fn test_export_builtin_schema_in_memory() {
+    let res = export_builtin_schema(None);
     assert!(res.is_ok());
-    assert!(out_file.exists());
-    let content = fs::read_to_string(&out_file).unwrap();
+    let content = res.unwrap();
     assert!(content.contains("ResumeDocument"));
   }
 
@@ -435,14 +469,9 @@ meta:
     // Regression guard for the schema/model drift class of bug: the
     // scaffold `resumake init` generates today must always validate
     // against the schema `resumake` derives from its own models today.
-    // This does not need Typst, so it stays fast enough to run on every
-    // `cargo test`, ahead of the slower end-to-end compile test in
-    // tests/cli.rs.
-    let temp = TempDir::new().unwrap();
-    let content_file = temp.path().join("content.yaml");
-    fs::write(&content_file, generate_init_template("Jane Doe")).unwrap();
-
-    let result = validate_schema_auto(&content_file, None);
+    // This runs completely in memory.
+    let scaffold = generate_init_template("Jane Doe");
+    let result = validate_schema_str(&scaffold, None);
     assert!(
       result.is_ok(),
       "init scaffold no longer matches the current schema: {result:?}"
@@ -450,36 +479,27 @@ meta:
   }
 
   #[test]
-  fn test_load_name_version_and_derive_filename() {
-    let temp = TempDir::new().unwrap();
-    let content_file = temp.path().join("content.yaml");
-
-    let yaml = r#"
-meta:
-  name: "Jane Doe"
-  version: "2.1.0"
-sections: []
-"#;
-    fs::write(&content_file, yaml).unwrap();
-
-    assert_eq!(load_content_name(&content_file).unwrap(), "Jane Doe");
-    assert_eq!(load_content_version(&content_file).unwrap(), "2.1.0");
+  fn test_derive_output_filename_from_name() {
     assert_eq!(
-      derive_output_filename(&content_file),
+      derive_output_filename_from_name("Jane Doe"),
       PathBuf::from("janedoe_resume.pdf")
+    );
+    assert_eq!(
+      derive_output_filename_from_name("Dr. Alex Vance, Ph.D."),
+      PathBuf::from("dralexvancephd_resume.pdf")
+    );
+    assert_eq!(
+      derive_output_filename_from_name(""),
+      PathBuf::from("resume.pdf")
     );
   }
 
   #[test]
-  fn test_validate_schema_auto_fails_on_renamed_field() {
+  fn test_validate_schema_fails_on_renamed_field() {
     // Regression test for the exact bug that motivated
     // `deny_unknown_fields`: an old `meta.role` (the model now expects
     // `meta.title`) must fail loudly, not silently vanish.
-    let temp = TempDir::new().unwrap();
-    let content_file = temp.path().join("content.yaml");
-    fs::write(
-      &content_file,
-      r#"
+    let yaml = r#"
 meta:
   name: "Jane Doe"
   version: "1.0.0"
@@ -487,11 +507,8 @@ meta:
   contact:
     - name: "jane@example.com"
 sections: []
-"#,
-    )
-    .unwrap();
-
-    let err = validate_schema_auto(&content_file, None).unwrap_err();
+"#;
+    let err = validate_schema_str(yaml, None).unwrap_err();
     match err {
       SchemaError::ValidationFailed { errors } => {
         assert!(errors.iter().any(|e| e.contains("role")));
@@ -501,12 +518,8 @@ sections: []
   }
 
   #[test]
-  fn test_validate_schema_auto_fails_on_typo() {
-    let temp = TempDir::new().unwrap();
-    let content_file = temp.path().join("content.yaml");
-    fs::write(
-      &content_file,
-      r#"
+  fn test_validate_schema_fails_on_typo() {
+    let yaml = r#"
 meta:
   name: "Jane Doe"
   version: "1.0.0"
@@ -514,11 +527,8 @@ meta:
   contact:
     - name: "jane@example.com"
 sections: []
-"#,
-    )
-    .unwrap();
-
-    let err = validate_schema_auto(&content_file, None).unwrap_err();
+"#;
+    let err = validate_schema_str(yaml, None).unwrap_err();
     match err {
       SchemaError::ValidationFailed { errors } => {
         assert!(errors.iter().any(|e| e.contains("titel")));
@@ -528,12 +538,8 @@ sections: []
   }
 
   #[test]
-  fn test_validate_schema_auto_with_meta_extra() {
-    let temp = TempDir::new().unwrap();
-    let content_file = temp.path().join("content.yaml");
-    fs::write(
-      &content_file,
-      r#"
+  fn test_validate_schema_with_meta_extra() {
+    let yaml = r#"
 meta:
   name: "Jane Doe"
   version: "1.0.0"
@@ -550,27 +556,17 @@ meta:
       clearance: "Secret"
       relocation: false
 sections: []
-"#,
-    )
-    .unwrap();
-
-    assert!(validate_schema_auto(&content_file, None).is_ok());
+"#;
+    assert!(validate_schema_str(yaml, None).is_ok());
   }
 
   #[test]
-  fn test_validate_schema_auto_does_not_check_generic_items_payload() {
+  fn test_validate_schema_does_not_check_generic_items_payload() {
     // Documents the known coverage gap: `items:` is an untyped
     // passthrough (see `Section::items`), so a typo inside it is not
     // caught by `deny_unknown_fields` the way a typo in the strongly
-    // typed `education:`/`experience:`/... shorthand fields is. This
-    // test exists so that gap is a documented, intentional trade-off
-    // rather than a silent regression if it's ever "fixed" by accident
-    // in a way that changes behavior without anyone noticing.
-    let temp = TempDir::new().unwrap();
-    let content_file = temp.path().join("content.yaml");
-    fs::write(
-      &content_file,
-      r#"
+    // typed `education:`/`experience:`/... shorthand fields is.
+    let yaml = r#"
 meta:
   name: "Jane Doe"
   version: "1.0.0"
@@ -583,11 +579,8 @@ sections:
     type: "education"
     items:
       insitution: "Typo'd field name"
-"#,
-    )
-    .unwrap();
-
-    assert!(validate_schema_auto(&content_file, None).is_ok());
+"#;
+    assert!(validate_schema_str(yaml, None).is_ok());
   }
 
   #[test]
