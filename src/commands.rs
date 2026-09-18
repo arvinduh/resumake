@@ -6,7 +6,7 @@ pub(crate) mod release;
 pub(crate) mod template;
 pub(crate) mod update;
 
-use crate::cli::{Commands, TemplateCommands};
+use crate::cli::Commands;
 use crate::commands::init::InitOptions;
 use crate::engine::templates;
 use crate::error::ResumakeError;
@@ -19,71 +19,54 @@ pub fn execute_command(
   match command {
     Commands::Build {
       content,
-      check,
-      watch,
       template,
-      source,
       output,
       schema,
       font_path,
     } => {
       let template_name =
         template.as_deref().unwrap_or(templates::DEFAULT_TEMPLATE);
-      match (watch, check) {
-        (true, true) => build::run_check_watch(
-          &content,
-          template_name,
-          source.as_deref(),
-          schema.as_deref(),
-          font_path.as_deref(),
-          quiet,
-        ),
-        (true, false) => build::run_watch(
-          &content,
-          template_name,
-          source.as_deref(),
-          output.as_deref(),
-          schema.as_deref(),
-          font_path.as_deref(),
-          quiet,
-        ),
-        (false, true) => build::run_check(
-          &content,
-          template_name,
-          source.as_deref(),
-          schema.as_deref(),
-          font_path.as_deref(),
-          quiet,
-        ),
-        (false, false) => build::run_build(
-          &content,
-          template_name,
-          source.as_deref(),
-          output.as_deref(),
-          schema.as_deref(),
-          font_path.as_deref(),
-          quiet,
-        ),
-      }
+      build::run_build(
+        &content,
+        template_name,
+        output.as_deref(),
+        schema.as_deref(),
+        font_path.as_deref(),
+        quiet,
+      )
+    }
+    Commands::Check {
+      content,
+      template,
+      schema,
+      font_path,
+    } => {
+      let template_name =
+        template.as_deref().unwrap_or(templates::DEFAULT_TEMPLATE);
+      build::run_check(
+        &content,
+        template_name,
+        schema.as_deref(),
+        font_path.as_deref(),
+        quiet,
+      )
     }
     Commands::Init {
       dest,
       name,
-      output,
       force,
       no_git,
       no_workflows,
-      update,
+      workflows,
     } => {
-      let resolved_output =
-        init::resolve_init_output(dest.as_deref(), output.as_deref());
+      let resolved_output = init::resolve_init_output(dest.as_deref());
       init::run_init(InitOptions {
         name: name.as_deref(),
         output: &resolved_output,
         force,
         no_git,
         no_workflows,
-        update,
+        workflows,
         quiet,
       })
       .map_err(Into::into)
@@ -101,14 +84,26 @@ pub fn execute_command(
       quiet,
     )
     .map_err(Into::into),
-    Commands::Template(args) => match args.command {
-      TemplateCommands::List => template::run_template_list(),
-      TemplateCommands::Eject { name, force } => {
+    Commands::Template { name, list, force } => {
+      if list {
+        template::run_template_list()
+      } else if let Some(name) = name {
         template::run_template_eject(&name, force, quiet)
+      } else {
+        println!("Usage: rsmk template [NAME] [--list] [--force]\n\nRun `rsmk template --help` for more information.");
+        Ok(())
       }
-    },
+    }
     Commands::Update { check, force } => {
       update::run_update(check, force, quiet).map_err(Into::into)
+    }
+    Commands::Schema { output } => {
+      let schema_str = crate::schema::export_builtin_schema(output.as_deref())
+        .map_err(ResumakeError::from)?;
+      if output.is_none() {
+        println!("{schema_str}");
+      }
+      Ok(())
     }
   }
 }

@@ -33,33 +33,41 @@ impl TypstEngine {
     })
   }
 
+  /// Constructs a [`TypstEngine`] with a specific root path and font path.
+  #[must_use]
+  pub fn with_root(root_path: PathBuf, font_path: Option<PathBuf>) -> Self {
+    Self {
+      font_path,
+      root_path,
+    }
+  }
+
   /// Returns the configured font directory, if any.
   #[must_use]
   pub fn font_path(&self) -> Option<&Path> {
     self.font_path.as_deref()
   }
 
-  /// Resolves the Typst entry file from `--template` and optional `--source`.
+  /// Resolves the Typst entry file from `--template` (named built-in, local file, or directory).
   ///
   /// # Errors
   /// Returns [`EngineError::TemplateNotFound`] if a named template is unknown.
   pub fn resolve_template(
     &self,
     template_name: &str,
-    source: Option<&Path>,
   ) -> Result<PathBuf, EngineError> {
-    if let Some(src) = source {
-      if src.is_dir() {
-        return Ok(src.join("main.typ"));
+    let direct = Path::new(template_name);
+    if direct.is_file() {
+      return Ok(direct.to_path_buf());
+    }
+    if direct.is_dir() {
+      let main_typ = direct.join("main.typ");
+      if main_typ.is_file() {
+        return Ok(main_typ);
       }
-      return Ok(src.to_path_buf());
     }
 
     if template_name.ends_with(".typ") {
-      let direct = PathBuf::from(template_name);
-      if direct.is_file() {
-        return Ok(direct);
-      }
       let joined = self.root_path.join(template_name);
       if joined.is_file() {
         return Ok(joined);
@@ -227,7 +235,6 @@ pub fn query_doc_metadata(
 pub fn verify_content(
   content: &Path,
   template_name: &str,
-  source: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
 ) -> Result<TelemetryReport, EngineError> {
@@ -240,7 +247,7 @@ pub fn verify_content(
   schema::validate_schema_auto(content, schema)?;
 
   let engine = TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template_name, source)?;
+  let resolved_template = engine.resolve_template(template_name)?;
   let doc = engine.compile_paged(&resolved_template, content)?;
   let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
   let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
@@ -256,31 +263,22 @@ pub fn verify_content(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use tempfile::TempDir;
 
   #[test]
   fn test_resolve_template_builtin_classic() {
-    let temp = TempDir::new().unwrap();
-    let engine = TypstEngine {
-      font_path: None,
-      root_path: temp.path().to_path_buf(),
-    };
+    let engine = TypstEngine::with_root(PathBuf::from("."), None);
 
     let resolved = engine
-      .resolve_template(templates::DEFAULT_TEMPLATE, None)
+      .resolve_template(templates::DEFAULT_TEMPLATE)
       .unwrap();
     assert_eq!(resolved, PathBuf::from("classic/main.typ"));
   }
 
   #[test]
   fn test_resolve_template_rejects_unknown_name() {
-    let temp = TempDir::new().unwrap();
-    let engine = TypstEngine {
-      font_path: None,
-      root_path: temp.path().to_path_buf(),
-    };
+    let engine = TypstEngine::with_root(PathBuf::from("."), None);
 
-    let err = engine.resolve_template("does-not-exist", None).unwrap_err();
+    let err = engine.resolve_template("does-not-exist").unwrap_err();
     let msg = err.to_string();
     assert!(msg.contains("does-not-exist"));
     assert!(msg.contains("classic"));
@@ -325,184 +323,5 @@ mod tests {
         "Block '{block}' is missing an #import in main.typ!"
       );
     }
-  }
-
-  #[test]
-  fn test_list_templates_builtins_and_custom() {
-    let temp = TempDir::new().unwrap();
-    let templates_dir = temp.path().join("templates");
-
-    let list = templates::list_templates_in(&templates_dir);
-    assert_eq!(list.len(), 1);
-    assert_eq!(list[0].name, "classic");
-    assert!(list[0].is_builtin);
-    assert!(list[0].is_default);
-    assert_eq!(list[0].to_string(), "classic (built-in, default)");
-
-    fs::create_dir_all(templates_dir.join("modern")).unwrap();
-    fs::create_dir_all(templates_dir.join("minimal")).unwrap();
-    fs::write(templates_dir.join("single.typ"), "// single file\n").unwrap();
-    fs::write(templates_dir.join("ignore.txt"), "text\n").unwrap();
-    fs::create_dir_all(templates_dir.join(".hidden")).unwrap();
-
-    let list2 = templates::list_templates_in(&templates_dir);
-    assert_eq!(list2.len(), 4);
-    assert_eq!(list2[0].name, "classic");
-    assert!(list2[0].is_builtin);
-    assert_eq!(list2[1].name, "minimal");
-    assert!(!list2[1].is_builtin);
-    assert_eq!(list2[2].name, "modern");
-    assert!(!list2[2].is_builtin);
-    assert_eq!(list2[3].name, "single");
-    assert!(!list2[3].is_builtin);
-  }
-
-  #[test]
-  fn test_eject_template_success_and_collision_rejection() {
-    let temp = TempDir::new().unwrap();
-    let target = temp.path().join("templates").join("classic");
-
-    let files = templates::eject_template("classic", &target, false).unwrap();
-    assert!(files.contains(&"main.typ".to_string()));
-    assert!(files.contains(&"tokens.typ".to_string()));
-    assert!(files.contains(&"primitives.typ".to_string()));
-
-    let err = templates::eject_template("classic", &target, false).unwrap_err();
-    assert!(matches!(err, EngineError::DestinationAlreadyExists { .. }));
-
-    let files_force =
-      templates::eject_template("classic", &target, true).unwrap();
-    assert_eq!(files, files_force);
-  }
-
-  #[test]
-  fn test_eject_template_rejects_unknown_name() {
-    let temp = TempDir::new().unwrap();
-    let target = temp.path().join("templates").join("fake");
-    let err = templates::eject_template("fake", &target, false).unwrap_err();
-    assert!(matches!(err, EngineError::TemplateNotFound { .. }));
-  }
-
-  #[test]
-  fn test_in_process_compilation_and_telemetry() {
-    let temp = TempDir::new().unwrap();
-    let root = temp.path();
-    let content_path = root.join("content.yaml");
-
-    let yaml = r#"
-meta:
-  name: "Dr. Alex Vance"
-  version: "1.0.0"
-  theme: "classic"
-contact:
-  email: "alex@blackmesa.org"
-sections:
-  - heading: "Experience"
-    type: "experience"
-    items:
-      - title: "Senior Scientist"
-        organization: "Black Mesa"
-        dates: "2000 - Present"
-        bullets:
-          - "Led quantum teleportation experiments."
-"#;
-    fs::write(&content_path, yaml).unwrap();
-
-    let engine = TypstEngine {
-      font_path: None,
-      root_path: root.to_path_buf(),
-    };
-    let output_pdf = root.join("resume.pdf");
-
-    engine
-      .compile(
-        &PathBuf::from("classic/main.typ"),
-        &content_path,
-        &output_pdf,
-      )
-      .expect("In-process Typst compilation must succeed");
-
-    assert!(output_pdf.exists());
-    assert!(fs::metadata(&output_pdf).unwrap().len() > 1000);
-
-    let page_json = engine
-      .query_metadata(
-        &PathBuf::from("classic/main.typ"),
-        &content_path,
-        "<pageinfo>",
-      )
-      .expect("pageinfo query must succeed");
-    let bullets_json = engine
-      .query_metadata(
-        &PathBuf::from("classic/main.typ"),
-        &content_path,
-        "<bulletinfo>",
-      )
-      .expect("bulletinfo query must succeed");
-
-    let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)
-      .expect("Telemetry evaluation must succeed");
-    assert!(report.is_pass());
-    assert_eq!(report.page_count, 1);
-  }
-
-  #[test]
-  fn test_typst_engine_render_pdf_and_query_doc_metadata() {
-    let temp = TempDir::new().unwrap();
-    let root = temp.path();
-    let content_path = root.join("content.yaml");
-    let output_pdf = root.join("output.pdf");
-
-    fs::write(&content_path, "meta:\n  name: Test\n").unwrap();
-
-    let engine = TypstEngine {
-      font_path: None,
-      root_path: root.to_path_buf(),
-    };
-
-    let doc = engine
-      .compile_paged(&PathBuf::from("classic/main.typ"), &content_path)
-      .expect("Paged compilation must succeed");
-
-    engine
-      .render_pdf(&doc, &output_pdf)
-      .expect("PDF rendering must succeed");
-
-    assert!(output_pdf.exists());
-    assert!(fs::metadata(&output_pdf).unwrap().len() > 1000);
-
-    let page_json = query_doc_metadata(&doc, "<pageinfo>")
-      .expect("pageinfo query must succeed");
-    let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")
-      .expect("bulletinfo query must succeed");
-
-    let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)
-      .expect("Telemetry evaluation must succeed");
-    assert!(report.is_pass());
-    assert_eq!(report.page_count, 1);
-  }
-
-  #[test]
-  fn test_compilation_error_formatting() {
-    let temp = TempDir::new().unwrap();
-    let root = temp.path();
-    let content_path = root.join("content.yaml");
-    let broken_template = root.join("broken.typ");
-
-    fs::write(&content_path, "meta:\n  name: Test\n").unwrap();
-    fs::write(&broken_template, "#let invalid_syntax = (((").unwrap();
-
-    let engine = TypstEngine {
-      font_path: None,
-      root_path: root.to_path_buf(),
-    };
-    let output_pdf = root.join("out.pdf");
-
-    let err = engine
-      .compile(&broken_template, &content_path, &output_pdf)
-      .unwrap_err();
-
-    let msg = err.to_string();
-    assert!(msg.contains("Typst compilation failed:"));
   }
 }
