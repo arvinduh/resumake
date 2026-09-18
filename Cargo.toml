@@ -72,7 +72,6 @@ typst-kit = { version = "0.13", default-features = false, features = [
 assert_cmd = "2.0"
 predicates = "3.1"
 tempfile = "3.16"
-similar = "3.2"
 
 [profile.release]
 opt-level = 3

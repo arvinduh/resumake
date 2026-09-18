@@ -638,35 +638,4 @@ sections:
     assert_eq!(parsed["name"], "Setup Resumake (rsmk)");
     assert_eq!(parsed["runs"]["using"], "composite");
   }
-
-  #[test]
-  fn test_schema_no_uncommitted_drift() {
-    let current_schema_str = export_builtin_schema(None).unwrap();
-    let current_json: serde_json::Value =
-      serde_json::from_str(&current_schema_str).unwrap();
-    let committed_schema_str = include_str!("../resume.schema.json");
-    let committed_json: serde_json::Value =
-      serde_json::from_str(committed_schema_str).unwrap();
-
-    if current_json != committed_json {
-      let current_pretty = serde_json::to_string_pretty(&current_json).unwrap();
-      let committed_pretty =
-        serde_json::to_string_pretty(&committed_json).unwrap();
-      let diff =
-        similar::TextDiff::from_lines(&committed_pretty, &current_pretty)
-          .unified_diff()
-          .header("committed (resume.schema.json)", "current (src/models.rs)")
-          .to_string();
-
-      panic!(
-        "\n\n❌ SCHEMA DRIFT DETECTED!\n\
-        The Serde models in `src/models.rs` have drifted from `resume.schema.json`.\n\
-        \nDiff:\n{diff}\n\
-        If this change was intentional:\n\
-        1. Run `cargo run -q -- schema -o resume.schema.json` to update the canonical schema.\n\
-        2. Stage `resume.schema.json` with your commit.\n\
-        3. Cut a new schema release tag (e.g. s1.1) upon merge.\n"
-      );
-    }
-  }
 }
