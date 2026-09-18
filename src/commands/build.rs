@@ -1,4 +1,4 @@
-//! Handlers for `rsmk build` and check mode.
+//! Handlers for `rsmk build` and `rsmk check`.
 
 use crate::engine;
 use crate::engine::error::EngineError;
@@ -13,7 +13,6 @@ use std::path::Path;
 fn compile_and_evaluate(
   content: &Path,
   template_name: &str,
-  source: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
   output_pdf: Option<&Path>,
@@ -33,7 +32,7 @@ fn compile_and_evaluate(
 
   // 2. Resolve paths and compile document once in-memory
   let engine = TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template_name, source)?;
+  let resolved_template = engine.resolve_template(template_name)?;
   let doc = engine.compile_paged(&resolved_template, content)?;
 
   // 3. Render PDF directly from the in-memory document if requested
@@ -71,7 +70,6 @@ fn compile_and_evaluate(
 pub(crate) fn run_build(
   content: &Path,
   template_name: &str,
-  source: Option<&Path>,
   output: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
@@ -84,7 +82,6 @@ pub(crate) fn run_build(
   compile_and_evaluate(
     content,
     template_name,
-    source,
     schema,
     font_path,
     Some(&output_pdf),
@@ -92,24 +89,15 @@ pub(crate) fn run_build(
   )
 }
 
-/// Runs `rsmk build --check` to verify schema and layout geometry without generating a PDF.
+/// Runs `rsmk check` to verify schema and layout geometry without generating a PDF.
 pub(crate) fn run_check(
   content: &Path,
   template_name: &str,
-  source: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
   quiet: bool,
 ) -> Result<(), ResumakeError> {
-  compile_and_evaluate(
-    content,
-    template_name,
-    source,
-    schema,
-    font_path,
-    None,
-    quiet,
-  )?;
+  compile_and_evaluate(content, template_name, schema, font_path, None, quiet)?;
 
   if !quiet {
     ui::print_success(

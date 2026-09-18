@@ -21,8 +21,8 @@ pub(crate) struct InitOptions<'a> {
   pub no_git: bool,
   /// Whether to skip GitHub Actions workflow scaffolding.
   pub no_workflows: bool,
-  /// Whether to update GitHub Actions workflow files.
-  pub update: bool,
+  /// Whether to create or update GitHub Actions workflow files.
+  pub workflows: bool,
   /// Suppress informational console output.
   pub quiet: bool,
 }
@@ -51,20 +51,12 @@ fn looks_like_file(path: &Path) -> bool {
 }
 
 /// Resolves the effective content-file path for `rsmk init` from the optional
-/// positional destination and the optional `--output` flag (which are mutually
-/// exclusive at the CLI layer).
+/// positional destination.
 ///
-/// - Neither given: `content.yaml` in the current directory.
-/// - `--output <path>`: used verbatim.
+/// - None: `content.yaml` in the current directory.
 /// - positional `<dest>`: a directory-like value scaffolds `<dest>/content.yaml`;
 ///   a `*.yaml` value is used verbatim as the file path.
-pub(crate) fn resolve_init_output(
-  dest: Option<&Path>,
-  output: Option<&Path>,
-) -> PathBuf {
-  if let Some(output) = output {
-    return output.to_path_buf();
-  }
+pub(crate) fn resolve_init_output(dest: Option<&Path>) -> PathBuf {
   match dest {
     None => PathBuf::from("content.yaml"),
     Some(dest) if looks_like_file(dest) => dest.to_path_buf(),
@@ -426,7 +418,7 @@ pub(crate) fn check_workflow_version_skew(
 
   for pinned in skew_versions {
     eprintln!(
-      "warning: Repository workflows pin rsmk {pinned}, but your local binary is {local_version}.\n         Layout telemetry may measure geometry differently in CI.\n         Run `rsmk init --update` to synchronize your workflow pin."
+      "warning: Repository workflows pin rsmk {pinned}, but your local binary is {local_version}.\n         Layout telemetry may measure geometry differently in CI.\n         Run `rsmk init --workflows` to synchronize your workflow pin."
     );
   }
 }
@@ -444,7 +436,7 @@ pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
     .filter(|p| !p.as_os_str().is_empty())
     .unwrap_or(Path::new("."));
 
-  if opts.update {
+  if opts.workflows {
     return update_workflows(base_dir, opts.force, opts.quiet);
   }
 
@@ -506,11 +498,11 @@ pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
 
   // GitHub Actions workflows only make sense inside a repository, so they are
   // scaffolded only when a git repo is being set up. A workspace created with
-  // --no-git can add them later with `rsmk init --update`.
+  // --no-git can add them later with `rsmk init --workflows`.
   if opts.no_git {
     if !opts.no_workflows && !opts.quiet {
       ui::print_info(
-        "Skipping GitHub Actions workflows (--no-git). Run `rsmk init --update` \
+        "Skipping GitHub Actions workflows (--no-git). Run `rsmk init --workflows` \
          from the project directory to add CI/Release workflows later.",
       );
     }
@@ -545,21 +537,18 @@ mod tests {
 
   #[test]
   fn test_resolve_init_output() {
+    assert_eq!(resolve_init_output(None), PathBuf::from("content.yaml"));
     assert_eq!(
-      resolve_init_output(None, None),
-      PathBuf::from("content.yaml")
-    );
-    assert_eq!(
-      resolve_init_output(None, Some(Path::new("custom.yaml"))),
+      resolve_init_output(Some(Path::new("custom.yaml"))),
       PathBuf::from("custom.yaml")
     );
     assert_eq!(
-      resolve_init_output(Some(Path::new("custom_resume")), None),
+      resolve_init_output(Some(Path::new("custom_resume"))),
       PathBuf::from("custom_resume/content.yaml")
     );
     assert_eq!(
-      resolve_init_output(Some(Path::new("custom.yaml")), None),
-      PathBuf::from("custom.yaml")
+      resolve_init_output(Some(Path::new("dir/nested.yml"))),
+      PathBuf::from("dir/nested.yml")
     );
   }
 

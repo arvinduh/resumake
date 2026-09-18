@@ -591,7 +591,7 @@ sections:
     assert!(default_ci.contains(env!("CARGO_PKG_VERSION")));
     assert!(default_ci.contains("uses: actions/checkout@v4"));
     assert!(default_ci.contains("uses: arvinduh/resumake/setup@v1"));
-    assert!(default_ci.contains("run: rsmk build --check"));
+    assert!(default_ci.contains("run: rsmk check"));
 
     // Ensure it is valid YAML
     let parsed: serde_yaml::Value = serde_yaml::from_str(&default_ci).unwrap();

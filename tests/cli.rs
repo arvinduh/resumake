@@ -26,7 +26,6 @@ fn test_cli_init_scaffolds_content() {
     .arg("init")
     .arg("--name")
     .arg("Jane Doe")
-    .arg("--output")
     .arg(&content_file)
     .assert()
     .success()
@@ -121,7 +120,7 @@ fn test_cli_init_no_git() {
 }
 
 #[test]
-fn test_cli_init_no_git_then_add_workflows_via_update() {
+fn test_cli_init_no_git_then_add_workflows_via_workflows_flag() {
   let temp = TempDir::new().unwrap();
 
   Command::cargo_bin("rsmk")
@@ -138,7 +137,7 @@ fn test_cli_init_no_git_then_add_workflows_via_update() {
     .unwrap()
     .current_dir(temp.path())
     .arg("init")
-    .arg("--update")
+    .arg("--workflows")
     .assert()
     .success();
 
@@ -237,18 +236,25 @@ fn test_cli_init_positional_directory_destination() {
 }
 
 #[test]
-fn test_cli_init_positional_and_output_conflict() {
+fn test_cli_init_positional_file_destination() {
   let temp = TempDir::new().unwrap();
+  let custom_yaml = temp.path().join("my_resume.yaml");
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
     .arg("init")
-    .arg("some_dir")
-    .arg("--output")
-    .arg("content.yaml")
+    .arg(&custom_yaml)
+    .arg("--name")
+    .arg("Arvin Duh")
+    .arg("--no-git")
+    .arg("--no-workflows")
     .assert()
-    .failure()
-    .stderr(predicate::str::contains("cannot be used with"));
+    .success();
+
+  assert!(custom_yaml.exists());
+  assert!(fs::read_to_string(&custom_yaml)
+    .unwrap()
+    .contains("Arvin Duh"));
 }
 
 #[test]
@@ -305,7 +311,6 @@ fn test_cli_init_then_build_succeeds_end_to_end() {
     .arg("init")
     .arg("--name")
     .arg("Jane Doe")
-    .arg("--output")
     .arg(&content_file)
     .assert()
     .success();
@@ -313,9 +318,7 @@ fn test_cli_init_then_build_succeeds_end_to_end() {
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
-    .arg("build")
-    .arg("--check")
-    .arg("--content")
+    .arg("check")
     .arg(&content_file)
     .assert()
     .success()
@@ -330,9 +333,7 @@ fn test_cli_check_detects_invalid_yaml() {
 
   let mut cmd = Command::cargo_bin("rsmk").unwrap();
   cmd
-    .arg("build")
-    .arg("--check")
-    .arg("--content")
+    .arg("check")
     .arg(&invalid_file)
     .assert()
     .failure()
@@ -364,9 +365,7 @@ sections: []
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
-    .arg("build")
-    .arg("--check")
-    .arg("--content")
+    .arg("check")
     .arg(&content_file)
     .assert()
     .failure()
@@ -398,9 +397,7 @@ sections: []
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
-    .arg("build")
-    .arg("--check")
-    .arg("--content")
+    .arg("check")
     .arg(&content_file)
     .assert()
     .success()
@@ -415,7 +412,7 @@ fn test_cli_template_list() {
   cmd
     .current_dir(temp.path())
     .arg("template")
-    .arg("list")
+    .arg("--list")
     .assert()
     .success()
     .stdout(predicate::str::contains("Available templates:"))
@@ -429,7 +426,7 @@ fn test_cli_template_list() {
   cmd2
     .current_dir(temp.path())
     .arg("template")
-    .arg("list")
+    .arg("--list")
     .assert()
     .success()
     .stdout(predicate::str::contains("classic (built-in, default)"))
@@ -444,7 +441,6 @@ fn test_cli_template_eject_classic() {
   cmd
     .current_dir(temp.path())
     .arg("template")
-    .arg("eject")
     .arg("classic")
     .assert()
     .success()
@@ -475,7 +471,6 @@ fn test_cli_template_eject_collision_without_force() {
     .unwrap()
     .current_dir(temp.path())
     .arg("template")
-    .arg("eject")
     .arg("classic")
     .assert()
     .success();
@@ -485,7 +480,6 @@ fn test_cli_template_eject_collision_without_force() {
     .unwrap()
     .current_dir(temp.path())
     .arg("template")
-    .arg("eject")
     .arg("classic")
     .assert()
     .failure()
@@ -497,7 +491,6 @@ fn test_cli_template_eject_collision_without_force() {
     .unwrap()
     .current_dir(temp.path())
     .arg("template")
-    .arg("eject")
     .arg("classic")
     .arg("--force")
     .assert()
@@ -513,7 +506,6 @@ fn test_cli_template_eject_unknown_template() {
     .unwrap()
     .current_dir(temp.path())
     .arg("template")
-    .arg("eject")
     .arg("nonexistent")
     .assert()
     .failure()
@@ -532,7 +524,6 @@ fn test_cli_build_and_check_flags_integration() {
     .arg("init")
     .arg("--name")
     .arg("Jane Doe")
-    .arg("--output")
     .arg(&content_file)
     .assert()
     .success();
@@ -542,7 +533,6 @@ fn test_cli_build_and_check_flags_integration() {
     .unwrap()
     .current_dir(temp.path())
     .arg("build")
-    .arg("--content")
     .arg(&content_file)
     .arg("--output")
     .arg(&output_pdf)
@@ -552,46 +542,30 @@ fn test_cli_build_and_check_flags_integration() {
 
   assert!(output_pdf.exists());
 
-  // 3. rsmk build --check
+  // 3. rsmk check
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
-    .arg("build")
-    .arg("--check")
-    .arg("--content")
+    .arg("check")
     .arg(&content_file)
     .assert()
     .success()
     .stdout(predicate::str::contains("[dry-run: no PDF written]"))
     .stdout(predicate::str::contains("Dry-run check passed"));
 
-  // 4. rsmk build -c
+  // 4. rsmk build --template classic
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
     .arg("build")
-    .arg("-c")
-    .arg("--content")
     .arg(&content_file)
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("[dry-run: no PDF written]"))
-    .stdout(predicate::str::contains("Dry-run check passed"));
-
-  // 5. rsmk build --template classic
-  Command::cargo_bin("rsmk")
-    .unwrap()
-    .current_dir(temp.path())
-    .arg("build")
     .arg("--template")
     .arg("classic")
-    .arg("--content")
-    .arg(&content_file)
     .assert()
     .success()
     .stdout(predicate::str::contains("SUCCESS"));
 
-  // 6. Bare rsmk with no subcommand defaults to build
+  // 5. Bare rsmk with no subcommand defaults to build
   Command::cargo_bin("rsmk")
     .unwrap()
     .current_dir(temp.path())
@@ -1088,7 +1062,7 @@ fn test_cli_release_version_skew_warning() {
       "Layout telemetry may measure geometry differently in CI."
     ))
     .stderr(predicate::str::contains(
-      "Run `rsmk init --update` to synchronize your workflow pin."
+      "Run `rsmk init --workflows` to synchronize your workflow pin."
     ));
 }
 

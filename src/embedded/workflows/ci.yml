@@ -9,4 +9,4 @@ jobs:
       - uses: arvinduh/resumake/setup@v1
         with:
           version: "RSMK_VERSION"
-      - run: rsmk build --check
+      - run: rsmk check

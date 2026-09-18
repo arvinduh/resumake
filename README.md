@@ -187,27 +187,29 @@ Every compile checks golden-ratio layout geometry:
 
 ```bash
 # Compilation & Telemetry
-rsmk build                      # Compile PDF and evaluate layout geometry
-rsmk build -c, --check          # Dry-run validation (no PDF written)
-rsmk build -t, --template <TPL> # Built-in template name (default: 'classic') or path
+rsmk build [CONTENT]            # Compile PDF and evaluate layout geometry (defaults to content.yaml)
+rsmk build -t, --template <TPL> # Built-in template name, local directory, or .typ file
 rsmk build -o, --output <PDF>   # Custom output PDF path
 
+# Validation
+rsmk check [CONTENT]            # Verify schema & single-page layout geometry without writing PDF
+
 # Project Scaffolding
-rsmk init                       # Interactive initialization wizard
-rsmk init <DEST>                # Scaffold into a directory
+rsmk init [DEST]                # Scaffold into current directory, target folder, or custom YAML file
 rsmk init --name <NAME>         # Scaffold with specific candidate name
-rsmk init --no-git              # Scaffold content.yaml only (no git repo / workflows)
-rsmk init -u, --update          # Add or refresh workflow stubs
+rsmk init --no-git              # Scaffold content.yaml only (skip git repo and workflows)
+rsmk init --workflows           # Add or refresh workflow stubs (alias: --update)
 rsmk init -f, --force           # Overwrite existing files
 
 # Résumé Release
-rsmk release                    # Pre-flight assertions + tag meta.version + push
+rsmk release [CONTENT]          # Pre-flight assertions + tag meta.version + push
 rsmk release --dry-run          # Test pre-flight assertions without tagging
 rsmk release -m <MESSAGE>       # Custom annotated tag message
 
 # Template Management
-rsmk template list              # List built-in and local custom templates
-rsmk template eject classic     # Extract template tree to ./templates/classic/
+rsmk template --list            # List built-in and local custom templates
+rsmk template <NAME>            # Eject template tree to ./templates/<NAME>/
+rsmk template <NAME> -f, --force# Overwrite existing ejected template directory
 
 # Binary Self-Update
 rsmk update                     # In-place update to the latest release
@@ -216,7 +218,7 @@ rsmk update -f, --force         # Force reinstallation of latest release
 
 # Schema (Tooling & Offline IDEs)
 rsmk schema                     # Print canonical JSON Schema to stdout
-rsmk schema -o <PATH>           # Export schema to a local file
+rsmk schema -o, --output <PATH> # Export schema to a local file
 ```
 
 ---

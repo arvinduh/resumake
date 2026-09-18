@@ -168,12 +168,9 @@ pub(crate) fn run_release(
 
   // Pre-flight check 4: Build / layout check
   if !skip_build {
-    engine::verify_content(content_path, DEFAULT_TEMPLATE, None, None, None)?;
+    engine::verify_content(content_path, DEFAULT_TEMPLATE, None, None)?;
     if !quiet {
-      println!(
-        "  {} pre-flight check passed (rsmk build --check)",
-        "✓".green()
-      );
+      println!("  {} pre-flight check passed (rsmk check)", "✓".green());
     }
   } else if !quiet {
     println!("  {} pre-flight check skipped (--skip-build)", "✓".green());

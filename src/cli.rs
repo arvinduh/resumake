@@ -29,50 +29,54 @@ pub enum Commands {
   /// Compile résumé to PDF and verify layout telemetry
   Build {
     /// Path to content YAML file
-    #[arg(long = "content", default_value = "content.yaml")]
+    #[arg(value_name = "CONTENT", default_value = "content.yaml")]
     content: PathBuf,
 
-    /// Dry-run verification mode (evaluates schema + telemetry without generating a PDF output)
-    #[arg(short, long)]
-    check: bool,
-
-    /// Named built-in layout to render with or path to template
+    /// Named built-in layout, local template directory, or .typ file to render with
     #[arg(short, long)]
     template: Option<String>,
 
-    /// Path to a custom Typst template file, bypassing the built-in
-    /// registry entirely
-    #[arg(short = 's', long = "source")]
-    source: Option<PathBuf>,
-
     /// Custom output PDF path (defaults to `<name>_resume.pdf`)
-    #[arg(short = 'o', long = "output")]
+    #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Path to custom JSON schema file (falls back to built-in schema if
-    /// omitted)
-    #[arg(long = "schema")]
+    /// Path to custom JSON schema file (falls back to built-in schema if omitted)
+    #[arg(long)]
     schema: Option<PathBuf>,
 
     /// Custom font directory (auto-detects ./fonts if present)
-    #[arg(long = "font-path")]
+    #[arg(long)]
+    font_path: Option<PathBuf>,
+  },
+  /// Verify schema and single-page layout geometry without generating a PDF
+  Check {
+    /// Path to content YAML file
+    #[arg(value_name = "CONTENT", default_value = "content.yaml")]
+    content: PathBuf,
+
+    /// Named built-in layout, local template directory, or .typ file to render with
+    #[arg(short, long)]
+    template: Option<String>,
+
+    /// Path to custom JSON schema file (falls back to built-in schema if omitted)
+    #[arg(long)]
+    schema: Option<PathBuf>,
+
+    /// Custom font directory (auto-detects ./fonts if present)
+    #[arg(long)]
     font_path: Option<PathBuf>,
   },
   /// Scaffold a new résumé workspace with rich examples, workflows, and git config
   Init {
     /// Destination for the scaffold: a directory (creates it and writes
     /// `content.yaml` inside) or an explicit `*.yaml` file path. Defaults to
-    /// `content.yaml` in the current directory. Conflicts with `--output`.
-    #[arg(value_name = "DEST", conflicts_with = "output")]
+    /// `content.yaml` in the current directory.
+    #[arg(value_name = "DEST")]
     dest: Option<PathBuf>,
 
     /// Candidate display name
     #[arg(short, long)]
     name: Option<String>,
-
-    /// Destination path for the new content file
-    #[arg(short, long)]
-    output: Option<PathBuf>,
 
     /// Overwrite destination file if it already exists
     #[arg(short, long)]
@@ -80,7 +84,7 @@ pub enum Commands {
 
     /// Skip initializing a git repository and git config files (also skips
     /// GitHub Actions workflows, which require a repo; add them later with
-    /// `rsmk init --update`)
+    /// `rsmk init --workflows`)
     #[arg(long)]
     no_git: bool,
 
@@ -89,13 +93,13 @@ pub enum Commands {
     no_workflows: bool,
 
     /// Create or refresh GitHub Actions workflows without modifying content.yaml
-    #[arg(short, long)]
-    update: bool,
+    #[arg(long, visible_alias = "update")]
+    workflows: bool,
   },
   /// Validate repository state, verify semver, and cut a new release tag
   Release {
     /// Path to content YAML file
-    #[arg(short, long, default_value = "content.yaml")]
+    #[arg(value_name = "CONTENT", default_value = "content.yaml")]
     content: PathBuf,
 
     /// Optional release message for the annotated git tag
@@ -106,12 +110,24 @@ pub enum Commands {
     #[arg(long)]
     dry_run: bool,
 
-    /// Skip compilation and telemetry pre-flight check (rsmk build --check)
+    /// Skip compilation and telemetry pre-flight check (rsmk check)
     #[arg(long)]
     skip_build: bool,
   },
   /// Manage and eject résumé layout templates
-  Template(TemplateArgs),
+  Template {
+    /// Name of the template to eject (e.g. `classic`)
+    #[arg(value_name = "NAME", conflicts_with = "list")]
+    name: Option<String>,
+
+    /// List all available built-in and discovered custom templates
+    #[arg(long, conflicts_with = "name")]
+    list: bool,
+
+    /// Overwrite destination directory if it already exists when ejecting
+    #[arg(short, long)]
+    force: bool,
+  },
   /// Replace the installed binary with the latest GitHub release
   Update {
     /// Report whether a newer release exists without installing it
@@ -123,35 +139,10 @@ pub enum Commands {
     force: bool,
   },
   /// Output canonical JSON schema for content.yaml
-  #[command(hide = true)]
   Schema {
     /// Destination path for the generated schema JSON (prints to stdout if omitted)
-    #[arg(short = 'o', long = "output")]
-    output: Option<PathBuf>,
-  },
-}
-
-/// Arguments for the `template` subcommand.
-#[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
-pub struct TemplateArgs {
-  /// Template subcommand to execute
-  #[command(subcommand)]
-  pub command: TemplateCommands,
-}
-
-/// Available template subcommands.
-#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
-pub enum TemplateCommands {
-  /// List all available built-in and discovered custom templates
-  List,
-  /// Eject an embedded template to a local directory for customization
-  Eject {
-    /// Name of the template to eject (e.g. `classic`)
-    name: String,
-
-    /// Overwrite destination directory if it already exists
     #[arg(short, long)]
-    force: bool,
+    output: Option<PathBuf>,
   },
 }
 
@@ -159,9 +150,7 @@ impl Default for Commands {
   fn default() -> Self {
     Commands::Build {
       content: PathBuf::from("content.yaml"),
-      check: false,
       template: None,
-      source: None,
       output: None,
       schema: None,
       font_path: None,
@@ -185,9 +174,8 @@ mod tests {
     let cli = Cli::parse_from([
       "rsmk",
       "build",
-      "--content",
       "alt.yaml",
-      "--source",
+      "--template",
       "alt.typ",
       "--output",
       "out.pdf",
@@ -195,58 +183,70 @@ mod tests {
     match cli.command.unwrap() {
       Commands::Build {
         content,
-        source,
         output,
         template,
-        check,
-        ..
+        schema,
+        font_path,
       } => {
         assert_eq!(content, PathBuf::from("alt.yaml"));
-        assert_eq!(source, Some(PathBuf::from("alt.typ")));
+        assert_eq!(template, Some("alt.typ".to_string()));
         assert_eq!(output, Some(PathBuf::from("out.pdf")));
+        assert_eq!(schema, None);
+        assert_eq!(font_path, None);
+      }
+      _ => panic!("Expected Build command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_build_defaults() {
+    let cli = Cli::parse_from(["rsmk", "build"]);
+    match cli.command.unwrap() {
+      Commands::Build {
+        content,
+        template,
+        output,
+        schema,
+        font_path,
+      } => {
+        assert_eq!(content, PathBuf::from("content.yaml"));
         assert_eq!(template, None);
-        assert!(!check);
+        assert_eq!(output, None);
+        assert_eq!(schema, None);
+        assert_eq!(font_path, None);
       }
       _ => panic!("Expected Build command"),
     }
   }
 
   #[test]
-  fn test_cli_build_template_name_flag() {
-    let cli = Cli::parse_from(["rsmk", "build", "--template", "classic"]);
+  fn test_cli_check_command() {
+    let cli =
+      Cli::parse_from(["rsmk", "check", "alt.yaml", "--template", "classic"]);
     match cli.command.unwrap() {
-      Commands::Build { template, .. } => {
+      Commands::Check {
+        content,
+        template,
+        schema,
+        font_path,
+      } => {
+        assert_eq!(content, PathBuf::from("alt.yaml"));
         assert_eq!(template, Some("classic".to_string()));
+        assert_eq!(schema, None);
+        assert_eq!(font_path, None);
       }
-      _ => panic!("Expected Build command"),
-    }
-  }
-
-  #[test]
-  fn test_cli_build_check_flag() {
-    let cli = Cli::parse_from(["rsmk", "build", "--check"]);
-    match cli.command.unwrap() {
-      Commands::Build { check, .. } => {
-        assert!(check);
-      }
-      _ => panic!("Expected Build command"),
-    }
-
-    let cli_short = Cli::parse_from(["rsmk", "build", "-c"]);
-    match cli_short.command.unwrap() {
-      Commands::Build { check, .. } => {
-        assert!(check);
-      }
-      _ => panic!("Expected Build command"),
+      _ => panic!("Expected Check command"),
     }
   }
 
   #[test]
   fn test_cli_template_list() {
-    let cli = Cli::parse_from(["rsmk", "template", "list"]);
+    let cli = Cli::parse_from(["rsmk", "template", "--list"]);
     match cli.command.unwrap() {
-      Commands::Template(args) => {
-        assert_eq!(args.command, TemplateCommands::List);
+      Commands::Template { list, name, force } => {
+        assert!(list);
+        assert_eq!(name, None);
+        assert!(!force);
       }
       _ => panic!("Expected Template command"),
     }
@@ -254,15 +254,47 @@ mod tests {
 
   #[test]
   fn test_cli_template_eject() {
-    let cli = Cli::parse_from(["rsmk", "template", "eject", "classic"]);
+    let cli = Cli::parse_from(["rsmk", "template", "classic"]);
     match cli.command.unwrap() {
-      Commands::Template(args) => match args.command {
-        TemplateCommands::Eject { name, force } => {
-          assert_eq!(name, "classic");
-          assert!(!force);
-        }
-        _ => panic!("Expected Eject command"),
-      },
+      Commands::Template { name, list, force } => {
+        assert_eq!(name, Some("classic".to_string()));
+        assert!(!list);
+        assert!(!force);
+      }
+      _ => panic!("Expected Template command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_template_eject_force_flags() {
+    let cli = Cli::parse_from(["rsmk", "template", "classic", "--force"]);
+    match cli.command.unwrap() {
+      Commands::Template { name, force, .. } => {
+        assert_eq!(name, Some("classic".to_string()));
+        assert!(force);
+      }
+      _ => panic!("Expected Template command"),
+    }
+
+    let cli_short = Cli::parse_from(["rsmk", "template", "classic", "-f"]);
+    match cli_short.command.unwrap() {
+      Commands::Template { name, force, .. } => {
+        assert_eq!(name, Some("classic".to_string()));
+        assert!(force);
+      }
+      _ => panic!("Expected Template command"),
+    }
+  }
+
+  #[test]
+  fn test_cli_template_no_args() {
+    let cli = Cli::parse_from(["rsmk", "template"]);
+    match cli.command.unwrap() {
+      Commands::Template { name, list, force } => {
+        assert_eq!(name, None);
+        assert!(!list);
+        assert!(!force);
+      }
       _ => panic!("Expected Template command"),
     }
   }
@@ -298,35 +330,6 @@ mod tests {
   }
 
   #[test]
-  fn test_cli_template_eject_force_flags() {
-    let cli =
-      Cli::parse_from(["rsmk", "template", "eject", "classic", "--force"]);
-    match cli.command.unwrap() {
-      Commands::Template(args) => match args.command {
-        TemplateCommands::Eject { name, force } => {
-          assert_eq!(name, "classic");
-          assert!(force);
-        }
-        _ => panic!("Expected Eject command"),
-      },
-      _ => panic!("Expected Template command"),
-    }
-
-    let cli_short =
-      Cli::parse_from(["rsmk", "template", "eject", "classic", "-f"]);
-    match cli_short.command.unwrap() {
-      Commands::Template(args) => match args.command {
-        TemplateCommands::Eject { name, force } => {
-          assert_eq!(name, "classic");
-          assert!(force);
-        }
-        _ => panic!("Expected Eject command"),
-      },
-      _ => panic!("Expected Template command"),
-    }
-  }
-
-  #[test]
   fn test_cli_release_default_flags() {
     let cli = Cli::parse_from(["rsmk", "release"]);
     match cli.command.unwrap() {
@@ -350,7 +353,6 @@ mod tests {
     let cli = Cli::parse_from([
       "rsmk",
       "release",
-      "--content",
       "my_resume.yaml",
       "--message",
       "Version 1.2.0 release",
@@ -372,14 +374,8 @@ mod tests {
       _ => panic!("Expected Release command"),
     }
 
-    let cli_short = Cli::parse_from([
-      "rsmk",
-      "release",
-      "-c",
-      "my_resume.yaml",
-      "-m",
-      "Short msg",
-    ]);
+    let cli_short =
+      Cli::parse_from(["rsmk", "release", "my_resume.yaml", "-m", "Short msg"]);
     match cli_short.command.unwrap() {
       Commands::Release {
         content,
@@ -403,19 +399,17 @@ mod tests {
       Commands::Init {
         dest,
         name,
-        output,
         force,
         no_git,
         no_workflows,
-        update,
+        workflows,
       } => {
         assert_eq!(dest, None);
         assert_eq!(name, None);
-        assert_eq!(output, None);
         assert!(!force);
         assert!(!no_git);
         assert!(!no_workflows);
-        assert!(!update);
+        assert!(!workflows);
       }
       _ => panic!("Expected Init command"),
     }
@@ -423,57 +417,58 @@ mod tests {
     let cli_custom = Cli::parse_from([
       "rsmk",
       "init",
+      "custom.yaml",
       "--name",
       "John Smith",
-      "--output",
-      "custom.yaml",
       "--force",
       "--no-git",
       "--no-workflows",
-      "--update",
+      "--workflows",
     ]);
     match cli_custom.command.unwrap() {
       Commands::Init {
         dest,
         name,
-        output,
         force,
         no_git,
         no_workflows,
-        update,
+        workflows,
       } => {
-        assert_eq!(dest, None);
+        assert_eq!(dest, Some(PathBuf::from("custom.yaml")));
         assert_eq!(name, Some("John Smith".to_string()));
-        assert_eq!(output, Some(PathBuf::from("custom.yaml")));
         assert!(force);
         assert!(no_git);
         assert!(no_workflows);
-        assert!(update);
+        assert!(workflows);
       }
       _ => panic!("Expected Init command"),
     }
 
-    let cli_short_update = Cli::parse_from(["rsmk", "init", "-u"]);
-    match cli_short_update.command.unwrap() {
-      Commands::Init { update, .. } => {
-        assert!(update);
+    let cli_update_alias = Cli::parse_from(["rsmk", "init", "--update"]);
+    match cli_update_alias.command.unwrap() {
+      Commands::Init { workflows, .. } => {
+        assert!(workflows);
       }
       _ => panic!("Expected Init command"),
     }
 
     let cli_positional = Cli::parse_from(["rsmk", "init", "./arvin_resume"]);
     match cli_positional.command.unwrap() {
-      Commands::Init { dest, output, .. } => {
+      Commands::Init { dest, .. } => {
         assert_eq!(dest, Some(PathBuf::from("./arvin_resume")));
-        assert_eq!(output, None);
       }
       _ => panic!("Expected Init command"),
     }
+  }
 
-    // The positional destination and `--output` are mutually exclusive.
-    assert!(
-      Cli::try_parse_from(["rsmk", "init", "dir", "--output", "x.yaml"])
-        .is_err()
-    );
+  #[test]
+  fn test_cli_schema_flags() {
+    let cli = Cli::parse_from(["rsmk", "schema", "-o", "schema.json"]);
+    match cli.command.unwrap() {
+      Commands::Schema { output } => {
+        assert_eq!(output, Some(PathBuf::from("schema.json")));
+      }
+      _ => panic!("Expected Schema command"),
+    }
   }
 }

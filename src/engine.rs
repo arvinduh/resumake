@@ -48,27 +48,26 @@ impl TypstEngine {
     self.font_path.as_deref()
   }
 
-  /// Resolves the Typst entry file from `--template` and optional `--source`.
+  /// Resolves the Typst entry file from `--template` (named built-in, local file, or directory).
   ///
   /// # Errors
   /// Returns [`EngineError::TemplateNotFound`] if a named template is unknown.
   pub fn resolve_template(
     &self,
     template_name: &str,
-    source: Option<&Path>,
   ) -> Result<PathBuf, EngineError> {
-    if let Some(src) = source {
-      if src.is_dir() {
-        return Ok(src.join("main.typ"));
+    let direct = Path::new(template_name);
+    if direct.is_file() {
+      return Ok(direct.to_path_buf());
+    }
+    if direct.is_dir() {
+      let main_typ = direct.join("main.typ");
+      if main_typ.is_file() {
+        return Ok(main_typ);
       }
-      return Ok(src.to_path_buf());
     }
 
     if template_name.ends_with(".typ") {
-      let direct = PathBuf::from(template_name);
-      if direct.is_file() {
-        return Ok(direct);
-      }
       let joined = self.root_path.join(template_name);
       if joined.is_file() {
         return Ok(joined);
@@ -236,7 +235,6 @@ pub fn query_doc_metadata(
 pub fn verify_content(
   content: &Path,
   template_name: &str,
-  source: Option<&Path>,
   schema: Option<&Path>,
   font_path: Option<&Path>,
 ) -> Result<TelemetryReport, EngineError> {
@@ -249,7 +247,7 @@ pub fn verify_content(
   schema::validate_schema_auto(content, schema)?;
 
   let engine = TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template_name, source)?;
+  let resolved_template = engine.resolve_template(template_name)?;
   let doc = engine.compile_paged(&resolved_template, content)?;
   let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
   let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
@@ -271,7 +269,7 @@ mod tests {
     let engine = TypstEngine::with_root(PathBuf::from("."), None);
 
     let resolved = engine
-      .resolve_template(templates::DEFAULT_TEMPLATE, None)
+      .resolve_template(templates::DEFAULT_TEMPLATE)
       .unwrap();
     assert_eq!(resolved, PathBuf::from("classic/main.typ"));
   }
@@ -280,7 +278,7 @@ mod tests {
   fn test_resolve_template_rejects_unknown_name() {
     let engine = TypstEngine::with_root(PathBuf::from("."), None);
 
-    let err = engine.resolve_template("does-not-exist", None).unwrap_err();
+    let err = engine.resolve_template("does-not-exist").unwrap_err();
     let msg = err.to_string();
     assert!(msg.contains("does-not-exist"));
     assert!(msg.contains("classic"));
