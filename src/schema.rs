@@ -203,8 +203,9 @@ pub fn export_builtin_schema(
   output_path: Option<&Path>,
 ) -> Result<String, SchemaError> {
   let schema_json = models::generate_builtin_schema();
-  let schema_str = serde_json::to_string_pretty(&schema_json)
+  let raw_json = serde_json::to_string_pretty(&schema_json)
     .map_err(SchemaError::JsonSerialize)?;
+  let schema_str = format!("{}\n", raw_json.trim_end());
 
   if let Some(path) = output_path {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -636,5 +637,28 @@ sections:
     let parsed: serde_yaml::Value = serde_yaml::from_str(action_str).unwrap();
     assert_eq!(parsed["name"], "Setup Resumake (rsmk)");
     assert_eq!(parsed["runs"]["using"], "composite");
+  }
+
+  #[test]
+  fn test_schema_no_uncommitted_drift() {
+    let current_schema = export_builtin_schema(None).unwrap();
+    let committed_schema = include_str!("../resume.schema.json");
+
+    if current_schema != committed_schema {
+      let diff = similar::TextDiff::from_lines(committed_schema, &current_schema)
+        .unified_diff()
+        .header("committed (resume.schema.json)", "current (src/models.rs)")
+        .to_string();
+
+      panic!(
+        "\n\n❌ SCHEMA DRIFT DETECTED!\n\
+        The Serde models in `src/models.rs` have drifted from `resume.schema.json`.\n\
+        \nDiff:\n{diff}\n\
+        If this change was intentional:\n\
+        1. Run `cargo run -q -- schema -o resume.schema.json` to update the canonical schema.\n\
+        2. Stage `resume.schema.json` with your commit.\n\
+        3. Cut a new schema release tag (e.g. s1.1) upon merge.\n"
+      );
+    }
   }
 }

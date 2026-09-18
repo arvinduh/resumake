@@ -110,5 +110,13 @@ pub fn execute_command(
     Commands::Update { check, force } => {
       update::run_update(check, force, quiet).map_err(Into::into)
     }
+    Commands::Schema { output } => {
+      let schema_str = crate::schema::export_builtin_schema(output.as_deref())
+        .map_err(ResumakeError::from)?;
+      if output.is_none() {
+        println!("{schema_str}");
+      }
+      Ok(())
+    }
   }
 }

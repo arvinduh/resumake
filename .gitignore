@@ -8,11 +8,7 @@
 *.pdf
 output/
 
-# The canonical JSON Schema is never committed — it is generated from
-# src/models.rs at release time (`cargo run --example generate-schema`) and
-# published only as a GitHub Release asset. Ignore any local copy.
-/resume.schema.json
-/schema/resume.schema.json
+
 
 # --- IDEs & Editors ---
 .vscode/
@@ -51,15 +47,9 @@ $RECYCLE.BIN/
 *.profdata
 crash.dump
 
-# --- Agentic Workflows & Tool Scratches ---
+# --- Tool Scratches ---
 /.artifacts/
 /.worktrees/
-# .agents/orchestrate.md and .agents/start.md are the committed process
-# files every harness/human references directly - must ship with the
-# repo. Only ignore other loose scratch files dropped in .agents/.
-/.agents/*
-!/.agents/orchestrate.md
-!/.agents/start.md
 # Directory form (`/.claude/`) would permanently block any future
 # `!/.claude/<file>` negation - git never descends into an excluded
 # directory. Use the `*` form so a committed convention file (e.g.

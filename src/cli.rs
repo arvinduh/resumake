@@ -126,6 +126,13 @@ pub enum Commands {
     #[arg(short, long)]
     force: bool,
   },
+  /// Output canonical JSON schema for content.yaml
+  #[command(hide = true)]
+  Schema {
+    /// Destination path for the generated schema JSON (prints to stdout if omitted)
+    #[arg(short = 'o', long = "output")]
+    output: Option<PathBuf>,
+  },
 }
 
 /// Arguments for the `template` subcommand.

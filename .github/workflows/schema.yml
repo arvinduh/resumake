@@ -22,7 +22,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Generate schema from the models
-        run: cargo run --release --example generate-schema
+        run: cargo run -q -- schema -o resume.schema.json
 
       - name: Publish schema release
         uses: softprops/action-gh-release@v3
