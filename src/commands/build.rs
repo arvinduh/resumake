@@ -118,5 +118,3 @@ pub(crate) fn run_check(
   }
   Ok(())
 }
-
-

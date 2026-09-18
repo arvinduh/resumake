@@ -17,10 +17,7 @@
         },
         "issuer": {
           "description": "Issuing organization or institution.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "name": {
           "description": "Award title.",
@@ -28,15 +25,10 @@
         },
         "summary": {
           "description": "Summary or award context.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "type": "object"
     },
     "CertificationItem": {
@@ -45,31 +37,19 @@
       "properties": {
         "credential_id": {
           "description": "Credential ID.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "date": {
           "description": "Issue date.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "expiry": {
           "description": "Expiration date.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "issuer": {
           "description": "Issuing body or authority (e.g. \"AWS\", \"Google Cloud\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "name": {
           "description": "Credential name.",
@@ -77,15 +57,10 @@
         },
         "url": {
           "description": "Verification URL.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "type": "object"
     },
     "ContactItem": {
@@ -99,26 +74,18 @@
           "properties": {
             "icon": {
               "description": "Optional icon identifier.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "link": {
               "description": "URI link (e.g. \"mailto:...\", \"https://...\").",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "name": {
               "description": "Display name or label.",
               "type": "string"
             }
           },
-          "required": [
-            "name"
-          ],
+          "required": ["name"],
           "type": "object"
         }
       ],
@@ -141,24 +108,15 @@
         },
         "dates": {
           "description": "Attendance dates (e.g. \"Sep 2020 – Jun 2022\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "degree": {
           "description": "Degree and major (e.g. \"B.S. in Computer Science\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "gpa": {
           "description": "GPA representation (e.g. \"3.95 / 4.00\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "honors": {
           "anyOf": [
@@ -173,27 +131,18 @@
         },
         "institution": {
           "description": "Name of university or institution.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "lines": {
           "additionalProperties": {
             "type": "string"
           },
           "description": "Custom key-value lines attached to this degree.",
-          "type": [
-            "object",
-            "null"
-          ]
+          "type": ["object", "null"]
         },
         "location": {
           "description": "City, State / Country.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "thesis": {
           "anyOf": [
@@ -234,62 +183,38 @@
           "items": {
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "dates": {
           "description": "Employment dates (for single-role shorthand).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "location": {
           "description": "City, State or \"Remote\".",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "org": {
           "description": "Company or organization name.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "roles": {
           "description": "One or more roles held at this organization (supports promotion ladders).",
           "items": {
             "$ref": "#/$defs/RoleItem"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "stack": {
           "description": "Tech stack or tools used.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "title": {
           "description": "Job title (if specifying a single-role company without `roles` array).",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "url": {
           "description": "Organization website or URL.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
       "type": "object"
@@ -300,10 +225,7 @@
       "properties": {
         "badge": {
           "description": "Availability badge, clearance, or work authorization status.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "contact": {
           "description": "Contact items (email, phone, LinkedIn, GitHub, portfolio, etc.).",
@@ -314,28 +236,19 @@
         },
         "description": {
           "description": "Short bio or document summary.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "extra": {
           "additionalProperties": true,
           "description": "Extensible custom metadata key-values.",
-          "type": [
-            "object",
-            "null"
-          ]
+          "type": ["object", "null"]
         },
         "keywords": {
           "description": "Keywords embedded into PDF document metadata for ATS optimization.",
           "items": {
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "name": {
           "description": "Full display name of the candidate.",
@@ -354,21 +267,14 @@
         },
         "title": {
           "description": "Professional headline or role tagline (e.g. \"Staff AI Systems Engineer\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "version": {
           "description": "Semantic milestone version of the résumé (e.g. \"1.0.0\").",
           "type": "string"
         }
       },
-      "required": [
-        "name",
-        "version",
-        "contact"
-      ],
+      "required": ["name", "version", "contact"],
       "type": "object"
     },
     "ProjectItem": {
@@ -385,10 +291,7 @@
         },
         "date": {
           "description": "Date or period (e.g. \"Jan 2024\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "name": {
           "description": "Project title.",
@@ -396,29 +299,18 @@
         },
         "stack": {
           "description": "Tech stack or subtitle (e.g. \"Rust · CUDA · Triton\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "stats": {
           "description": "Key metric or stats callout (e.g. \"1.2k GitHub Stars\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "url": {
           "description": "Link to demo or repository.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "type": "object"
     },
     "PublicationItem": {
@@ -438,10 +330,7 @@
         },
         "notes": {
           "description": "Acceptance rate or extra notes (e.g. \"Oral Presentation, top 2%\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "title": {
           "description": "Publication title.",
@@ -449,17 +338,11 @@
         },
         "url": {
           "description": "DOI or publication link.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "venue": {
           "description": "Conference, journal, or workshop venue (e.g. \"NeurIPS 2024\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "year": {
           "anyOf": [
@@ -473,9 +356,7 @@
           "description": "Publication year or date."
         }
       },
-      "required": [
-        "title"
-      ],
+      "required": ["title"],
       "type": "object"
     },
     "ReferenceItem": {
@@ -484,10 +365,7 @@
       "properties": {
         "contact": {
           "description": "Optional email or contact line.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "name": {
           "description": "Reference person's name.",
@@ -502,11 +380,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "name",
-        "role",
-        "org"
-      ],
+      "required": ["name", "role", "org"],
       "type": "object"
     },
     "ReferencesValue": {
@@ -529,9 +403,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "items"
-          ],
+          "required": ["items"],
           "type": "object"
         }
       ],
@@ -555,27 +427,18 @@
         },
         "stack": {
           "description": "Tech stack or technologies used in this role.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "team": {
           "description": "Team, group, or division name (e.g. \"Inference Systems\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "title": {
           "description": "Job title or position (e.g. \"Staff AI Systems Engineer\").",
           "type": "string"
         }
       },
-      "required": [
-        "title",
-        "dates"
-      ],
+      "required": ["title", "dates"],
       "type": "object"
     },
     "Section": {
@@ -587,30 +450,21 @@
           "items": {
             "$ref": "#/$defs/AwardItem"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "bullets": {
           "description": "Generic bullet points shorthand.",
           "items": {
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "certifications": {
           "description": "Professional certifications and licenses shorthand.",
           "items": {
             "$ref": "#/$defs/CertificationItem"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "education": {
           "anyOf": [
@@ -628,10 +482,7 @@
           "items": {
             "$ref": "#/$defs/ExperienceItem"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "items": {
           "description": "Generic items payload (supports polymorphic items for any section)."
@@ -641,30 +492,21 @@
             "type": "string"
           },
           "description": "Generic key-value dictionary lines shorthand.",
-          "type": [
-            "object",
-            "null"
-          ]
+          "type": ["object", "null"]
         },
         "projects": {
           "description": "Technical projects block shorthand.",
           "items": {
             "$ref": "#/$defs/ProjectItem"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "publications": {
           "description": "Academic publications and preprints shorthand.",
           "items": {
             "$ref": "#/$defs/PublicationItem"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "references": {
           "anyOf": [
@@ -693,17 +535,11 @@
           "items": {
             "$ref": "#/$defs/SpeakingItem"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "text": {
           "description": "Freeform markdown prose paragraph.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "title": {
           "description": "Section header title (e.g., \"Education\", \"Experience\", \"Technical\nSkills\", \"Projects\").",
@@ -711,15 +547,10 @@
         },
         "type": {
           "description": "Explicit block type descriptor (e.g. \"experience\", \"education\",\n\"skills\", \"projects\", \"publications\", \"split_line\", \"columns\",\n\"lines\", \"bullets\", \"text\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
-      "required": [
-        "title"
-      ],
+      "required": ["title"],
       "type": "object"
     },
     "SkillCategoryItem": {
@@ -735,10 +566,7 @@
           "description": "Comma-separated string or array of skills."
         }
       },
-      "required": [
-        "category",
-        "items"
-      ],
+      "required": ["category", "items"],
       "type": "object"
     },
     "SkillsValue": {
@@ -777,33 +605,22 @@
         },
         "event": {
           "description": "Conference or event name.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "link": {
           "description": "Slides or recording URL.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "location": {
           "description": "Location or virtual venue.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "title": {
           "description": "Talk title.",
           "type": "string"
         }
       },
-      "required": [
-        "title"
-      ],
+      "required": ["title"],
       "type": "object"
     },
     "StringOrList": {
@@ -842,80 +659,47 @@
       "properties": {
         "accent_color": {
           "description": "Accent color for rules and highlights (hex string, e.g. \"#2a2a2a\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "font_family": {
           "description": "Font family for the document (e.g. \"Crimson Pro\", \"Inter\", \"Linux\nLibertine\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "font_size": {
           "description": "Body font size (e.g. \"11.5pt\", \"10pt\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "ink_color": {
           "description": "Primary text ink color (hex string, e.g. \"#111111\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "margin": {
           "description": "Page margin (e.g. \"0.5in\", \"0.4in\", \"1.5cm\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "muted_color": {
           "description": "Muted color for secondary metadata, dates, and locations (hex\nstring, e.g. \"#444444\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "name_size": {
           "description": "Candidate name heading font size (e.g. \"25pt\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "org_size": {
           "description": "Organization / company font size (e.g. \"12pt\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "paper_size": {
           "description": "Paper size (\"us-letter\" or \"a4\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "rule_thickness": {
           "description": "Section horizontal divider rule thickness (e.g. \"0.5pt\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "section_size": {
           "description": "Section heading font size (e.g. \"13pt\").",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
       "type": "object"
@@ -931,19 +715,14 @@
           "properties": {
             "advisor": {
               "description": "Advisor name.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "title": {
               "description": "Thesis title.",
               "type": "string"
             }
           },
-          "required": [
-            "title"
-          ],
+          "required": ["title"],
           "type": "object"
         }
       ],
@@ -966,10 +745,7 @@
       "type": "array"
     }
   },
-  "required": [
-    "meta",
-    "sections"
-  ],
+  "required": ["meta", "sections"],
   "title": "ResumeDocument",
   "type": "object"
 }

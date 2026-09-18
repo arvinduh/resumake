@@ -665,7 +665,6 @@ mod tests {
     assert_eq!(fs::extract_provenance_and_body("name: CI\n"), None);
   }
 
-
   #[test]
   fn test_update_workflows_clean_and_modified_and_force() {
     let temp = TempDir::new().unwrap();

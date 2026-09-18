@@ -49,7 +49,6 @@ pub(crate) fn extract_provenance_and_body(
   Some((hash, body))
 }
 
-
 /// Normalizes a content file path into a POSIX virtual path relative to root.
 pub(crate) fn normalize_posix_path(root: &Path, content_path: &Path) -> String {
   if let Ok(rel) = content_path.strip_prefix(root) {
@@ -158,5 +157,4 @@ mod tests {
 
     assert_eq!(extract_provenance_and_body("name: CI\n"), None);
   }
-
 }

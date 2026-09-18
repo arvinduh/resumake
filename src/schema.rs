@@ -641,14 +641,22 @@ sections:
 
   #[test]
   fn test_schema_no_uncommitted_drift() {
-    let current_schema = export_builtin_schema(None).unwrap();
-    let committed_schema = include_str!("../resume.schema.json");
+    let current_schema_str = export_builtin_schema(None).unwrap();
+    let current_json: serde_json::Value =
+      serde_json::from_str(&current_schema_str).unwrap();
+    let committed_schema_str = include_str!("../resume.schema.json");
+    let committed_json: serde_json::Value =
+      serde_json::from_str(committed_schema_str).unwrap();
 
-    if current_schema != committed_schema {
-      let diff = similar::TextDiff::from_lines(committed_schema, &current_schema)
-        .unified_diff()
-        .header("committed (resume.schema.json)", "current (src/models.rs)")
-        .to_string();
+    if current_json != committed_json {
+      let current_pretty = serde_json::to_string_pretty(&current_json).unwrap();
+      let committed_pretty =
+        serde_json::to_string_pretty(&committed_json).unwrap();
+      let diff =
+        similar::TextDiff::from_lines(&committed_pretty, &current_pretty)
+          .unified_diff()
+          .header("committed (resume.schema.json)", "current (src/models.rs)")
+          .to_string();
 
       panic!(
         "\n\n❌ SCHEMA DRIFT DETECTED!\n\

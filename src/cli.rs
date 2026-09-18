@@ -36,7 +36,6 @@ pub enum Commands {
     #[arg(short, long)]
     check: bool,
 
-
     /// Named built-in layout to render with or path to template
     #[arg(short, long)]
     template: Option<String>,
