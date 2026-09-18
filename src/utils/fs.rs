@@ -49,21 +49,6 @@ pub(crate) fn extract_provenance_and_body(
   Some((hash, body))
 }
 
-/// Generates a standard unified diff between two text documents, labelled
-/// `<filename> (current)` and `<filename> (target)`.
-pub(crate) fn generate_unified_diff(
-  filename: &str,
-  old_content: &str,
-  new_content: &str,
-) -> String {
-  similar::TextDiff::from_lines(old_content, new_content)
-    .unified_diff()
-    .header(
-      &format!("{filename} (current)"),
-      &format!("{filename} (target)"),
-    )
-    .to_string()
-}
 
 /// Normalizes a content file path into a POSIX virtual path relative to root.
 pub(crate) fn normalize_posix_path(root: &Path, content_path: &Path) -> String {
@@ -174,15 +159,4 @@ mod tests {
     assert_eq!(extract_provenance_and_body("name: CI\n"), None);
   }
 
-  #[test]
-  fn test_generate_unified_diff() {
-    let old_text = "line1\nline2\nline3\n";
-    let new_text = "line1\nline2_modified\nline3\nline4\n";
-    let diff = generate_unified_diff("test.yml", old_text, new_text);
-    assert!(diff.contains("--- test.yml (current)"));
-    assert!(diff.contains("+++ test.yml (target)"));
-    assert!(diff.contains("-line2"));
-    assert!(diff.contains("+line2_modified"));
-    assert!(diff.contains("+line4"));
-  }
 }

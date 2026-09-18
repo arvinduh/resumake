@@ -407,19 +407,11 @@ fn update_workflows(
           path.display()
         ));
       }
-    } else {
-      if !quiet {
-        eprintln!(
-          "warning: Workflow '{}' has local modifications; skipping update. Use --force to overwrite.",
-          path.display()
-        );
-        let diff = fs::generate_unified_diff(
-          &path.display().to_string(),
-          &existing,
-          &new_with_header,
-        );
-        eprintln!("{diff}");
-      }
+    } else if !quiet {
+      eprintln!(
+        "warning: Workflow '{}' has local modifications; skipping update. Use --force to overwrite.",
+        path.display()
+      );
     }
   }
 
@@ -673,17 +665,6 @@ mod tests {
     assert_eq!(fs::extract_provenance_and_body("name: CI\n"), None);
   }
 
-  #[test]
-  fn test_generate_unified_diff() {
-    let old_text = "line1\nline2\nline3\n";
-    let new_text = "line1\nline2_modified\nline3\nline4\n";
-    let diff = fs::generate_unified_diff("test.yml", old_text, new_text);
-    assert!(diff.contains("--- test.yml (current)"));
-    assert!(diff.contains("+++ test.yml (target)"));
-    assert!(diff.contains("-line2"));
-    assert!(diff.contains("+line2_modified"));
-    assert!(diff.contains("+line4"));
-  }
 
   #[test]
   fn test_update_workflows_clean_and_modified_and_force() {

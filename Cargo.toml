@@ -57,7 +57,6 @@ semver = "1.0"
 colored = "3.0"
 comfy-table = { version = "8.0", features = ["custom_styling"] }
 sha2 = "0.11"
-similar = "3.2"
 include_dir = "0.7"
 thiserror = "2.0"
 axoupdater = { version = "0.9", features = ["blocking"] }
@@ -73,6 +72,7 @@ typst-kit = { version = "0.13", default-features = false, features = [
 assert_cmd = "2.0"
 predicates = "3.1"
 tempfile = "3.16"
+similar = "3.2"
 
 [profile.release]
 opt-level = 3
