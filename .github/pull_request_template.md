@@ -19,17 +19,6 @@ Fixes #<!-- issue number -->
 - [ ] `cargo test --lib -q`
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test --all-targets`
-- [ ] Staged pre-commit hook passed (`.githooks/pre-commit` /
-      `fml fmt --staged`)
-
-## Maker-Checker QA Review
-
-<!-- For non-trivial changes, record the independent QA review findings. -->
-
-- **QA Reviewer**: <!-- Subagent role / name -->
-- **Review Findings**:
-  <!-- Summary of edge case analysis, telemetry checks, or debate points -->
-- **Sign-off**: <!-- Approved / Ready to merge -->
 
 ## Checklist
 
