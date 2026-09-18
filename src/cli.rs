@@ -36,9 +36,6 @@ pub enum Commands {
     #[arg(short, long)]
     check: bool,
 
-    /// Live file watcher mode
-    #[arg(short, long)]
-    watch: bool,
 
     /// Named built-in layout to render with or path to template
     #[arg(short, long)]
@@ -164,7 +161,6 @@ impl Default for Commands {
     Commands::Build {
       content: PathBuf::from("content.yaml"),
       check: false,
-      watch: false,
       template: None,
       source: None,
       output: None,
@@ -204,7 +200,6 @@ mod tests {
         output,
         template,
         check,
-        watch,
         ..
       } => {
         assert_eq!(content, PathBuf::from("alt.yaml"));
@@ -212,7 +207,6 @@ mod tests {
         assert_eq!(output, Some(PathBuf::from("out.pdf")));
         assert_eq!(template, None);
         assert!(!check);
-        assert!(!watch);
       }
       _ => panic!("Expected Build command"),
     }
@@ -233,39 +227,16 @@ mod tests {
   fn test_cli_build_check_flag() {
     let cli = Cli::parse_from(["rsmk", "build", "--check"]);
     match cli.command.unwrap() {
-      Commands::Build { check, watch, .. } => {
+      Commands::Build { check, .. } => {
         assert!(check);
-        assert!(!watch);
       }
       _ => panic!("Expected Build command"),
     }
 
     let cli_short = Cli::parse_from(["rsmk", "build", "-c"]);
     match cli_short.command.unwrap() {
-      Commands::Build { check, watch, .. } => {
+      Commands::Build { check, .. } => {
         assert!(check);
-        assert!(!watch);
-      }
-      _ => panic!("Expected Build command"),
-    }
-  }
-
-  #[test]
-  fn test_cli_build_watch_flag() {
-    let cli = Cli::parse_from(["rsmk", "build", "--watch"]);
-    match cli.command.unwrap() {
-      Commands::Build { check, watch, .. } => {
-        assert!(!check);
-        assert!(watch);
-      }
-      _ => panic!("Expected Build command"),
-    }
-
-    let cli_short = Cli::parse_from(["rsmk", "build", "-w"]);
-    match cli_short.command.unwrap() {
-      Commands::Build { check, watch, .. } => {
-        assert!(!check);
-        assert!(watch);
       }
       _ => panic!("Expected Build command"),
     }

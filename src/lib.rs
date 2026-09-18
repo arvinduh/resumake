@@ -20,6 +20,5 @@ pub mod telemetry;
 /// Cross-cutting shared utilities (filesystem, git, terminal UI).
 pub mod utils;
 
-pub use crate::commands::build::WatchError;
-pub use crate::error::{Result, ResumakeError};
+pub use crate::error::{ResumakeError, Result};
 pub use crate::utils::ui;

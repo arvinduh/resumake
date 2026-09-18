@@ -1,6 +1,5 @@
 //! Crate-level error types, result aliases, and classification helpers.
 
-use crate::commands::build::WatchError;
 use crate::commands::init::InitError;
 use crate::commands::release::ReleaseError;
 use crate::commands::update::UpdateError;
@@ -37,9 +36,6 @@ pub enum ResumakeError {
   /// In-place binary update error.
   #[error(transparent)]
   Update(#[from] UpdateError),
-  /// File watching or hot-reload error.
-  #[error(transparent)]
-  Watch(#[from] WatchError),
   /// Underlying standard I/O error.
   #[error("I/O error: {0}")]
   Io(#[from] std::io::Error),

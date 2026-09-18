@@ -20,7 +20,6 @@ pub fn execute_command(
     Commands::Build {
       content,
       check,
-      watch,
       template,
       source,
       output,
@@ -29,33 +28,17 @@ pub fn execute_command(
     } => {
       let template_name =
         template.as_deref().unwrap_or(templates::DEFAULT_TEMPLATE);
-      match (watch, check) {
-        (true, true) => build::run_check_watch(
+      if check {
+        build::run_check(
           &content,
           template_name,
           source.as_deref(),
           schema.as_deref(),
           font_path.as_deref(),
           quiet,
-        ),
-        (true, false) => build::run_watch(
-          &content,
-          template_name,
-          source.as_deref(),
-          output.as_deref(),
-          schema.as_deref(),
-          font_path.as_deref(),
-          quiet,
-        ),
-        (false, true) => build::run_check(
-          &content,
-          template_name,
-          source.as_deref(),
-          schema.as_deref(),
-          font_path.as_deref(),
-          quiet,
-        ),
-        (false, false) => build::run_build(
+        )
+      } else {
+        build::run_build(
           &content,
           template_name,
           source.as_deref(),
@@ -63,7 +46,7 @@ pub fn execute_command(
           schema.as_deref(),
           font_path.as_deref(),
           quiet,
-        ),
+        )
       }
     }
     Commands::Init {
