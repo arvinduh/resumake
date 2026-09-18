@@ -3,7 +3,7 @@
 
 use crate::schema;
 use crate::utils::fs;
-use crate::utils::git::{self, GitError};
+use crate::utils::git;
 use crate::utils::ui;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -277,45 +277,10 @@ fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
   Ok(())
 }
 
-/// Checks if GitHub CLI `gh` is installed and authenticated.
-#[inline]
-fn is_gh_authenticated(dir: &Path) -> bool {
-  git::is_gh_authenticated(dir)
-}
-
-/// Handles interactive GitHub repository creation or prints remote setup guidance.
-fn handle_github_remote(dir: &Path, quiet: bool) {
+/// Prints remote setup guidance for newly initialized repositories.
+fn print_next_steps(quiet: bool) {
   if quiet {
     return;
-  }
-
-  let interactive =
-    std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
-
-  if interactive && is_gh_authenticated(dir) {
-    use std::io::{self, Write};
-    print!("\nCreate a GitHub repository and push? [y/N]: ");
-    let _ = io::stdout().flush();
-    let mut input = String::new();
-    if io::stdin().read_line(&mut input).is_ok() {
-      let trimmed = input.trim().to_lowercase();
-      if trimmed == "y" || trimmed == "yes" {
-        match git::create_repo_and_push(dir) {
-          Ok(()) => {
-            ui::print_success(
-              "GitHub repository created and pushed successfully.",
-            );
-            return;
-          }
-          Err(GitError::Spawn(e)) => {
-            ui::print_error(&format!("Error running gh CLI: {e}"));
-          }
-          Err(_) => {
-            ui::print_error("Failed to create GitHub repository via gh CLI.");
-          }
-        }
-      }
-    }
   }
 
   println!("\nNext steps to publish your résumé repository:");
@@ -559,7 +524,7 @@ pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
   }
 
   if !opts.no_git {
-    handle_github_remote(base_dir, opts.quiet);
+    print_next_steps(opts.quiet);
   }
 
   Ok(())

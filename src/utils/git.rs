@@ -328,31 +328,3 @@ pub fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), GitError> {
 
   Ok(())
 }
-
-/// Checks if GitHub CLI `gh` is installed and authenticated.
-pub(crate) fn is_gh_authenticated(dir: &Path) -> bool {
-  Command::new("gh")
-    .args(["auth", "status"])
-    .current_dir(dir)
-    .output()
-    .map(|output| output.status.success())
-    .unwrap_or(false)
-}
-
-/// Creates a new GitHub repository via `gh` CLI and pushes the current branch.
-///
-/// # Errors
-/// Returns a [`GitError`] if repository creation fails.
-pub(crate) fn create_repo_and_push(dir: &Path) -> Result<(), GitError> {
-  let status = Command::new("gh")
-    .args(["repo", "create", "--source=.", "--push"])
-    .current_dir(dir)
-    .status()
-    .map_err(GitError::Spawn)?;
-
-  if !status.success() {
-    return Err(GitError::Command("gh repo create failed".to_string()));
-  }
-
-  Ok(())
-}
