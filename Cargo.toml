@@ -45,6 +45,12 @@ install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
 
+# Build the Intel macOS binary on the Apple Silicon runner. The default
+# macos-*-intel runner took over twice as long as any other target on the
+# final single-codegen-unit LTO link; macos-14 cross-compiles x86_64 fine.
+[workspace.metadata.dist.github-custom-runners]
+x86_64-apple-darwin = "macos-14"
+
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "cargo"] }
