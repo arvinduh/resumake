@@ -80,4 +80,4 @@
 
 // Symbols & Separators
 #let SEP = [ · ]
-#let DASH = text(" - ")
+#let DASH = text(" – ")
