@@ -81,8 +81,8 @@
 #let bullets(items) = {
   set list(
     marker: text(size: 0.85em)[•],
-    indent: 0.30em,
-    body-indent: 0.40em,
+    indent: BULLET_INDENT,
+    body-indent: BULLET_BODY_INDENT,
     spacing: BULLET_GAP,
   )
   block(above: 0em, below: 0em, list(..items.map(b => guard([#b]))))
