@@ -221,7 +221,6 @@
       }
     }
   }
-
 }
 
 // Page layout telemetry probe for the Resumake CLI. `y` is where the content
