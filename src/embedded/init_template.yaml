@@ -18,6 +18,10 @@ meta:
     paper_size: "us-letter"
     margin: "0.5in"
     accent_color: "#2a2a2a"
+    # Spacing: every gap is a multiple of `leading`; `stretch` caps how far
+    # gaps may grow to fill spare page height (0 keeps them fixed).
+    # leading: "0.52em"
+    # stretch: 1.0
 
 sections:
   - title: "Education"
