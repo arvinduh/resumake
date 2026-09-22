@@ -44,8 +44,9 @@
 #let ORG_BELOW = LEADING
 #let ROLE_ABOVE = 0.62em
 #let GROUP_GAP = 0.78em
-#let SEC_ABOVE = 1.10em
-#let RULE_BELOW = 0.60em
+#let SEC_ABOVE = 1.00em
+#let RULE_GAP = 0.20em
+#let RULE_BELOW = 0.50em
 
 // Symbols & Separators
 #let SEP = [ · ]
