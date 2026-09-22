@@ -85,12 +85,18 @@
 
 #let render-header(meta) = {
   align(center)[
-    #text(size: NAME, weight: "semibold", tracking: 0.02em)[#meta.name]
-    #if "title" in meta and meta.title != "" [
-      #v(-0.55em)
-      #text(size: BODY + 0.5pt, style: "italic", fill: MUTED)[#meta.title]
-    ]
-    #v(-0.60em)
+    #block(below: NAME_BELOW, text(
+      size: NAME,
+      weight: "semibold",
+      tracking: 0.02em,
+    )[#meta.name])
+    #if "title" in meta and meta.title != "" {
+      block(below: HEADER_GAP, text(
+        size: BODY + 0.5pt,
+        style: "italic",
+        fill: MUTED,
+      )[#meta.title])
+    }
     #text(size: BODY)[
       #{
         let contact-items = ()
@@ -115,10 +121,9 @@
         contact-items.join(SEP)
       }
     ]
-    #if "badge" in meta and meta.badge != "" [
-      #v(-0.40em)
-      #text(size: BODY - 1pt, fill: MUTED)[#meta.badge]
-    ]
+    #if "badge" in meta and meta.badge != "" {
+      block(above: HEADER_GAP, text(size: BODY - 1pt, fill: MUTED)[#meta.badge])
+    }
   ]
 }
 
