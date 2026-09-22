@@ -5,7 +5,7 @@
 
 #let render-publications(
   publications,
-  body-size: 11.5pt,
+  body-size: 11pt,
   muted-color: rgb("#444444"),
 ) = {
   let first-pub = true
