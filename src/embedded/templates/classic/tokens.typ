@@ -29,28 +29,41 @@
   (body: body, org: org, sec: sec, name: name)
 }
 
-// Spacing design tokens.
+// Theme overrides, read here so the spacing rhythm below can honour them.
+#let THEME = {
+  let data = yaml(sys.inputs.at("content", default: "/content.yaml"))
+  let meta = data.at("meta", default: (:))
+  if meta != none and "theme" in meta { meta.theme } else { (:) }
+}
+
+// Spacing rhythm.
 //
 // Typst measures leading and block spacing from one line's baseline to the
 // next line's cap height, so the baseline-to-baseline pitch is roughly
-// `LEADING + cap-height` (~1.1em for most serifs). Every gap between
-// consecutive single-line rows must be at least LEADING, otherwise separate
-// rows sit tighter than the wrapped lines of a paragraph and ascenders
-// collide with the descenders above them.
-#let LEADING = 0.52em
-#let BULLET_GAP = LEADING
-#let LINE_GAP = LEADING
-#let ROLE_BELOW = LEADING
-#let ORG_BELOW = LEADING
-#let ROLE_ABOVE = 0.62em
-#let GROUP_GAP = 0.78em
-// Header gaps. Block spacing resolves `em` against the surrounding body
-// text, not the enlarged name, so these are body-relative.
-#let NAME_BELOW = 0.70em
-#let HEADER_GAP = 0.40em
-#let SEC_ABOVE = 1.00em
-#let RULE_GAP = 0.20em
-#let RULE_BELOW = 0.50em
+// `LEADING + cap-height` (~1.1em for most serifs). Every other gap is a
+// fixed multiple of LEADING, so one `theme.leading` value re-spaces the whole
+// document consistently. Gaps between consecutive single-line rows are never
+// below 1x, otherwise separate rows sit tighter than the wrapped lines of a
+// paragraph and ascenders collide with the descenders above them.
+//
+// All values resolve `em` against the body text (block spacing does not see
+// the enlarged name or section sizes), so they scale with `font_size` too.
+#let LEADING = if "leading" in THEME { eval(str(THEME.leading)) } else {
+  0.52em
+}
+#let space(ratio) = LEADING * ratio
+
+#let BULLET_GAP = space(1.0) // bullet to bullet
+#let LINE_GAP = space(1.0) // skill / award / freeform rows
+#let ROLE_BELOW = space(1.0) // role row to its first bullet
+#let ORG_BELOW = space(1.0) // organisation row to its first role
+#let ROLE_ABOVE = space(1.2) // between roles inside one organisation
+#let GROUP_GAP = space(1.5) // between organisations / projects / degrees
+#let SEC_ABOVE = space(1.9) // above a section title
+#let RULE_GAP = space(0.4) // section title to its rule
+#let RULE_BELOW = space(1.0) // rule to the section's first row
+#let NAME_BELOW = space(1.35) // name to title / contact row
+#let HEADER_GAP = space(0.75) // between the header's secondary rows
 
 // Symbols & Separators
 #let SEP = [ · ]

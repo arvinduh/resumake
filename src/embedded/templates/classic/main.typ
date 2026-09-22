@@ -16,7 +16,7 @@
 #let data = yaml(content-path)
 
 // Theme extraction from YAML meta.theme or fallback defaults
-#let theme = if "theme" in data.meta { data.meta.theme } else { (:) }
+#let theme = THEME
 
 // Golden Ratio Typography Scale
 #let scale = calc-scale(11pt, theme)
