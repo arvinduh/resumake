@@ -20,6 +20,22 @@
   body
 })
 
+// Flexible spacing. Each call reserves `weight` shares of whatever height
+// the page has left once the content is laid out at its natural spacing
+// (see `fit-page` in main.typ); in an auto-height container it is zero.
+// The counter records the total weight so `fit-page` can cap the stretch
+// per share rather than per document.
+//
+// Hard `v` spacing suppresses the weak `above`/`below` spacing of the
+// blocks around it, so the call also emits the gap's natural size `base`.
+#let flex-counter = counter("resumake-flex")
+
+#let flex-gap(weight, base) = {
+  flex-counter.update(n => n + int(weight * 100))
+  v(base)
+  v(weight * 1fr)
+}
+
 // Text style primitives
 #let bold(body) = text(weight: "bold")[#body]
 #let italic(body) = text(style: "italic")[#body]
