@@ -36,11 +36,17 @@
   accent-color: rgb("#2a2a2a"),
   rule-thick: 0.5pt,
 ) = {
-  block(above: SEC_ABOVE, below: RULE_BELOW)[
-    #text(size: sec-size, weight: "semibold", tracking: 0.08em)[#upper(title)]
-    #v(-1.00em)
-    #line(length: 100%, stroke: rule-thick + accent-color)
-  ]
+  // The rule is the block's own bottom border rather than a separate line
+  // pulled up with negative spacing, so its distance from the title stays
+  // fixed whatever the font's line metrics or the paragraph leading are.
+  block(
+    above: SEC_ABOVE,
+    below: RULE_BELOW,
+    width: 100%,
+    inset: (bottom: RULE_GAP),
+    stroke: (bottom: rule-thick + accent-color),
+    text(size: sec-size, weight: "semibold", tracking: 0.08em)[#upper(title)],
+  )
 }
 
 // Generic "label ...... flush-right meta" row.
