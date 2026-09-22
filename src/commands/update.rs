@@ -67,6 +67,30 @@ fn build_updater() -> Result<(AxoUpdater, Receipt), UpdateError> {
   Ok((updater, receipt))
 }
 
+/// Explains failures a user can act on. A permission error almost always
+/// means the binary sits in an admin-only directory (e.g. an MSI install
+/// under Program Files), which a per-user self-update cannot write to.
+fn failure_hint(err: &UpdateError) -> Option<String> {
+  let io = match err {
+    UpdateError::Io(io) => io,
+    UpdateError::AxoUpdater(e) => match e.as_ref() {
+      axoupdater::AxoupdateError::Io(io) => io,
+      _ => return None,
+    },
+  };
+  if io.kind() != std::io::ErrorKind::PermissionDenied {
+    return None;
+  }
+  let exe = std::env::current_exe()
+    .map(|p| p.display().to_string())
+    .unwrap_or_else(|_| "the rsmk binary".to_string());
+  Some(format!(
+    "No permission to replace {exe}. If it is in an admin-only folder \
+     (such as Program Files), uninstall that copy and reinstall per-user \
+     with the installer from the README, or rerun from an elevated shell."
+  ))
+}
+
 /// Entry point for the `update` subcommand.
 ///
 /// # Errors
@@ -135,6 +159,10 @@ pub(crate) fn run_update(
     Err(e) => {
       if !quiet {
         ui::print_error(&format!("Self-update failed: {e}"));
+        let err = UpdateError::from(e);
+        if let Some(hint) = failure_hint(&err) {
+          ui::print_info(&hint);
+        }
       }
     }
   }
@@ -159,6 +187,25 @@ mod tests {
       "file not found",
     ));
     assert!(format!("{io_err}").contains("I/O error"));
+  }
+
+  #[test]
+  fn test_failure_hint_explains_permission_denied() {
+    let denied =
+      || std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+    let wrapped = UpdateError::AxoUpdater(Box::new(
+      axoupdater::AxoupdateError::Io(denied()),
+    ));
+    let hint = failure_hint(&wrapped).expect("permission errors get a hint");
+    assert!(hint.contains("No permission to replace"));
+    assert!(failure_hint(&UpdateError::Io(denied())).is_some());
+  }
+
+  #[test]
+  fn test_failure_hint_ignores_other_errors() {
+    let missing =
+      UpdateError::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "x"));
+    assert!(failure_hint(&missing).is_none());
   }
 
   #[test]
