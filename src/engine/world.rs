@@ -8,19 +8,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use typst::diag::{FileError, FileResult, Severity, SourceDiagnostic};
-use typst::foundations::{Bytes, Datetime, Dict, Str, Value};
-use typst::syntax::{FileId, Source, VirtualPath};
+use typst::foundations::{Bytes, Datetime, Dict, Duration, Str, Value};
+use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
-use typst::{Library, World};
-use typst_kit::fonts::FontSlot;
+use typst::{Library, LibraryExt, World, WorldExt};
+use typst_kit::fonts::{self, FontStore};
 
 /// In-process [`World`] implementation resolving embedded templates from memory,
 /// disk files from the project root, and system/custom fonts.
 pub(crate) struct ResumakeWorld {
   library: LazyHash<Library>,
-  book: LazyHash<FontBook>,
-  fonts: Vec<FontSlot>,
+  fonts: FontStore,
   main_id: FileId,
   content_id: FileId,
   root_path: PathBuf,
@@ -44,10 +43,6 @@ impl ResumakeWorld {
     content_path: PathBuf,
     font_path: Option<PathBuf>,
   ) -> Result<Self, EngineError> {
-    let mut searcher = typst_kit::fonts::Fonts::searcher();
-    searcher.include_system_fonts(true);
-    searcher.include_embedded_fonts(true);
-
     let mut font_dirs = Vec::new();
     if let Some(ref fp) = font_path {
       font_dirs.push(fp.clone());
@@ -61,12 +56,17 @@ impl ResumakeWorld {
       font_dirs.push(candidate_assets);
     }
 
-    let fonts = searcher.search_with(font_dirs);
-    let book = LazyHash::new(fonts.book);
-    let font_slots = fonts.fonts;
+    // Project fonts first, so a family shipped in ./fonts wins over a
+    // same-named system or embedded one.
+    let mut fonts = FontStore::new();
+    for dir in &font_dirs {
+      fonts.extend(fonts::scan(dir));
+    }
+    fonts.extend(fonts::system());
+    fonts.extend(fonts::embedded());
 
     let content_vpath = normalize_posix_path(&root_path, &content_path);
-    let content_id = FileId::new(None, VirtualPath::new(&content_vpath));
+    let content_id = project_file_id(&content_vpath);
 
     let mut inputs = Dict::new();
     inputs.insert(
@@ -90,12 +90,11 @@ impl ResumakeWorld {
       format!("/{template_str}")
     };
 
-    let main_id = FileId::new(None, VirtualPath::new(&main_vpath));
+    let main_id = project_file_id(&main_vpath);
 
     Ok(Self {
       library,
-      book,
-      fonts: font_slots,
+      fonts,
       main_id,
       content_id,
       root_path,
@@ -110,9 +109,7 @@ impl ResumakeWorld {
   }
 
   fn read_bytes_uncached(&self, id: FileId) -> FileResult<Bytes> {
-    let raw_vpath = id.vpath().as_rootless_path().to_string_lossy();
-    let vpath = raw_vpath.replace('\\', "/");
-    let trimmed_vpath = vpath.trim_start_matches('/');
+    let trimmed_vpath = id.vpath().get_without_slash();
 
     // 1. Resolve from embedded templates in memory
     if let Some(file) = TEMPLATES_DIR.get_file(trimmed_vpath) {
@@ -174,9 +171,7 @@ impl ResumakeWorld {
       }
     }
 
-    Err(FileError::NotFound(
-      id.vpath().as_rooted_path().to_path_buf(),
-    ))
+    Err(FileError::NotFound(PathBuf::from(id.vpath().get_with_slash())))
   }
 }
 
@@ -186,7 +181,7 @@ impl World for ResumakeWorld {
   }
 
   fn book(&self) -> &LazyHash<FontBook> {
-    &self.book
+    self.fonts.book()
   }
 
   fn main(&self) -> FileId {
@@ -224,17 +219,29 @@ impl World for ResumakeWorld {
   }
 
   fn font(&self, index: usize) -> Option<Font> {
-    self.fonts.get(index).and_then(|slot| slot.get())
+    self.fonts.font(index)
   }
 
-  fn today(&self, offset: Option<i64>) -> Option<Datetime> {
+  fn today(&self, offset: Option<Duration>) -> Option<Datetime> {
     let duration = self.now.duration_since(std::time::UNIX_EPOCH).ok()?;
     let secs = match offset {
       None => duration.as_secs() as i64,
-      Some(hours) => (duration.as_secs() as i64) + (hours * 3600),
+      Some(offset) => (duration.as_secs() as i64) + offset.seconds() as i64,
     };
     days_to_date(secs / 86400)
   }
+}
+
+/// Interns a project-rooted virtual path. A path that cannot be virtualised
+/// (e.g. one escaping the root via `..`) falls back to its file name, which
+/// `read_bytes_uncached` still resolves for the content file.
+fn project_file_id(vpath: &str) -> FileId {
+  let path = VirtualPath::new(vpath)
+    .or_else(|_| VirtualPath::new(vpath.rsplit('/').next().unwrap_or("")))
+    .unwrap_or_else(|_| {
+      VirtualPath::new("/content.yaml").expect("constant path is valid")
+    });
+  FileId::new(RootedPath::new(VirtualRoot::Project, path))
 }
 
 fn days_to_date(days_since_epoch: i64) -> Option<Datetime> {
@@ -265,26 +272,19 @@ pub(crate) fn format_diagnostics(
     };
     let mut location = String::new();
     if let Some(id) = diag.span.id() {
-      let path = id.vpath().as_rooted_path();
-      if let Ok(source) = world.source(id) {
-        if let Some(range) = source.range(diag.span) {
-          let line =
-            source.byte_to_line(range.start).map(|l| l + 1).unwrap_or(1);
-          let col = source
-            .byte_to_column(range.start)
-            .map(|c| c + 1)
-            .unwrap_or(1);
-          location = format!("{}:{}:{}: ", path.display(), line, col);
-        } else {
-          location = format!("{}: ", path.display());
-        }
-      } else {
-        location = format!("{}: ", path.display());
-      }
+      let path = id.vpath().get_with_slash();
+      let line_col = world.source(id).ok().and_then(|source| {
+        let range = world.range(diag.span)?;
+        source.lines().byte_to_line_column(range.start)
+      });
+      location = match line_col {
+        Some((line, col)) => format!("{path}:{}:{}: ", line + 1, col + 1),
+        None => format!("{path}: "),
+      };
     }
     let mut msg = format!("{location}{severity}: {}", diag.message);
     for hint in &diag.hints {
-      msg.push_str(&format!("\n  = hint: {hint}"));
+      msg.push_str(&format!("\n  = hint: {}", hint.v));
     }
     out.push(msg);
   }

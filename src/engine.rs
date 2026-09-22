@@ -9,9 +9,9 @@ use crate::telemetry::{self, TelemetryReport};
 use std::fs;
 use std::path::{Path, PathBuf};
 use typst::foundations::{Label, Selector};
-use typst::layout::PagedDocument;
+use typst::introspection::Introspector;
 use typst::utils::PicoStr;
-use typst::Document;
+use typst_layout::PagedDocument;
 
 /// The core in-process Typst compiler facade.
 pub struct TypstEngine {
@@ -144,13 +144,13 @@ impl TypstEngine {
               typst::diag::Severity::Warning => "warning",
             };
             let location = if let Some(id) = d.span.id() {
-              format!("{}: ", id.vpath().as_rooted_path().display())
+              format!("{}: ", id.vpath().get_with_slash())
             } else {
               String::new()
             };
             let mut msg = format!("{location}{severity}: {}", d.message);
             for hint in &d.hints {
-              msg.push_str(&format!("\n  = hint: {hint}"));
+              msg.push_str(&format!("\n  = hint: {}", hint.v));
             }
             msg
           })
@@ -208,9 +208,10 @@ pub fn query_doc_metadata(
     .trim()
     .trim_start_matches('<')
     .trim_end_matches('>');
-  let label = Label::new(PicoStr::intern(label_str));
-  let sel = Selector::Label(label);
-  let elems = doc.introspector().query(&sel);
+  let Some(label) = Label::new(PicoStr::intern(label_str)) else {
+    return Ok("[]".to_string());
+  };
+  let elems = doc.introspector().query(&Selector::Label(label));
 
   let mut values = Vec::new();
   for elem in elems {
