@@ -80,7 +80,7 @@
 )
 #set page(paper: PAPER, margin: MARGIN)
 #set text(font: FONT, size: BODY, fill: INK)
-#set par(justify: false, leading: 0.65em)
+#set par(justify: false, leading: LEADING, spacing: LEADING)
 #show link: it => text(fill: INK)[#it]
 
 #let render-header(meta) = {
