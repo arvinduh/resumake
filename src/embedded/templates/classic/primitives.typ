@@ -13,12 +13,14 @@
   let n = bulletinfo-counter.get().first()
   let nat = measure(body)
   let fill = calc.round(nat.width / size.width * 100.0, digits: 1)
-  let t = repr(body)
+  // Truncate by grapheme cluster, not byte: `str.slice` takes byte offsets
+  // and panics when one lands inside a multi-byte character such as `–`.
+  let chars = repr(body).clusters()
   [#metadata((
     id: kind + "-" + str(n),
     kind: kind,
     fill: fill,
-    text: t.slice(0, calc.min(80, t.len())),
+    text: chars.slice(0, calc.min(80, chars.len())).join(default: ""),
   )) <bulletinfo>]
   par(body)
 })
