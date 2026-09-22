@@ -83,6 +83,11 @@
 #set par(justify: false, leading: LEADING, spacing: LEADING)
 #show link: it => text(fill: INK)[#it]
 
+// The name and section titles are real headings so the tagged PDF (and its
+// bookmarks) carries H1/H2 structure, but they are styled at the call site,
+// so drop Typst's default heading block, weight and size.
+#show heading: it => it.body
+
 // Typographic punctuation. Strings from YAML are inserted as plain text,
 // which bypasses Typst's markup-level smart quotes and dash shorthands, so
 // apply them here: a spaced hyphen (date ranges, "Role - Team") becomes a
@@ -94,11 +99,11 @@
 
 #let render-header(meta) = {
   align(center)[
-    #block(below: NAME_BELOW, text(
+    #block(below: NAME_BELOW, heading(level: 1, text(
       size: NAME,
       weight: "semibold",
       tracking: 0.02em,
-    )[#meta.name])
+    )[#meta.name]))
     #if "title" in meta and meta.title != "" {
       block(below: HEADER_GAP, text(
         size: BODY + 0.5pt,
