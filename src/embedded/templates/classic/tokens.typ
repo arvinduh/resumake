@@ -44,6 +44,10 @@
 #let ORG_BELOW = LEADING
 #let ROLE_ABOVE = 0.62em
 #let GROUP_GAP = 0.78em
+// Header gaps. Block spacing resolves `em` against the surrounding body
+// text, not the enlarged name, so these are body-relative.
+#let NAME_BELOW = 0.70em
+#let HEADER_GAP = 0.40em
 #let SEC_ABOVE = 1.00em
 #let RULE_GAP = 0.20em
 #let RULE_BELOW = 0.50em
