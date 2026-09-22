@@ -22,6 +22,12 @@
   the latest release.
 - **Automated Résumé CI/CD**: Scaffolds GitHub Actions workflows to compile and
   release your PDF automatically on tag.
+- **Accessible, Copyable PDFs**: Output is a tagged PDF (headings,
+  paragraphs, lists), so text pasted into Word or Docs keeps its line breaks
+  and parsers see the document's structure.
+- **Adaptive Spacing**: Every gap derives from one `theme.leading` value, and
+  spare page height is shared across section and entry gaps (capped by
+  `theme.stretch`) so short résumés loosen instead of ending half-empty.
 
 ---
 
@@ -177,7 +183,8 @@ Every compile checks golden-ratio layout geometry:
 
 - **Page Count Guard**: Strictly fails if content spills over to page 2.
 - **Vertical Fill Percentage**: Target between 90% and 98% for optimal white
-  space balance.
+  space balance. Measured at natural spacing, before spare height is shared
+  out across the flexible gaps.
 - **Line Wrap Detector**: Highlights bullet points that wrap only one or two
   orphan words onto a second line.
 
