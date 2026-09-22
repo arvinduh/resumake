@@ -23,6 +23,7 @@
     text(size: org-size, weight: "bold")[#inst],
     muted-italic(loc, muted-color: muted-color),
     above: if first { 0em } else { GROUP_GAP },
+    flex: if first { 0 } else { 1 },
     below: ORG_BELOW,
   )
   split-row(

@@ -29,6 +29,7 @@
   format-role-title(title, stack: stack),
   muted-italic(dates, muted-color: muted-color),
   above: if first { 0em } else { ROLE_ABOVE },
+  flex: if first { 0 } else { 0.5 },
   below: ROLE_BELOW,
 )
 
@@ -51,6 +52,7 @@
       text(size: org-size, weight: "bold")[#org-name],
       muted-italic(loc, muted-color: muted-color),
       above: if first-exp { 0em } else { GROUP_GAP },
+      flex: if first-exp { 0 } else { 1 },
       below: ORG_BELOW,
     )
 
