@@ -83,6 +83,15 @@
 #set par(justify: false, leading: LEADING, spacing: LEADING)
 #show link: it => text(fill: INK)[#it]
 
+// Typographic punctuation. Strings from YAML are inserted as plain text,
+// which bypasses Typst's markup-level smart quotes and dash shorthands, so
+// apply them here: a spaced hyphen (date ranges, "Role - Team") becomes a
+// spaced en dash, and straight quotes become curly ones. Unspaced hyphens
+// are left alone, so phone numbers and compounds keep theirs.
+#show " - ": [ – ]
+#show "'": "’"
+#show regex("\"[^\"]*\""): it => "“" + it.text.slice(1, -1) + "”"
+
 #let render-header(meta) = {
   align(center)[
     #block(below: NAME_BELOW, text(
