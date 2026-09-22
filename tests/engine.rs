@@ -189,6 +189,89 @@ fn test_template_reports_wrapped_from_layout() {
   assert_eq!(report.line_wraps.len(), flags.len() - first_wrap);
 }
 
+/// Ejects `classic` into `dir`, then marks it so a compile can prove the
+/// local copy, including a file reached through an import, was used.
+fn eject_marked_classic(dir: &std::path::Path) {
+  templates::eject_template("classic", dir, false).unwrap();
+  let tokens = dir.join("tokens.typ");
+  let mut src = fs::read_to_string(&tokens).unwrap();
+  src.push_str("\n#let EJECT-PROBE = \"local\"\n");
+  fs::write(&tokens, src).unwrap();
+  let main = dir.join("main.typ");
+  let mut src = fs::read_to_string(&main).unwrap();
+  src.push_str("\n#metadata(EJECT-PROBE) <ejectprobe>\n");
+  fs::write(&main, src).unwrap();
+}
+
+#[test]
+fn test_compile_with_template_ejected_into_project() {
+  let temp = TempDir::new().unwrap();
+  let root = temp.path();
+  let content_path = root.join("content.yaml");
+  fs::write(&content_path, "meta:\n  name: Test\n").unwrap();
+  eject_marked_classic(&root.join("templates").join("classic"));
+
+  // `classic` now resolves to the ejected copy by absolute path, as it does
+  // for `rsmk build` in a project with a `templates/` directory.
+  let engine = TypstEngine::with_root(root.to_path_buf(), None);
+  let template = engine.resolve_template("classic").unwrap();
+  assert!(template.is_absolute());
+
+  let doc = engine
+    .compile_paged(&template, &content_path)
+    .expect("an ejected template must compile");
+  let probe = query_doc_metadata(&doc, "<ejectprobe>").unwrap();
+  assert!(
+    probe.contains("local"),
+    "ejected files must be used: {probe}"
+  );
+}
+
+#[test]
+fn test_ejected_template_named_like_builtin_shadows_it() {
+  // A local `classic/` must win over the embedded `classic/`, even though
+  // both map to the virtual paths `/classic/*.typ`.
+  let temp = TempDir::new().unwrap();
+  let root = temp.path();
+  let content_path = root.join("content.yaml");
+  fs::write(&content_path, "meta:\n  name: Test\n").unwrap();
+  let template_dir = root.join("classic");
+  eject_marked_classic(&template_dir);
+
+  let engine = TypstEngine::with_root(root.to_path_buf(), None);
+  let template = engine
+    .resolve_template(template_dir.to_str().unwrap())
+    .unwrap();
+  let doc = engine
+    .compile_paged(&template, &content_path)
+    .expect("a local copy of a built-in template must compile");
+  let probe = query_doc_metadata(&doc, "<ejectprobe>").unwrap();
+  assert!(probe.contains("local"), "local files must win: {probe}");
+}
+
+#[test]
+fn test_compile_with_template_outside_project_root() {
+  let project = TempDir::new().unwrap();
+  let elsewhere = TempDir::new().unwrap();
+  let content_path = project.path().join("content.yaml");
+  fs::write(&content_path, "meta:\n  name: Test\n").unwrap();
+  let template_dir = elsewhere.path().join("mytheme");
+  eject_marked_classic(&template_dir);
+
+  let engine = TypstEngine::with_root(project.path().to_path_buf(), None);
+  let template = engine
+    .resolve_template(template_dir.to_str().unwrap())
+    .unwrap();
+  let doc = engine
+    .compile_paged(&template, &content_path)
+    .expect("a template outside the project root must compile");
+  let probe = query_doc_metadata(&doc, "<ejectprobe>").unwrap();
+  assert!(
+    probe.contains("local"),
+    "template files must be used: {probe}"
+  );
+}
+
 #[test]
 fn test_typst_engine_render_pdf_and_query_doc_metadata() {
   let temp = TempDir::new().unwrap();

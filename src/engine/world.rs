@@ -27,6 +27,11 @@ pub(crate) struct ResumakeWorld {
   content_path: PathBuf,
   content_vpath: String,
   template_name_hint: String,
+  /// Virtual directory of an on-disk template's entry file, without a
+  /// leading slash; empty for embedded templates and project-root entries.
+  template_dir_vpath: String,
+  /// Whether the template entry file exists on disk rather than embedded.
+  local_template: bool,
   sources: Mutex<HashMap<FileId, FileResult<Source>>>,
   files: Mutex<HashMap<FileId, FileResult<Bytes>>>,
   now: std::time::SystemTime,
@@ -82,12 +87,25 @@ impl ResumakeWorld {
       .unwrap_or(DEFAULT_TEMPLATE)
       .to_string();
 
-    let main_vpath = if template_str.starts_with('/') {
+    // A template on disk gets a project-relative virtual path, so its
+    // relative imports resolve beside it. Using an absolute filesystem path
+    // as the virtual path sends `tokens.typ` to `<root>/<abs path>/...`.
+    let on_disk = template_path.is_file();
+    let main_vpath = if on_disk {
+      normalize_posix_path(&root_path, &template_path)
+    } else if template_str.starts_with('/') {
       template_str
-    } else if let Ok(rel) = template_path.strip_prefix(&root_path) {
-      format!("/{}", rel.to_string_lossy().replace('\\', "/"))
     } else {
       format!("/{template_str}")
+    };
+    let template_dir_vpath = if on_disk {
+      main_vpath
+        .trim_start_matches('/')
+        .rsplit_once('/')
+        .map(|(dir, _)| dir.to_string())
+        .unwrap_or_default()
+    } else {
+      String::new()
     };
 
     let main_id = project_file_id(&main_vpath);
@@ -102,6 +120,8 @@ impl ResumakeWorld {
       content_path,
       content_vpath,
       template_name_hint,
+      template_dir_vpath,
+      local_template: on_disk,
       sources: Mutex::new(HashMap::new()),
       files: Mutex::new(HashMap::new()),
       now: std::time::SystemTime::now(),
@@ -111,15 +131,25 @@ impl ResumakeWorld {
   fn read_bytes_uncached(&self, id: FileId) -> FileResult<Bytes> {
     let trimmed_vpath = id.vpath().get_without_slash();
 
+    // Files of an on-disk template come from disk, even when its directory
+    // shares a name (and so virtual paths) with an embedded template.
+    let dir_prefix = format!("{}/", self.template_dir_vpath);
+    let in_local_template = self.local_template
+      && (id == self.main_id
+        || (!self.template_dir_vpath.is_empty()
+          && trimmed_vpath.starts_with(&dir_prefix)));
+
     // 1. Resolve from embedded templates in memory
-    if let Some(file) = TEMPLATES_DIR.get_file(trimmed_vpath) {
-      return Ok(Bytes::new(file.contents()));
-    }
-    if !self.template_name_hint.is_empty() {
-      let scoped_embedded =
-        format!("{}/{}", self.template_name_hint, trimmed_vpath);
-      if let Some(file) = TEMPLATES_DIR.get_file(&scoped_embedded) {
+    if !in_local_template {
+      if let Some(file) = TEMPLATES_DIR.get_file(trimmed_vpath) {
         return Ok(Bytes::new(file.contents()));
+      }
+      if !self.template_name_hint.is_empty() {
+        let scoped_embedded =
+          format!("{}/{}", self.template_name_hint, trimmed_vpath);
+        if let Some(file) = TEMPLATES_DIR.get_file(&scoped_embedded) {
+          return Ok(Bytes::new(file.contents()));
+        }
       }
     }
 
@@ -144,7 +174,16 @@ impl ResumakeWorld {
         .map_err(|e| FileError::from_io(e, &self.template_path));
     }
     if let Some(parent) = self.template_path.parent() {
-      let candidate = parent.join(trimmed_vpath);
+      // Files beside the entry share its virtual directory; strip it so
+      // `templates/classic/tokens.typ` maps to `<template dir>/tokens.typ`.
+      let rel = if self.template_dir_vpath.is_empty() {
+        trimmed_vpath
+      } else {
+        trimmed_vpath
+          .strip_prefix(&dir_prefix)
+          .unwrap_or(trimmed_vpath)
+      };
+      let candidate = parent.join(rel);
       if candidate.is_file() {
         return fs::read(&candidate)
           .map(Bytes::new)

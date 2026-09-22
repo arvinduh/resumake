@@ -463,6 +463,43 @@ fn test_cli_template_eject_classic() {
 }
 
 #[test]
+fn test_cli_build_with_ejected_template() {
+  // Regression test: after `rsmk template classic`, every build failed with
+  // "file not found" for tokens.typ, because the template's absolute path
+  // was used as its virtual path.
+  let temp = TempDir::new().unwrap();
+  let content_file = temp.path().join("content.yaml");
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .arg("init")
+    .arg("--name")
+    .arg("Jane Doe")
+    .arg(&content_file)
+    .assert()
+    .success();
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .current_dir(temp.path())
+    .arg("template")
+    .arg("classic")
+    .assert()
+    .success();
+
+  // The auto-detected local template, then the command eject suggests.
+  for extra in [&[][..], &["--template", "./templates/classic/main.typ"][..]] {
+    Command::cargo_bin("rsmk")
+      .unwrap()
+      .current_dir(temp.path())
+      .arg("check")
+      .args(extra)
+      .assert()
+      .success()
+      .stdout(predicate::str::contains("SUCCESS"));
+  }
+}
+
+#[test]
 fn test_cli_template_eject_collision_without_force() {
   let temp = TempDir::new().unwrap();
 
