@@ -41,16 +41,16 @@
       below: ROLE_BELOW,
     )
     if authors != "" {
-      block(above: 0.15em, below: 0.25em)[#text(
+      block(above: LINE_GAP, below: LINE_GAP)[#par(text(
         size: body-size - 0.5pt,
         fill: muted-color,
-      )[#authors]]
+      )[#authors])]
     }
     if "notes" in pub and pub.notes != "" {
-      block(above: 0.10em, below: 0.25em)[#text(
+      block(above: LINE_GAP, below: LINE_GAP)[#par(text(
         size: body-size - 0.5pt,
         style: "italic",
-      )[#pub.notes]]
+      )[#pub.notes])]
     }
     first-pub = false
   }

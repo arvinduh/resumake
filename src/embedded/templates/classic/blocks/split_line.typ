@@ -35,10 +35,10 @@
       below: LINE_GAP,
     )
     if "summary" in it and it.summary != "" {
-      block(above: 0.10em, below: 0.25em)[#text(
+      block(above: LINE_GAP, below: LINE_GAP)[#par(text(
         size: body-size - 0.5pt,
         fill: muted-color,
-      )[#it.summary]]
+      )[#it.summary])]
     }
     first-item = false
   }
