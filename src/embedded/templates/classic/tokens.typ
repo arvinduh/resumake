@@ -29,15 +29,23 @@
   (body: body, org: org, sec: sec, name: name)
 }
 
-// Spacing design tokens
-#let SEC_ABOVE = 1.00em
-#let RULE_BELOW = 0.42em
-#let GROUP_GAP = 0.80em
-#let ORG_BELOW = 0.44em
-#let ROLE_ABOVE = 0.46em
-#let ROLE_BELOW = 0.34em
-#let BULLET_GAP = 0.34em
-#let LINE_GAP = 0.30em
+// Spacing design tokens.
+//
+// Typst measures leading and block spacing from one line's baseline to the
+// next line's cap height, so the baseline-to-baseline pitch is roughly
+// `LEADING + cap-height` (~1.1em for most serifs). Every gap between
+// consecutive single-line rows must be at least LEADING, otherwise separate
+// rows sit tighter than the wrapped lines of a paragraph and ascenders
+// collide with the descenders above them.
+#let LEADING = 0.52em
+#let BULLET_GAP = LEADING
+#let LINE_GAP = LEADING
+#let ROLE_BELOW = LEADING
+#let ORG_BELOW = LEADING
+#let ROLE_ABOVE = 0.62em
+#let GROUP_GAP = 0.78em
+#let SEC_ABOVE = 1.10em
+#let RULE_BELOW = 0.60em
 
 // Symbols & Separators
 #let SEP = [ · ]
