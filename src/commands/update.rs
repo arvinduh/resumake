@@ -20,6 +20,53 @@ impl From<axoupdater::AxoupdateError> for UpdateError {
   }
 }
 
+/// How the install receipt relates to the running binary.
+#[derive(Debug, PartialEq, Eq)]
+enum Receipt {
+  /// A receipt exists and describes this executable.
+  Matches,
+  /// No receipt could be loaded.
+  Missing,
+  /// A receipt exists but describes a different install location.
+  Stale,
+}
+
+/// Builds an updater for the running binary.
+///
+/// axoupdater only trusts a receipt for the executable it describes, and
+/// when they disagree it answers "no update needed" without querying
+/// GitHub at all. A receipt left behind by another install (or written by
+/// a build under `target/`) would then pin `rsmk update` to "up to date"
+/// forever, so a stale receipt is treated like a missing one: the release
+/// source, install directory and version come from this binary instead.
+fn build_updater() -> Result<(AxoUpdater, Receipt), UpdateError> {
+  let mut updater = AxoUpdater::new_for("resumake");
+  let receipt = if updater.load_receipt().is_err() {
+    Receipt::Missing
+  } else if updater.check_receipt_is_for_this_executable()? {
+    return Ok((updater, Receipt::Matches));
+  } else {
+    Receipt::Stale
+  };
+
+  let mut updater = AxoUpdater::new_for("resumake");
+  let current_exe = std::env::current_exe()?;
+  let install_dir = current_exe
+    .parent()
+    .unwrap_or_else(|| std::path::Path::new("."));
+  updater.set_release_source(ReleaseSource {
+    release_type: ReleaseSourceType::GitHub,
+    owner: "arvinduh".to_string(),
+    name: "resumake".to_string(),
+    app_name: "resumake".to_string(),
+  });
+  updater.set_install_dir(install_dir.to_str().unwrap_or("."));
+  if let Ok(ver) = Version::parse(env!("CARGO_PKG_VERSION")) {
+    let _ = updater.set_current_version(ver);
+  }
+  Ok((updater, receipt))
+}
+
 /// Entry point for the `update` subcommand.
 ///
 /// # Errors
@@ -30,22 +77,12 @@ pub(crate) fn run_update(
   force: bool,
   quiet: bool,
 ) -> Result<(), UpdateError> {
-  let mut updater = AxoUpdater::new_for("resumake");
-  if updater.load_receipt().is_err() {
-    let current_exe = std::env::current_exe()?;
-    let install_dir = current_exe
-      .parent()
-      .unwrap_or_else(|| std::path::Path::new("."));
-    updater.set_release_source(ReleaseSource {
-      release_type: ReleaseSourceType::GitHub,
-      owner: "arvinduh".to_string(),
-      name: "resumake".to_string(),
-      app_name: "resumake".to_string(),
-    });
-    updater.set_install_dir(install_dir.to_str().unwrap_or("."));
-    if let Ok(ver) = Version::parse(env!("CARGO_PKG_VERSION")) {
-      let _ = updater.set_current_version(ver);
-    }
+  let (mut updater, receipt) = build_updater()?;
+  if receipt == Receipt::Stale && !quiet {
+    ui::print_info(
+      "Ignoring an install receipt that belongs to a different rsmk \
+       install; checking GitHub releases for this binary directly.",
+    );
   }
 
   if force {

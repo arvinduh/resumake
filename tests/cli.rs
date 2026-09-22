@@ -1088,3 +1088,30 @@ fn test_cli_update_check_quiet() {
     .assert()
     .success();
 }
+
+#[test]
+fn test_cli_update_check_ignores_stale_receipt() {
+  // A receipt for a different install (here, a test-build folder) must not
+  // short-circuit the check to "up to date". AXOUPDATER_CONFIG_PATH keeps the
+  // receipt lookup inside the temp dir, away from the real user profile.
+  let config = TempDir::new().unwrap();
+  fs::write(
+    config.path().join("resumake-receipt.json"),
+    r#"{"binaries":["rsmk"],"binary_aliases":{},"cdylibs":[],
+      "cstaticlibs":[],"install_layout":"cargo-home",
+      "install_prefix":"/nonexistent/target/debug/deps","modify_path":true,
+      "provider":{"source":"cargo-dist","version":"0.32.0"},
+      "source":{"app_name":"resumake","name":"resumake","owner":"arvinduh",
+      "release_type":"github"},"version":"0.3.1"}"#,
+  )
+  .unwrap();
+
+  Command::cargo_bin("rsmk")
+    .unwrap()
+    .env("AXOUPDATER_CONFIG_PATH", config.path())
+    .arg("update")
+    .arg("--check")
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Ignoring an install receipt"));
+}
