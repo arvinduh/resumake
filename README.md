@@ -95,7 +95,7 @@ This scaffolds:
 Resumake separates your career content from styling. Edit `content.yaml`:
 
 ```yaml
-# yaml-language-server: $schema=https://github.com/arvinduh/resumake/releases/download/s1.0/resume.schema.json
+# yaml-language-server: $schema=https://github.com/arvinduh/resumake/releases/download/s1.1/resume.schema.json
 meta:
   name: "Jane Doe"
   version: "1.0.0"

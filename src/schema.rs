@@ -272,7 +272,7 @@ pub fn export_builtin_schema(
 /// Published under schema releases (e.g. `s1.0`, `s1.1`) matching Formality's
 /// schema distribution pattern.
 fn schema_url() -> String {
-  "https://github.com/arvinduh/resumake/releases/download/s1.0/resume.schema.json".to_string()
+  "https://github.com/arvinduh/resumake/releases/download/s1.1/resume.schema.json".to_string()
 }
 
 /// Generates a starter `resume.yaml` scaffold with schema directives and
@@ -460,7 +460,7 @@ meta:
     // The schema URL placeholder must be substituted with a concrete,
     // schema-pinned release-asset URL, not left dangling.
     assert!(!tmpl.contains("RESUMAKE_SCHEMA_URL"));
-    assert!(tmpl.contains("/releases/download/s1.0"));
+    assert!(tmpl.contains("/releases/download/s1.1"));
     assert!(tmpl.contains("resume.schema.json"));
   }
 
