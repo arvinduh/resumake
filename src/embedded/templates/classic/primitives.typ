@@ -65,7 +65,11 @@
     width: 100%,
     inset: (bottom: RULE_GAP),
     stroke: (bottom: rule-thick + accent-color),
-    text(size: sec-size, weight: "semibold", tracking: 0.08em)[#upper(title)],
+    heading(level: 2, text(
+      size: sec-size,
+      weight: "semibold",
+      tracking: 0.08em,
+    )[#upper(title)]),
   )
 }
 
