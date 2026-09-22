@@ -13,6 +13,10 @@
   let n = bulletinfo-counter.get().first()
   let nat = measure(body)
   let fill = calc.round(nat.width / size.width * 100.0, digits: 1)
+  // Decide wrapping by laying the paragraph out at the real width, not from
+  // `fill`: a line a hair too wide rounds to exactly 100.0 yet still breaks.
+  let height = measure(par(body), width: size.width).height
+  let line = measure(par[x], width: size.width).height
   // Truncate by grapheme cluster, not byte: `str.slice` takes byte offsets
   // and panics when one lands inside a multi-byte character such as `–`.
   let chars = repr(body).clusters()
@@ -20,6 +24,7 @@
     id: kind + "-" + str(n),
     kind: kind,
     fill: fill,
+    wrapped: height > line * 1.5,
     text: chars.slice(0, calc.min(80, chars.len())).join(default: ""),
   )) <bulletinfo>]
   par(body)

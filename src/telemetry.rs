@@ -75,6 +75,10 @@ pub struct BulletInfo {
   /// Measured text fill ratio percentage
   /// ($width / available\_width \times 100$).
   pub fill: f64,
+  /// Whether the item broke onto more than one line when laid out. Templates
+  /// that predate this field omit it, and wrapping falls back to `fill`.
+  #[serde(default)]
+  pub wrapped: Option<bool>,
   /// Associated text snippet or description.
   pub text: String,
 }
@@ -103,7 +107,7 @@ pub struct TelemetryReport {
   pub fill_pct: f64,
   /// Spare vertical space at the bottom of page 1 in inches.
   pub spare_in: f64,
-  /// Bullet items that wrapped onto an extra line ($fill > 100.0\%$).
+  /// Bullet items that wrapped onto an extra line.
   pub line_wraps: Vec<BulletInfo>,
   /// Bullet items that underfilled ($fill < 86.0\%$).
   pub underfills: Vec<BulletInfo>,
@@ -160,7 +164,7 @@ pub fn evaluate_telemetry(
 
   for b in &bullets {
     if b.kind == "bullet" {
-      if b.fill > 100.0 {
+      if b.wrapped.unwrap_or(b.fill > 100.0) {
         wraps.push(b.clone());
       } else if b.fill < 86.0 {
         underfills.push(b.clone());
@@ -181,6 +185,39 @@ pub fn evaluate_telemetry(
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn test_wrapped_flag_overrides_rounded_fill() {
+    // A line a hair too wide reports fill 100.0 after rounding but still
+    // breaks; the template's `wrapped` flag is authoritative.
+    let page_json =
+      r#"[{"pages":1,"margin":36.0,"page_w":612.0,"page_h":792.0,"y":600.0}]"#;
+    let bullets_json = r#"[
+      {"id":"b1","kind":"bullet","fill":100.0,"wrapped":true,"text":"Just over."},
+      {"id":"b2","kind":"bullet","fill":100.0,"wrapped":false,"text":"Just fits."}
+    ]"#;
+
+    let report = evaluate_telemetry(page_json, bullets_json).unwrap();
+    assert_eq!(report.line_wraps.len(), 1);
+    assert_eq!(report.line_wraps[0].id, "b1");
+    assert!(!report.is_pass());
+  }
+
+  #[test]
+  fn test_missing_wrapped_flag_falls_back_to_fill() {
+    // Custom templates ejected before `wrapped` existed still work.
+    let page_json =
+      r#"[{"pages":1,"margin":36.0,"page_w":612.0,"page_h":792.0,"y":600.0}]"#;
+    let bullets_json = r#"[
+      {"id":"b1","kind":"bullet","fill":101.2,"text":"Over."},
+      {"id":"b2","kind":"bullet","fill":100.0,"text":"At the limit."}
+    ]"#;
+
+    let report = evaluate_telemetry(page_json, bullets_json).unwrap();
+    assert_eq!(report.line_wraps.len(), 1);
+    assert_eq!(report.line_wraps[0].id, "b1");
+    assert_eq!(report.all_bullets[1].wrapped, None);
+  }
 
   #[test]
   fn test_evaluate_valid_single_page_optimal_bullets() {

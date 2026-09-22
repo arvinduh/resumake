@@ -149,6 +149,47 @@ fn test_telemetry_truncates_multibyte_bullets_on_char_boundaries() {
 }
 
 #[test]
+fn test_template_reports_wrapped_from_layout() {
+  let temp = TempDir::new().unwrap();
+  let root = temp.path();
+  let content_path = root.join("content.yaml");
+
+  // Bullets from one to sixty words: short ones fit on a line, long ones
+  // break, and the flag must flip exactly once, from fits to wraps.
+  let bullets: String = (1..=60)
+    .map(|n| format!("          - \"{}\"\n", "word ".repeat(n).trim_end()))
+    .collect();
+  let yaml = format!(
+    "meta:\n  name: Test\nsections:\n  - title: Projects\n    projects:\n      - name: Demo\n        bullets:\n{bullets}"
+  );
+  fs::write(&content_path, yaml).unwrap();
+
+  let engine = TypstEngine::with_root(root.to_path_buf(), None);
+  let doc = engine
+    .compile_paged(&PathBuf::from("classic/main.typ"), &content_path)
+    .expect("compilation must succeed");
+  let page_json = query_doc_metadata(&doc, "<pageinfo>").unwrap();
+  let bullets_json = query_doc_metadata(&doc, "<bulletinfo>").unwrap();
+  let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)
+    .expect("telemetry must parse");
+
+  let flags: Vec<bool> = report
+    .all_bullets
+    .iter()
+    .map(|b| b.wrapped.expect("classic template must report `wrapped`"))
+    .collect();
+  let first_wrap = flags.iter().position(|&w| w).expect("long bullets wrap");
+  assert!(first_wrap > 0, "a one-word bullet must fit");
+  assert!(
+    flags[first_wrap..].iter().all(|&w| w),
+    "wrapping is monotonic"
+  );
+  assert!(report.all_bullets[first_wrap].fill >= 99.9);
+  assert!(report.all_bullets[first_wrap - 1].fill <= 100.1);
+  assert_eq!(report.line_wraps.len(), flags.len() - first_wrap);
+}
+
+#[test]
 fn test_typst_engine_render_pdf_and_query_doc_metadata() {
   let temp = TempDir::new().unwrap();
   let root = temp.path();
