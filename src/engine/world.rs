@@ -171,7 +171,9 @@ impl ResumakeWorld {
       }
     }
 
-    Err(FileError::NotFound(PathBuf::from(id.vpath().get_with_slash())))
+    Err(FileError::NotFound(PathBuf::from(
+      id.vpath().get_with_slash(),
+    )))
   }
 }
 
