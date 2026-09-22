@@ -19,7 +19,7 @@
 #let theme = if "theme" in data.meta { data.meta.theme } else { (:) }
 
 // Golden Ratio Typography Scale
-#let scale = calc-scale(11.5pt, theme)
+#let scale = calc-scale(11pt, theme)
 #let BODY = scale.body
 #let ORG_SIZE = scale.org
 #let SEC = scale.sec

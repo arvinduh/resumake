@@ -5,7 +5,7 @@
 
 #let render-split-line(
   items,
-  body-size: 11.5pt,
+  body-size: 11pt,
   muted-color: rgb("#444444"),
 ) = {
   let first-item = true
