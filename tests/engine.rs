@@ -125,6 +125,30 @@ sections:
 }
 
 #[test]
+fn test_telemetry_truncates_multibyte_bullets_on_char_boundaries() {
+  let temp = TempDir::new().unwrap();
+  let root = temp.path();
+  let content_path = root.join("content.yaml");
+
+  // Two-byte characters from both an even and an odd byte offset, so the
+  // 80-unit telemetry cutoff lands inside a character in one of them.
+  let yaml = format!(
+    "meta:\n  name: Test\nsections:\n  - title: Projects\n    projects:\n      - name: Demo\n        bullets:\n          - \"{}\"\n          - \"a{}\"\n",
+    "é".repeat(60),
+    "–×µ".repeat(20),
+  );
+  fs::write(&content_path, yaml).unwrap();
+
+  let engine = TypstEngine::with_root(root.to_path_buf(), None);
+  let doc = engine
+    .compile_paged(&PathBuf::from("classic/main.typ"), &content_path)
+    .expect("multi-byte bullets must compile");
+  let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")
+    .expect("bulletinfo query must succeed");
+  assert!(bullets_json.contains("é"));
+}
+
+#[test]
 fn test_typst_engine_render_pdf_and_query_doc_metadata() {
   let temp = TempDir::new().unwrap();
   let root = temp.path();
