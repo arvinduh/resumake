@@ -37,6 +37,7 @@
       pub-line,
       muted-italic(d, muted-color: muted-color),
       above: if first-pub { 0em } else { GROUP_GAP },
+      flex: if first-pub { 0 } else { 1 },
       below: ROLE_BELOW,
     )
     if authors != "" {

@@ -52,6 +52,7 @@
   accent-color: rgb("#2a2a2a"),
   rule-thick: 0.5pt,
 ) = {
+  flex-gap(2, SEC_ABOVE)
   // The rule is the block's own bottom border rather than a separate line
   // pulled up with negative spacing, so its distance from the title stays
   // fixed whatever the font's line metrics or the paragraph leading are.
@@ -66,7 +67,8 @@
 }
 
 // Generic "label ...... flush-right meta" row.
-#let split-row(left, right, above: 0em, below: 0em) = {
+#let split-row(left, right, above: 0em, below: 0em, flex: 0) = {
+  if flex > 0 { flex-gap(flex, above) }
   block(above: above, below: below)[#left #h(1fr) #right]
 }
 

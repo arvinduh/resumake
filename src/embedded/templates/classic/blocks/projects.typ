@@ -23,6 +23,7 @@
     left,
     muted-italic(date, muted-color: muted-color),
     above: if first { 0em } else { GROUP_GAP },
+    flex: if first { 0 } else { 1 },
     below: ROLE_BELOW,
   )
 }
