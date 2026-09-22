@@ -65,6 +65,12 @@
 #let NAME_BELOW = space(1.35) // name to title / contact row
 #let HEADER_GAP = space(0.75) // between the header's secondary rows
 
+// Bullets sit visibly inside the text column (indent) with room between
+// the marker and the text (body-indent); at 0.3em the markers read as
+// flush with the section's left edge.
+#let BULLET_INDENT = 0.55em
+#let BULLET_BODY_INDENT = 0.50em
+
 // Vertical fill. Leftover page height is shared out across the section and
 // entry gaps (weights set by `flex-gap` calls), but each unit of weight may
 // grow by at most STRETCH x LEADING, so a short résumé gets gently looser
