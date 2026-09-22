@@ -208,16 +208,40 @@
     }
   }
 
-  // Page layout telemetry probe for the Resumake CLI
-  context [
-    #metadata((
-      pages: counter(page).final().first(),
-      y: here().position().y.pt(),
-      margin: MARGIN.pt(),
-      page_w: PAGE_DIMS.w.pt(),
-      page_h: PAGE_DIMS.h.pt(),
-    )) <pageinfo>
-  ]
 }
 
-#render(data)
+// Page layout telemetry probe for the Resumake CLI. `y` is where the content
+// ends at its natural (unstretched) spacing, so the reported fill measures
+// the content itself rather than the flex gaps that pad it out.
+#let page-probe(y) = context [
+  #metadata((
+    pages: counter(page).final().first(),
+    y: if y == auto { here().position().y.pt() } else { y.pt() },
+    margin: MARGIN.pt(),
+    page_w: PAGE_DIMS.w.pt(),
+    page_h: PAGE_DIMS.h.pt(),
+  )) <pageinfo>
+]
+
+// Lays the document out at its natural height, then, when it fits on the
+// page, re-lays it inside a taller fixed-height block so the flex gaps
+// absorb the slack (capped per unit of flex weight). Content that does not
+// fit is left to flow onto further pages untouched, so overflow is still
+// reported as extra pages.
+#let fit-page(body) = layout(size => context {
+  let natural = measure(block(width: size.width, body)).height
+  let weight = flex-counter.final().first() / 100
+  let slack = calc.min(
+    size.height - natural,
+    weight * STRETCH * measure(v(LEADING)).height,
+  )
+  if natural > size.height or slack <= 0pt {
+    body
+    page-probe(auto)
+  } else {
+    block(height: natural + slack, width: 100%, body)
+    page-probe(here().position().y + natural)
+  }
+})
+
+#fit-page(render(data))

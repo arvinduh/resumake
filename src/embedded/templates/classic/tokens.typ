@@ -65,6 +65,13 @@
 #let NAME_BELOW = space(1.35) // name to title / contact row
 #let HEADER_GAP = space(0.75) // between the header's secondary rows
 
+// Vertical fill. Leftover page height is shared out across the section and
+// entry gaps (weights set by `flex-gap` calls), but each unit of weight may
+// grow by at most STRETCH x LEADING, so a short résumé gets gently looser
+// rather than spread thin to the bottom margin. `theme.stretch: 0` turns the
+// behaviour off.
+#let STRETCH = if "stretch" in THEME { float(THEME.stretch) } else { 1.0 }
+
 // Symbols & Separators
 #let SEP = [ · ]
 #let DASH = text(" - ")
