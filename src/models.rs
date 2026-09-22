@@ -80,7 +80,7 @@ pub struct ThemeConfig {
   /// Libertine").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub font_family: Option<String>,
-  /// Body font size (e.g. "11.5pt", "10pt").
+  /// Body font size (e.g. "11pt", "10pt").
   #[serde(
     default,
     alias = "body_size",
@@ -96,6 +96,14 @@ pub struct ThemeConfig {
   /// Organization / company font size (e.g. "12pt").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub org_size: Option<String>,
+  /// Line leading and base spacing unit (e.g. "0.52em"). Every gap in the
+  /// template is a fixed multiple of it, so this re-spaces the whole page.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub leading: Option<String>,
+  /// Maximum growth of each flexible gap, in multiples of `leading`, when
+  /// spare page height is shared out (e.g. 1.0; 0 disables stretching).
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub stretch: Option<f64>,
   /// Section horizontal divider rule thickness (e.g. "0.5pt").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub rule_thickness: Option<String>,
