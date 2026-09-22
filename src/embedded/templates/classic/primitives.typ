@@ -2,7 +2,10 @@
 
 #import "tokens.typ": *
 
-// Wrap guard + fill-ratio telemetry
+// Wrap guard + fill-ratio telemetry. The measured body is emitted as an
+// explicit paragraph: inline content alone in a block is not one, and
+// tagged-PDF consumers (copy/paste, screen readers, parsers) rely on
+// paragraph tags to keep each row on its own line.
 #let bulletinfo-counter = counter("resumake-bulletinfo")
 
 #let guard(body, kind: "bullet") = layout(size => context {
@@ -17,7 +20,7 @@
     fill: fill,
     text: t.slice(0, calc.min(80, t.len())),
   )) <bulletinfo>]
-  body
+  par(body)
 })
 
 // Flexible spacing. Each call reserves `weight` shares of whatever height
@@ -66,10 +69,11 @@
   )
 }
 
-// Generic "label ...... flush-right meta" row.
+// Generic "label ...... flush-right meta" row, emitted as one paragraph
+// (see `guard`) so it copies out as a single line.
 #let split-row(left, right, above: 0em, below: 0em, flex: 0) = {
   if flex > 0 { flex-gap(flex, above) }
-  block(above: above, below: below)[#left #h(1fr) #right]
+  block(above: above, below: below, par[#left #h(1fr) #right])
 }
 
 #let line-item(cat, body) = {

@@ -106,7 +106,7 @@
         fill: MUTED,
       )[#meta.title])
     }
-    #text(size: BODY)[
+    #par(text(size: BODY)[
       #{
         let contact-items = ()
         if "contact" in meta {
@@ -129,7 +129,7 @@
         }
         contact-items.join(SEP)
       }
-    ]
+    ])
     #if "badge" in meta and meta.badge != "" {
       block(above: HEADER_GAP, text(size: BODY - 1pt, fill: MUTED)[#meta.badge])
     }
