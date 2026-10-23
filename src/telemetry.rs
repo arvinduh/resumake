@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Errors originating from layout telemetry evaluation.
 #[derive(thiserror::Error, Debug)]
-pub enum TelemetryError {
+pub enum Error {
   /// Failed to parse page info JSON query result.
   #[error("Failed to parse page info JSON: {0}")]
   PageInfoParse(#[source] serde_json::Error),
@@ -36,23 +36,38 @@ impl PageInfo {
   ///
   /// # Errors
   ///
-  /// Returns a [`TelemetryError`] if the JSON is malformed or missing fields.
-  pub fn parse(json_str: &str) -> Result<Self, TelemetryError> {
+  /// Returns a [`Error`] if the JSON is malformed or missing fields.
+  pub fn parse(json_str: &str) -> Result<Self, Error> {
     let val: serde_json::Value =
-      serde_json::from_str(json_str).map_err(TelemetryError::PageInfoParse)?;
+      serde_json::from_str(json_str).map_err(Error::PageInfoParse)?;
 
     let item = if val.is_array() {
-      val.get(0).ok_or(TelemetryError::EmptyPageInfoQuery)?
+      val.get(0).ok_or(Error::EmptyPageInfoQuery)?
     } else {
       &val
     };
 
-    let pages =
-      item.get("pages").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
-    let margin = item.get("margin").and_then(|v| v.as_f64()).unwrap_or(36.0);
-    let page_w = item.get("page_w").and_then(|v| v.as_f64()).unwrap_or(612.0);
-    let page_h = item.get("page_h").and_then(|v| v.as_f64()).unwrap_or(792.0);
-    let y = item.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let pages = item
+      .get("pages")
+      .and_then(serde_json::Value::as_u64)
+      .and_then(|p| usize::try_from(p).ok())
+      .unwrap_or(1);
+    let margin = item
+      .get("margin")
+      .and_then(serde_json::Value::as_f64)
+      .unwrap_or(36.0);
+    let page_w = item
+      .get("page_w")
+      .and_then(serde_json::Value::as_f64)
+      .unwrap_or(612.0);
+    let page_h = item
+      .get("page_h")
+      .and_then(serde_json::Value::as_f64)
+      .unwrap_or(792.0);
+    let y = item
+      .get("y")
+      .and_then(serde_json::Value::as_f64)
+      .unwrap_or(0.0);
 
     Ok(Self {
       pages,
@@ -88,13 +103,13 @@ impl BulletInfo {
   ///
   /// # Errors
   ///
-  /// Returns a [`TelemetryError`] if JSON array parsing fails.
-  pub fn parse_list(json_str: &str) -> Result<Vec<Self>, TelemetryError> {
+  /// Returns a [`Error`] if JSON array parsing fails.
+  pub fn parse_list(json_str: &str) -> Result<Vec<Self>, Error> {
     if json_str.trim().is_empty() || json_str.trim() == "[]" {
       return Ok(Vec::new());
     }
 
-    serde_json::from_str(json_str).map_err(TelemetryError::BulletInfoParse)
+    serde_json::from_str(json_str).map_err(Error::BulletInfoParse)
   }
 }
 
@@ -117,6 +132,7 @@ pub struct TelemetryReport {
 
 impl TelemetryReport {
   /// Constructs a new `TelemetryReport`.
+  #[must_use]
   pub fn new(
     page_count: usize,
     fill_pct: f64,
@@ -136,6 +152,7 @@ impl TelemetryReport {
   }
 
   /// Returns `true` if document passes strict single-page constraints.
+  #[must_use]
   pub fn is_pass(&self) -> bool {
     self.page_count == 1 && self.line_wraps.is_empty()
   }
@@ -145,11 +162,11 @@ impl TelemetryReport {
 ///
 /// # Errors
 ///
-/// Returns a [`TelemetryError`] if parsing JSON queries fails.
+/// Returns a [`Error`] if parsing JSON queries fails.
 pub fn evaluate_telemetry(
   page_json: &str,
   bullets_json: &str,
-) -> Result<TelemetryReport, TelemetryError> {
+) -> Result<TelemetryReport, Error> {
   let page_info = PageInfo::parse(page_json)?;
   let bullets = BulletInfo::parse_list(bullets_json)?;
 
@@ -231,8 +248,8 @@ mod tests {
     let report = evaluate_telemetry(page_json, bullets_json).unwrap();
     assert_eq!(report.page_count, 1);
     assert!(report.is_pass());
-    assert!(report.line_wraps.is_empty());
-    assert!(report.underfills.is_empty());
+    assert_eq!(report.line_wraps.len(), 0);
+    assert_eq!(report.underfills.len(), 0);
     assert_eq!(report.all_bullets.len(), 2);
   }
 

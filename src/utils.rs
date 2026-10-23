@@ -1,5 +1,4 @@
-//! Shared cross-cutting utilities (filesystem, git, terminal UI).
+//! Shared cross-cutting utilities (filesystem, git).
 
 pub mod fs;
 pub mod git;
-pub mod ui;

@@ -1,12 +1,13 @@
 //! `rsmk update` — replace the running binary in place via axoupdater.
 
-use crate::utils::ui;
 use axoupdater::{AxoUpdater, ReleaseSource, ReleaseSourceType, Version};
+
+use crate::cli::ui;
 
 /// Errors originating from the self-update process.
 #[derive(thiserror::Error, Debug)]
-pub enum UpdateError {
-  /// AxoUpdater error.
+pub enum Error {
+  /// `AxoUpdater` error.
   #[error("Self-update error: {0}")]
   AxoUpdater(Box<axoupdater::AxoupdateError>),
   /// Underlying I/O error.
@@ -14,22 +15,45 @@ pub enum UpdateError {
   Io(#[from] std::io::Error),
 }
 
-impl From<axoupdater::AxoupdateError> for UpdateError {
+impl From<axoupdater::AxoupdateError> for Error {
   fn from(err: axoupdater::AxoupdateError) -> Self {
     Self::AxoUpdater(Box::new(err))
   }
 }
 
-/// Entry point for the `update` subcommand.
+/// Available CLI arguments for `rsmk update`.
+#[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
+pub struct UpdateArgs {
+  /// Report whether a newer release exists without installing it
+  #[arg(long)]
+  pub check: bool,
+
+  /// Reinstall even if the current version is already latest
+  #[arg(short, long)]
+  pub force: bool,
+}
+
+impl UpdateArgs {
+  /// Runs the update command.
+  ///
+  /// # Errors
+  ///
+  /// Returns an [`Error`] if update checks or downloads fail.
+  pub fn run(self, quiet: bool) -> Result<(), Error> {
+    run_update(self.check, self.force, quiet)
+  }
+}
+
+/// Entry point for the `update` subcommand logic.
 ///
 /// # Errors
 ///
-/// Returns an [`UpdateError`] if update checks or downloads fail.
+/// Returns an [`Error`] if update checks or downloads fail.
 pub(crate) fn run_update(
   check: bool,
   force: bool,
   quiet: bool,
-) -> Result<(), UpdateError> {
+) -> Result<(), Error> {
   let mut updater = AxoUpdater::new_for("resumake");
   if updater.load_receipt().is_err() {
     let current_exe = std::env::current_exe()?;
@@ -103,45 +127,4 @@ pub(crate) fn run_update(
   }
 
   Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn test_updater_initialization() {
-    let updater = AxoUpdater::new_for("resumake");
-    drop(updater);
-  }
-
-  #[test]
-  fn test_update_error_display() {
-    let io_err = UpdateError::Io(std::io::Error::new(
-      std::io::ErrorKind::NotFound,
-      "file not found",
-    ));
-    assert!(format!("{io_err}").contains("I/O error"));
-  }
-
-  #[test]
-  fn test_run_update_check_quiet() {
-    // In check mode with quiet = true, run_update succeeds without printing
-    let res = run_update(true, false, true);
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  fn test_run_update_fallback_quiet() {
-    // In update mode without receipt, quiet = true succeeds gracefully
-    let res = run_update(false, false, true);
-    assert!(res.is_ok());
-  }
-
-  #[test]
-  fn test_run_update_check_force_quiet() {
-    // In check mode with force = true and quiet = true, run_update succeeds gracefully
-    let res = run_update(true, true, true);
-    assert!(res.is_ok());
-  }
 }

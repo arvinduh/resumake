@@ -1,16 +1,17 @@
 //! In-process JSON Schema validation, version extraction, and schema
 //! export for content.yaml.
 
-use crate::models;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::models;
+
 const INIT_TEMPLATE_RAW: &str = include_str!("embedded/init_template.yaml");
 
-/// Raw embedded template for the GitHub Actions CI workflow stub.
+/// Raw embedded template for the `GitHub` Actions CI workflow stub.
 const CI_WORKFLOW_RAW: &str = include_str!("embedded/workflows/ci.yml");
 
-/// Raw embedded template for the GitHub Actions release workflow stub.
+/// Raw embedded template for the `GitHub` Actions release workflow stub.
 const RELEASE_WORKFLOW_RAW: &str =
   include_str!("embedded/workflows/release.yml");
 
@@ -24,7 +25,7 @@ fn format_validation_errors(errors: &[String]) -> String {
 
 /// Errors originating from schema validation and content inspection.
 #[derive(thiserror::Error, Debug)]
-pub enum SchemaError {
+pub enum Error {
   /// Failed to read custom schema file.
   #[error("Failed to read schema file '{}': {source}", path.display())]
   SchemaFileRead {
@@ -138,28 +139,27 @@ pub enum SchemaError {
 /// [`crate::models::ResumeDocument`] is used.
 ///
 /// # Errors
-/// Returns a [`SchemaError`] if parsing YAML or schema validation fails.
+/// Returns a [`Error`] if parsing YAML or schema validation fails.
 pub fn validate_schema_str(
   content_str: &str,
   schema_json: Option<&serde_json::Value>,
-) -> Result<(), SchemaError> {
+) -> Result<(), Error> {
   let default_schema;
-  let schema = match schema_json {
-    Some(s) => s,
-    None => {
-      default_schema = models::generate_builtin_schema();
-      &default_schema
-    }
+  let schema = if let Some(s) = schema_json {
+    s
+  } else {
+    default_schema = models::generate_builtin_schema();
+    &default_schema
   };
 
   let content_json: serde_json::Value = serde_yaml::from_str(content_str)
-    .map_err(|source| SchemaError::ContentYamlParse {
+    .map_err(|source| Error::ContentYamlParse {
       path: PathBuf::from("<memory>"),
       source,
     })?;
 
   let validator = jsonschema::validator_for(schema)
-    .map_err(|e| SchemaError::ValidatorCompile(e.to_string()))?;
+    .map_err(|e| Error::ValidatorCompile(e.to_string()))?;
 
   let mut errors = Vec::new();
   for error in validator.iter_errors(&content_json) {
@@ -175,7 +175,7 @@ pub fn validate_schema_str(
   if errors.is_empty() {
     Ok(())
   } else {
-    Err(SchemaError::ValidationFailed { errors })
+    Err(Error::ValidationFailed { errors })
   }
 }
 
@@ -205,21 +205,20 @@ pub fn validate_schema_str(
 /// the shorthand form is.
 ///
 /// # Errors
-/// Returns a [`SchemaError`] if reading, parsing, or validation fails.
+/// Returns a [`Error`] if reading, parsing, or validation fails.
 pub fn validate_schema_auto(
   content_path: &Path,
   schema_path: Option<&Path>,
-) -> Result<(), SchemaError> {
+) -> Result<(), Error> {
   let schema_json: Option<serde_json::Value> = match schema_path {
     Some(p) if p.exists() => {
-      let schema_str = fs::read_to_string(p).map_err(|source| {
-        SchemaError::SchemaFileRead {
+      let schema_str =
+        fs::read_to_string(p).map_err(|source| Error::SchemaFileRead {
           path: p.to_path_buf(),
           source,
-        }
-      })?;
+        })?;
       Some(serde_json::from_str(&schema_str).map_err(|source| {
-        SchemaError::SchemaJsonParse {
+        Error::SchemaJsonParse {
           path: p.to_path_buf(),
           source,
         }
@@ -229,7 +228,7 @@ pub fn validate_schema_auto(
   };
 
   let content_str = fs::read_to_string(content_path).map_err(|source| {
-    SchemaError::ContentFileRead {
+    Error::ContentFileRead {
       path: content_path.to_path_buf(),
       source,
     }
@@ -242,23 +241,23 @@ pub fn validate_schema_auto(
 /// formatted string.
 ///
 /// # Errors
-/// Returns a [`SchemaError`] if serialization or disk write fails.
+/// Returns a [`Error`] if serialization or disk write fails.
 pub fn export_builtin_schema(
   output_path: Option<&Path>,
-) -> Result<String, SchemaError> {
+) -> Result<String, Error> {
   let schema_json = models::generate_builtin_schema();
-  let raw_json = serde_json::to_string_pretty(&schema_json)
-    .map_err(SchemaError::JsonSerialize)?;
+  let raw_json =
+    serde_json::to_string_pretty(&schema_json).map_err(Error::JsonSerialize)?;
   let schema_str = format!("{}\n", raw_json.trim_end());
 
   if let Some(path) = output_path {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-      fs::create_dir_all(parent).map_err(|source| SchemaError::DirCreate {
+      fs::create_dir_all(parent).map_err(|source| Error::DirCreate {
         path: parent.to_path_buf(),
         source,
       })?;
     }
-    fs::write(path, &schema_str).map_err(|source| SchemaError::FileWrite {
+    fs::write(path, &schema_str).map_err(|source| Error::FileWrite {
       path: path.to_path_buf(),
       source,
     })?;
@@ -267,7 +266,7 @@ pub fn export_builtin_schema(
   Ok(schema_str)
 }
 
-/// GitHub Release asset URL for the JSON Schema matching this schema version.
+/// `GitHub` Release asset URL for the JSON Schema matching this schema version.
 ///
 /// Published under schema releases (e.g. `s1.0`, `s1.1`) matching Formality's
 /// schema distribution pattern.
@@ -277,6 +276,7 @@ fn schema_url() -> String {
 
 /// Generates a starter `resume.yaml` scaffold with schema directives and
 /// examples.
+#[must_use]
 pub fn generate_init_template(candidate_name: &str) -> String {
   let name = if candidate_name.trim().is_empty() {
     "Jane Doe"
@@ -289,10 +289,13 @@ pub fn generate_init_template(candidate_name: &str) -> String {
     .replace("RESUMAKE_SCHEMA_URL", &schema_url())
 }
 
-/// Generates a starter GitHub Actions CI workflow stub for downstream repositories.
+/// Generates a starter `GitHub` Actions CI workflow stub for downstream
+/// repositories.
 ///
 /// Substitutes `RSMK_VERSION` with `version` if provided and non-empty,
-/// otherwise defaults to the current binary version (`env!("CARGO_PKG_VERSION")`).
+/// otherwise defaults to the current binary version
+/// (`env!("CARGO_PKG_VERSION")`).
+#[must_use]
 pub fn generate_ci_workflow(version: Option<&str>) -> String {
   let v = match version {
     Some(s) if !s.trim().is_empty() => s.trim(),
@@ -301,10 +304,13 @@ pub fn generate_ci_workflow(version: Option<&str>) -> String {
   CI_WORKFLOW_RAW.replace("RSMK_VERSION", v)
 }
 
-/// Generates a starter GitHub Actions release workflow stub for downstream repositories.
+/// Generates a starter `GitHub` Actions release workflow stub for downstream
+/// repositories.
 ///
 /// Substitutes `RSMK_VERSION` with `version` if provided and non-empty,
-/// otherwise defaults to the current binary version (`env!("CARGO_PKG_VERSION")`).
+/// otherwise defaults to the current binary version
+/// (`env!("CARGO_PKG_VERSION")`).
+#[must_use]
 pub fn generate_release_workflow(version: Option<&str>) -> String {
   let v = match version {
     Some(s) if !s.trim().is_empty() => s.trim(),
@@ -316,12 +322,10 @@ pub fn generate_release_workflow(version: Option<&str>) -> String {
 /// Loads the semantic version string (`meta.version`) from a content YAML file.
 ///
 /// # Errors
-/// Returns a [`SchemaError`] if reading, parsing, or extracting the version fails.
-pub fn load_content_version(
-  content_path: &Path,
-) -> Result<String, SchemaError> {
+/// Returns a [`Error`] if reading, parsing, or extracting the version fails.
+pub fn load_content_version(content_path: &Path) -> Result<String, Error> {
   let content_str = fs::read_to_string(content_path).map_err(|source| {
-    SchemaError::ContentFileRead {
+    Error::ContentFileRead {
       path: content_path.to_path_buf(),
       source,
     }
@@ -329,7 +333,7 @@ pub fn load_content_version(
 
   let val: serde_yaml::Value =
     serde_yaml::from_str(&content_str).map_err(|source| {
-      SchemaError::ContentYamlParse {
+      Error::ContentYamlParse {
         path: content_path.to_path_buf(),
         source,
       }
@@ -339,14 +343,14 @@ pub fn load_content_version(
     val
       .get("meta")
       .and_then(|m| m.get("version"))
-      .ok_or_else(|| SchemaError::MissingField {
+      .ok_or_else(|| Error::MissingField {
         field: "meta.version",
         path: content_path.to_path_buf(),
       })?;
 
   let version_str = version_val
     .as_str()
-    .ok_or(SchemaError::InvalidFieldType("meta.version"))?;
+    .ok_or(Error::InvalidFieldType("meta.version"))?;
 
   Ok(version_str.to_string())
 }
@@ -354,10 +358,10 @@ pub fn load_content_version(
 /// Loads the author's name (`meta.name`) from a content YAML file.
 ///
 /// # Errors
-/// Returns a [`SchemaError`] if reading, parsing, or extracting the name fails.
-pub fn load_content_name(content_path: &Path) -> Result<String, SchemaError> {
+/// Returns a [`Error`] if reading, parsing, or extracting the name fails.
+pub fn load_content_name(content_path: &Path) -> Result<String, Error> {
   let content_str = fs::read_to_string(content_path).map_err(|source| {
-    SchemaError::ContentFileRead {
+    Error::ContentFileRead {
       path: content_path.to_path_buf(),
       source,
     }
@@ -365,7 +369,7 @@ pub fn load_content_name(content_path: &Path) -> Result<String, SchemaError> {
 
   let val: serde_yaml::Value =
     serde_yaml::from_str(&content_str).map_err(|source| {
-      SchemaError::ContentYamlParse {
+      Error::ContentYamlParse {
         path: content_path.to_path_buf(),
         source,
       }
@@ -373,7 +377,7 @@ pub fn load_content_name(content_path: &Path) -> Result<String, SchemaError> {
 
   let name_val =
     val.get("meta").and_then(|m| m.get("name")).ok_or_else(|| {
-      SchemaError::MissingField {
+      Error::MissingField {
         field: "meta.name",
         path: content_path.to_path_buf(),
       }
@@ -381,7 +385,7 @@ pub fn load_content_name(content_path: &Path) -> Result<String, SchemaError> {
 
   let name_str = name_val
     .as_str()
-    .ok_or(SchemaError::InvalidFieldType("meta.name"))?;
+    .ok_or(Error::InvalidFieldType("meta.name"))?;
 
   Ok(name_str.to_string())
 }
@@ -396,10 +400,10 @@ pub fn derive_output_filename_from_name(name: &str) -> PathBuf {
     .filter(|c| c.is_alphanumeric())
     .collect::<String>()
     .to_lowercase();
-  if !sanitized.is_empty() {
-    PathBuf::from(format!("{sanitized}_resume.pdf"))
-  } else {
+  if sanitized.is_empty() {
     PathBuf::from("resume.pdf")
+  } else {
+    PathBuf::from(format!("{sanitized}_resume.pdf"))
   }
 }
 
@@ -407,6 +411,7 @@ pub fn derive_output_filename_from_name(name: &str) -> PathBuf {
 /// `content.yaml`.
 ///
 /// For example, "Jane Doe" becomes `janedoe_resume.pdf`.
+#[must_use]
 pub fn derive_output_filename(content_path: &Path) -> PathBuf {
   if let Ok(name) = load_content_name(content_path) {
     derive_output_filename_from_name(&name)
@@ -510,7 +515,7 @@ sections: []
 "#;
     let err = validate_schema_str(yaml, None).unwrap_err();
     match err {
-      SchemaError::ValidationFailed { errors } => {
+      Error::ValidationFailed { errors } => {
         assert!(errors.iter().any(|e| e.contains("role")));
       }
       other => panic!("expected ValidationFailed, got {other:?}"),
@@ -530,7 +535,7 @@ sections: []
 "#;
     let err = validate_schema_str(yaml, None).unwrap_err();
     match err {
-      SchemaError::ValidationFailed { errors } => {
+      Error::ValidationFailed { errors } => {
         assert!(errors.iter().any(|e| e.contains("titel")));
       }
       other => panic!("expected ValidationFailed, got {other:?}"),

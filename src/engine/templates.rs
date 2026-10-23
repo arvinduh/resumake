@@ -1,10 +1,11 @@
 //! Embedded and custom résumé template registry, discovery, and extraction.
 
-use crate::engine::error::EngineError;
-use include_dir::{include_dir, Dir};
-use std::fmt;
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::{fmt, fs};
+
+use include_dir::{include_dir, Dir};
+
+use crate::engine::Error;
 
 /// A single Typst source file belonging to an embedded template.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,7 +71,8 @@ fn collect_template_files(
   }
 }
 
-/// Discovers all embedded templates compiled into the binary from `src/embedded/templates/`.
+/// Discovers all embedded templates compiled into the binary from
+/// `src/embedded/templates/`.
 pub(crate) fn embedded_templates() -> Vec<EmbeddedTemplate> {
   let mut templates = Vec::new();
   for dir in TEMPLATES_DIR.dirs() {
@@ -140,13 +142,17 @@ impl fmt::Display for TemplateInfo {
   }
 }
 
-/// Lists all built-in templates and any custom templates discovered in `./templates/`.
+/// Lists all built-in templates and any custom templates discovered in
+/// `./templates/`.
+#[must_use]
 pub fn list_templates() -> Vec<TemplateInfo> {
   let root = crate::utils::fs::find_project_root();
   list_templates_in(&root.join("templates"))
 }
 
-/// Lists all built-in templates and any custom templates discovered in the given directory.
+/// Lists all built-in templates and any custom templates discovered in the
+/// given directory.
+#[must_use]
 pub fn list_templates_in(templates_dir: &Path) -> Vec<TemplateInfo> {
   let mut results = Vec::new();
 
@@ -200,25 +206,26 @@ pub fn list_templates_in(templates_dir: &Path) -> Vec<TemplateInfo> {
   results
 }
 
-/// Extracts all embedded Typst component files for the template into `target_dir`.
+/// Extracts all embedded Typst component files for the template into
+/// `target_dir`.
 ///
 /// # Errors
-/// Returns [`EngineError::TemplateNotFound`] if `name` is not in the built-in registry.
-/// Returns [`EngineError::DestinationAlreadyExists`] if `target_dir` exists and `force` is false.
+/// Returns [`Error::TemplateNotFound`] if `name` is not in the built-in
+/// registry. Returns [`Error::DestinationAlreadyExists`] if `target_dir` exists
+/// and `force` is false.
 pub fn eject_template(
   name: &str,
   target_dir: &Path,
   force: bool,
-) -> Result<Vec<String>, EngineError> {
-  let template = find_embedded_template(name).ok_or_else(|| {
-    EngineError::TemplateNotFound {
+) -> Result<Vec<String>, Error> {
+  let template =
+    find_embedded_template(name).ok_or_else(|| Error::TemplateNotFound {
       name: name.to_string(),
       known: known_template_names(),
-    }
-  })?;
+    })?;
 
   if target_dir.exists() && !force {
-    return Err(EngineError::DestinationAlreadyExists {
+    return Err(Error::DestinationAlreadyExists {
       path: target_dir.to_path_buf(),
     });
   }

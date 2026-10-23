@@ -1,19 +1,18 @@
-//! Resumake CLI entry point and command router.
+//! Resumake CLI entry point and process host.
 
-use clap::Parser;
-use resumake::cli::Cli;
-use resumake::commands;
-use resumake::utils::ui;
+mod cli;
+
 use std::process::ExitCode;
 
-fn main() -> ExitCode {
-  let cli = Cli::parse();
-  let command = cli.command.unwrap_or_default();
+use clap::Parser;
 
-  match commands::execute_command(command, cli.quiet) {
+fn main() -> ExitCode {
+  let cli = cli::Cli::parse();
+
+  match cli.run() {
     Ok(()) => ExitCode::SUCCESS,
     Err(err) => {
-      ui::print_error(&format!("{err}"));
+      cli::ui::print_error(&format!("{err}"));
       ExitCode::FAILURE
     }
   }

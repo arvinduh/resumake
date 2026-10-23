@@ -1,17 +1,53 @@
-//! Command-line argument parsing and subcommand definitions.
+//! CLI router, command definitions, and binary error types.
 
-use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+mod build;
+mod check;
+mod init;
+mod release;
+mod schema;
+mod template;
+pub(crate) mod ui;
+#[cfg(feature = "update")]
+mod update;
+
+/// CLI-level errors from subcommand dispatch.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+  /// Engine compilation or verification error.
+  #[error(transparent)]
+  Engine(#[from] resumake::engine::Error),
+  /// Schema validation or inspection error.
+  #[error(transparent)]
+  Schema(#[from] resumake::schema::Error),
+  /// Telemetry evaluation error.
+  #[error(transparent)]
+  Telemetry(#[from] resumake::telemetry::Error),
+  /// Git operation error.
+  #[error(transparent)]
+  Git(#[from] resumake::utils::git::Error),
+  /// Workspace initialization failure.
+  #[error(transparent)]
+  Init(#[from] init::Error),
+  /// Release pipeline failure.
+  #[error(transparent)]
+  Release(#[from] release::Error),
+  #[cfg(feature = "update")]
+  /// Self-update failure.
+  #[error(transparent)]
+  Update(#[from] update::Error),
+  /// Standard I/O failure.
+  #[error("I/O error: {0}")]
+  Io(#[from] std::io::Error),
+}
 
 /// High-performance native Rust résumé compilation and telemetry engine.
-#[derive(Debug, Parser)]
+#[derive(Debug, clap::Parser)]
 #[command(
   name = "rsmk",
   version,
   about = "Modular résumé compiler and telemetry engine",
-  long_about = "rsmk is a high-performance native Rust CLI for \
-    compiling and verifying single-page résumés with strict layout \
-    telemetry."
+  long_about = "rsmk is a high-performance native Rust CLI for compiling and \
+                verifying single-page résumés with strict layout telemetry."
 )]
 pub struct Cli {
   /// Suppress non-essential terminal output
@@ -20,140 +56,55 @@ pub struct Cli {
 
   /// Subcommand to execute (defaults to build if omitted)
   #[command(subcommand)]
-  pub command: Option<Commands>,
+  pub command: Option<Command>,
 }
 
 /// Available CLI subcommands.
-#[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
-pub enum Commands {
+#[derive(Debug, Clone, PartialEq, Eq, clap::Subcommand)]
+pub enum Command {
   /// Compile résumé to PDF and verify layout telemetry
-  Build {
-    /// Path to content YAML file
-    #[arg(value_name = "CONTENT", default_value = "content.yaml")]
-    content: PathBuf,
-
-    /// Named built-in layout, local template directory, or .typ file to render with
-    #[arg(short, long)]
-    template: Option<String>,
-
-    /// Custom output PDF path (defaults to `<name>_resume.pdf`)
-    #[arg(short, long)]
-    output: Option<PathBuf>,
-
-    /// Path to custom JSON schema file (falls back to built-in schema if omitted)
-    #[arg(long)]
-    schema: Option<PathBuf>,
-
-    /// Custom font directory (auto-detects ./fonts if present)
-    #[arg(long)]
-    font_path: Option<PathBuf>,
-  },
+  Build(build::BuildArgs),
   /// Verify schema and single-page layout geometry without generating a PDF
-  Check {
-    /// Path to content YAML file
-    #[arg(value_name = "CONTENT", default_value = "content.yaml")]
-    content: PathBuf,
-
-    /// Named built-in layout, local template directory, or .typ file to render with
-    #[arg(short, long)]
-    template: Option<String>,
-
-    /// Path to custom JSON schema file (falls back to built-in schema if omitted)
-    #[arg(long)]
-    schema: Option<PathBuf>,
-
-    /// Custom font directory (auto-detects ./fonts if present)
-    #[arg(long)]
-    font_path: Option<PathBuf>,
-  },
-  /// Scaffold a new résumé workspace with rich examples, workflows, and git config
-  Init {
-    /// Destination for the scaffold: a directory (creates it and writes
-    /// `content.yaml` inside) or an explicit `*.yaml` file path. Defaults to
-    /// `content.yaml` in the current directory.
-    #[arg(value_name = "DEST")]
-    dest: Option<PathBuf>,
-
-    /// Candidate display name
-    #[arg(short, long)]
-    name: Option<String>,
-
-    /// Overwrite destination file if it already exists
-    #[arg(short, long)]
-    force: bool,
-
-    /// Skip initializing a git repository and git config files (also skips
-    /// GitHub Actions workflows, which require a repo; add them later with
-    /// `rsmk init --workflows`)
-    #[arg(long)]
-    no_git: bool,
-
-    /// Skip generating GitHub Actions CI and Release workflows
-    #[arg(long)]
-    no_workflows: bool,
-
-    /// Create or refresh GitHub Actions workflows without modifying content.yaml
-    #[arg(long, visible_alias = "update")]
-    workflows: bool,
-  },
+  Check(check::CheckArgs),
+  /// Scaffold a new résumé workspace with rich examples, workflows, and git
+  /// config
+  Init(init::InitArgs),
   /// Validate repository state, verify semver, and cut a new release tag
-  Release {
-    /// Path to content YAML file
-    #[arg(value_name = "CONTENT", default_value = "content.yaml")]
-    content: PathBuf,
-
-    /// Optional release message for the annotated git tag
-    #[arg(short, long)]
-    message: Option<String>,
-
-    /// Dry-run mode: run all pre-flight checks without creating or pushing a git tag
-    #[arg(long)]
-    dry_run: bool,
-
-    /// Skip compilation and telemetry pre-flight check (rsmk check)
-    #[arg(long)]
-    skip_build: bool,
-  },
+  Release(release::ReleaseArgs),
   /// Manage and eject résumé layout templates
-  Template {
-    /// Name of the template to eject (e.g. `classic`)
-    #[arg(value_name = "NAME", conflicts_with = "list")]
-    name: Option<String>,
-
-    /// List all available built-in and discovered custom templates
-    #[arg(long, conflicts_with = "name")]
-    list: bool,
-
-    /// Overwrite destination directory if it already exists when ejecting
-    #[arg(short, long)]
-    force: bool,
-  },
-  /// Replace the installed binary with the latest GitHub release
-  Update {
-    /// Report whether a newer release exists without installing it
-    #[arg(long)]
-    check: bool,
-
-    /// Reinstall even if the current version is already latest
-    #[arg(short, long)]
-    force: bool,
-  },
+  Template(template::TemplateArgs),
+  #[cfg(feature = "update")]
+  /// Replace the installed binary with the latest `GitHub` release
+  Update(update::UpdateArgs),
   /// Output canonical JSON schema for content.yaml
-  Schema {
-    /// Destination path for the generated schema JSON (prints to stdout if omitted)
-    #[arg(short, long)]
-    output: Option<PathBuf>,
-  },
+  Schema(schema::SchemaArgs),
 }
 
-impl Default for Commands {
+impl Default for Command {
   fn default() -> Self {
-    Commands::Build {
-      content: PathBuf::from("content.yaml"),
-      template: None,
-      output: None,
-      schema: None,
-      font_path: None,
+    Command::Build(build::BuildArgs::default())
+  }
+}
+
+impl Cli {
+  /// Parses CLI arguments and executes the selected subcommand.
+  ///
+  /// # Errors
+  ///
+  /// Returns an [`Error`] if subcommand execution fails.
+  pub fn run(self) -> Result<(), Error> {
+    let quiet = self.quiet;
+    let command = self.command.unwrap_or_default();
+
+    match command {
+      Command::Build(args) => Ok(args.run(quiet)?),
+      Command::Check(args) => Ok(args.run(quiet)?),
+      Command::Init(args) => Ok(args.run(quiet)?),
+      Command::Release(args) => Ok(args.run(quiet)?),
+      Command::Template(args) => Ok(args.run(quiet)?),
+      #[cfg(feature = "update")]
+      Command::Update(args) => Ok(args.run(quiet)?),
+      Command::Schema(args) => Ok(args.run(quiet)?),
     }
   }
 }
