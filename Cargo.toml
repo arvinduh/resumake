@@ -41,6 +41,9 @@ targets = [
   "x86_64-unknown-linux-gnu",
   "x86_64-pc-windows-msvc",
 ]
+# Host runners for each target. x86_64 macOS builds cross-compile on the
+# macos-14 runner to match aarch64 instead of queuing on the macos-13 runner.
+macos-runners = { x86_64-apple-darwin = "macos-14", aarch64-apple-darwin = "macos-14" }
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
 # Whether to install an updater program
@@ -48,12 +51,12 @@ install-updater = false
 
 
 [dependencies]
-clap = { version = "4.5", features = ["derive", "cargo"], optional = true }
+clap = { version = "4.6", features = ["derive", "cargo"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 schemars = "1.2"
-jsonschema = "0.51"
+jsonschema = "0.58"
 semver = "1.0"
 colored = { version = "3.0", optional = true }
 comfy-table = { version = "8.0", features = [
@@ -62,7 +65,7 @@ comfy-table = { version = "8.0", features = [
 sha2 = "0.11"
 include_dir = "0.7"
 thiserror = "2.0"
-axoupdater = { version = "0.9", features = ["blocking"], optional = true }
+axoupdater = { version = "0.10", features = ["blocking"], optional = true }
 typst = "0.15"
 typst-pdf = "0.15"
 typst-layout = "0.15"
