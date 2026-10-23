@@ -594,7 +594,7 @@ sections:
     let default_ci = generate_ci_workflow(None);
     assert!(!default_ci.contains("RSMK_VERSION"));
     assert!(default_ci.contains(env!("CARGO_PKG_VERSION")));
-    assert!(default_ci.contains("uses: actions/checkout@v4"));
+    assert!(default_ci.contains("uses: actions/checkout@v7"));
     assert!(default_ci.contains("uses: arvinduh/resumake/setup@v1"));
     assert!(default_ci.contains("run: rsmk check"));
 
@@ -613,7 +613,7 @@ sections:
     let default_release = generate_release_workflow(None);
     assert!(!default_release.contains("RSMK_VERSION"));
     assert!(default_release.contains(env!("CARGO_PKG_VERSION")));
-    assert!(default_release.contains("uses: actions/checkout@v4"));
+    assert!(default_release.contains("uses: actions/checkout@v7"));
     assert!(default_release.contains("uses: arvinduh/resumake/setup@v1"));
     assert!(default_release.contains("run: rsmk build"));
     assert!(default_release.contains("uses: softprops/action-gh-release@v3"));
