@@ -168,14 +168,17 @@ fn run_update_workflows(
 }
 
 fn print_next_steps() {
-  println!("\nNext steps to publish your résumé repository:");
-  println!("  1. Track and commit your changes:");
-  println!("     git add .");
-  println!("     git commit -m \"feat: initial résumé scaffold\"");
-  println!("  2. Push to GitHub:");
-  println!("     gh repo create --source=. --push");
-  println!("     # Or configure remote manually:");
-  println!("     git remote add origin git@github.com:<username>/<repo>.git");
-  println!("     git branch -M main");
-  println!("     git push -u origin main");
+  println!(
+    r#"
+Next steps to publish your résumé repository:
+  1. Track and commit your changes:
+     git add .
+     git commit -m "feat: initial résumé scaffold"
+  2. Push to GitHub:
+     gh repo create --source=. --push
+     # Or configure remote manually:
+     git remote add origin git@github.com:<username>/<repo>.git
+     git branch -M main
+     git push -u origin main"#
+  );
 }
