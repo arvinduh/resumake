@@ -124,6 +124,33 @@ pub struct ThemeConfig {
   /// string, e.g. "#444444").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub muted_color: Option<String>,
+  /// Header alignment ("center" or "left").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub header_align: Option<String>,
+  /// Candidate name heading font weight ("regular", "medium", "semibold", "bold").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub name_weight: Option<String>,
+  /// Section heading style ("underline", "overline", "none").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub section_style: Option<String>,
+  /// Section title casing ("uppercase", "small-caps", "title-case", "none").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub section_case: Option<String>,
+  /// Section heading font weight ("regular", "medium", "semibold", "bold").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub section_weight: Option<String>,
+  /// Bullet marker character or shape ("disc", "circle", "dash", "square").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub bullet_marker: Option<String>,
+  /// Left indentation before bullet marker (e.g. "0.55em", "0.3em").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub bullet_indent: Option<String>,
+  /// Space between bullet marker and text (e.g. "0.50em").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub bullet_body_indent: Option<String>,
+  /// Spacing density preset ("compact", "comfortable", "spacious").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub density: Option<String>,
 }
 
 /// Generic string or list of strings.
