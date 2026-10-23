@@ -1,6 +1,11 @@
 pub mod templates;
 pub(crate) mod world;
 
+pub use templates::{
+  eject_template, list_templates, list_templates_in, TemplateInfo,
+  DEFAULT_TEMPLATE,
+};
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -278,7 +283,7 @@ impl TypstEngine {
 
     schema::validate_schema_auto(options.content, options.schema)?;
 
-    let template_name = options.template.unwrap_or(templates::DEFAULT_TEMPLATE);
+    let template_name = options.template.unwrap_or(DEFAULT_TEMPLATE);
     let resolved_template = self.resolve_template(template_name)?;
     let doc = self.compile_paged(&resolved_template, options.content)?;
 
@@ -425,9 +430,7 @@ mod tests {
   fn test_resolve_template_builtin_classic() {
     let engine = TypstEngine::with_root(PathBuf::from("."), None);
 
-    let resolved = engine
-      .resolve_template(templates::DEFAULT_TEMPLATE)
-      .unwrap();
+    let resolved = engine.resolve_template(DEFAULT_TEMPLATE).unwrap();
     assert_eq!(resolved, PathBuf::from("classic/main.typ"));
   }
 

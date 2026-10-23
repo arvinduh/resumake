@@ -19,3 +19,22 @@ pub mod telemetry;
 pub mod utils;
 /// Workspace scaffolding, workflow lifecycle, and git configuration.
 pub mod workspace;
+
+// Primary compiler facade and build pipeline
+pub use engine::{build, BuildOptions, BuildOutcome, TypstEngine};
+
+// Canonical résumé data model
+pub use models::ResumeDocument;
+
+// JSON Schema validation
+pub use schema::{validate_schema_auto, validate_schema_str};
+
+// Layout geometry evaluation
+pub use telemetry::{evaluate_telemetry, TelemetryReport};
+
+// Module error aliases for unambiguous caller matching
+pub use engine::Error as EngineError;
+pub use release::Error as ReleaseError;
+pub use schema::Error as SchemaError;
+pub use telemetry::Error as TelemetryError;
+pub use workspace::Error as WorkspaceError;
