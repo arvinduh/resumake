@@ -259,6 +259,103 @@ impl TypstEngine {
     let doc = self.compile_paged(template_path, content_path)?;
     query_doc_metadata(&doc, selector)
   }
+
+  /// Compiles a résumé document, validates schema, evaluates layout telemetry,
+  /// and optionally writes output PDF.
+  ///
+  /// # Errors
+  /// Returns [`Error`] if content file does not exist, schema is invalid,
+  /// Typst compilation fails, or telemetry query fails.
+  pub fn build(
+    &self,
+    options: &BuildOptions<'_>,
+  ) -> Result<BuildOutcome, Error> {
+    if !options.content.exists() {
+      return Err(Error::ContentNotFound {
+        path: options.content.to_path_buf(),
+      });
+    }
+
+    schema::validate_schema_auto(options.content, options.schema)?;
+
+    let template_name = options.template.unwrap_or(templates::DEFAULT_TEMPLATE);
+    let resolved_template = self.resolve_template(template_name)?;
+    let doc = self.compile_paged(&resolved_template, options.content)?;
+
+    if let Some(out_path) = options.output {
+      self.render_pdf(&doc, out_path)?;
+    }
+
+    let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
+    let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
+    let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)?;
+
+    let candidate_name = schema::load_content_name(options.content)
+      .unwrap_or_else(|_| "Candidate".to_string());
+    let candidate_version = schema::load_content_version(options.content)
+      .unwrap_or_else(|_| "1.0.0".to_string());
+
+    Ok(BuildOutcome {
+      candidate_name,
+      candidate_version,
+      output_path: options.output.map(Path::to_path_buf),
+      report,
+      document: doc,
+    })
+  }
+}
+
+/// Options configuring a résumé compilation and verification run.
+#[derive(Debug, Clone)]
+pub struct BuildOptions<'a> {
+  /// Path to content YAML file.
+  pub content: &'a Path,
+  /// Named built-in layout, local template directory, or `.typ` file.
+  pub template: Option<&'a str>,
+  /// Custom path for generated PDF (if `None`, dry-run / in-memory only).
+  pub output: Option<&'a Path>,
+  /// Path to custom JSON schema file.
+  pub schema: Option<&'a Path>,
+  /// Custom font directory override.
+  pub font_path: Option<&'a Path>,
+}
+
+/// The outcome of compiling and evaluating a résumé document.
+#[derive(Debug)]
+pub struct BuildOutcome {
+  /// Candidate display name extracted from content metadata.
+  pub candidate_name: String,
+  /// Candidate document version extracted from content metadata.
+  pub candidate_version: String,
+  /// Output PDF path, if written to disk.
+  pub output_path: Option<PathBuf>,
+  /// Layout telemetry evaluation report.
+  pub report: TelemetryReport,
+  /// In-memory compiled Typst document.
+  pub document: PagedDocument,
+}
+
+impl BuildOutcome {
+  /// Returns `true` if all layout constraints passed.
+  #[must_use]
+  pub fn is_pass(&self) -> bool {
+    self.report.is_pass()
+  }
+
+  /// Total page count of the compiled document.
+  #[must_use]
+  pub fn page_count(&self) -> usize {
+    self.report.page_count
+  }
+}
+
+/// Compiles and evaluates a résumé document with default engine configuration.
+///
+/// # Errors
+/// Returns [`Error`] if initialization, compilation, or evaluation fails.
+pub fn build(options: &BuildOptions<'_>) -> Result<BuildOutcome, Error> {
+  let engine = TypstEngine::new(options.font_path)?;
+  engine.build(options)
 }
 
 /// Queries metadata value(s) matching `selector` from a [`PagedDocument`] and
@@ -305,26 +402,19 @@ pub fn verify_content(
   schema: Option<&Path>,
   font_path: Option<&Path>,
 ) -> Result<TelemetryReport, Error> {
-  if !content.exists() {
-    return Err(Error::ContentNotFound {
-      path: content.to_path_buf(),
-    });
-  }
-
-  schema::validate_schema_auto(content, schema)?;
-
-  let engine = TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template_name)?;
-  let doc = engine.compile_paged(&resolved_template, content)?;
-  let page_json = query_doc_metadata(&doc, "<pageinfo>")?;
-  let bullets_json = query_doc_metadata(&doc, "<bulletinfo>")?;
-  let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)?;
-
-  if !report.is_pass() {
+  let options = BuildOptions {
+    content,
+    template: Some(template_name),
+    output: None,
+    schema,
+    font_path,
+  };
+  let outcome = build(&options)?;
+  if !outcome.is_pass() {
     return Err(Error::LayoutConstraintViolation);
   }
 
-  Ok(report)
+  Ok(outcome.report)
 }
 
 #[cfg(test)]
@@ -390,5 +480,32 @@ mod tests {
         "Block '{block}' is missing an #import in main.typ!"
       );
     }
+  }
+
+  #[test]
+  fn test_build_outcome_lifecycle() {
+    let temp = tempfile::TempDir::new().unwrap();
+    let content_path = temp.path().join("content.yaml");
+    let yaml = schema::generate_init_template("Dr. Gordon Freeman");
+    fs::write(&content_path, yaml).unwrap();
+
+    let engine = TypstEngine::with_root(temp.path().to_path_buf(), None);
+    let output_pdf = temp.path().join("resume.pdf");
+
+    let options = BuildOptions {
+      content: &content_path,
+      template: None,
+      output: Some(&output_pdf),
+      schema: None,
+      font_path: None,
+    };
+
+    let outcome = engine.build(&options).unwrap();
+    assert_eq!(outcome.candidate_name, "Dr. Gordon Freeman");
+    assert_eq!(outcome.candidate_version, "1.0.0");
+    assert!(outcome.is_pass());
+    assert_eq!(outcome.page_count(), 1);
+    assert!(output_pdf.exists());
+    assert!(fs::metadata(&output_pdf).unwrap().len() > 1000);
   }
 }
