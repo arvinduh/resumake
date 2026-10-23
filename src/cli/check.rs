@@ -4,8 +4,7 @@ use std::path::PathBuf;
 
 use resumake::engine;
 
-use crate::cli::build::compile_and_evaluate;
-use crate::cli::Error;
+use crate::cli::{ui, Error};
 
 /// Command line arguments for `rsmk check`.
 #[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
@@ -31,18 +30,35 @@ pub struct CheckArgs {
 
 impl CheckArgs {
   /// Runs the check command.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error`] if schema validation, Typst compilation, or layout
+  /// constraint verification fails.
   pub fn run(self, quiet: bool) -> Result<(), Error> {
-    let template_name = self
-      .template
-      .as_deref()
-      .unwrap_or(engine::templates::DEFAULT_TEMPLATE);
-    compile_and_evaluate(
-      &self.content,
-      template_name,
-      self.schema.as_deref(),
-      self.font_path.as_deref(),
-      None,
-      quiet,
-    )
+    let options = engine::BuildOptions {
+      content: &self.content,
+      template: self.template.as_deref(),
+      output: None,
+      schema: self.schema.as_deref(),
+      font_path: self.font_path.as_deref(),
+    };
+
+    let outcome = engine::build(&options)?;
+
+    if !quiet {
+      ui::print_telemetry_table(
+        &outcome.report,
+        &outcome.candidate_name,
+        "[dry-run: no PDF written]",
+        &outcome.candidate_version,
+      );
+    }
+
+    if !outcome.is_pass() {
+      return Err(engine::Error::LayoutConstraintViolation.into());
+    }
+
+    Ok(())
   }
 }

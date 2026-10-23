@@ -27,10 +27,10 @@ pub enum Error {
   Git(#[from] resumake::utils::git::Error),
   /// Workspace initialization failure.
   #[error(transparent)]
-  Init(#[from] init::Error),
+  Workspace(#[from] resumake::workspace::Error),
   /// Release pipeline failure.
   #[error(transparent)]
-  Release(#[from] release::Error),
+  Release(#[from] resumake::release::Error),
   #[cfg(feature = "update")]
   /// Self-update failure.
   #[error(transparent)]

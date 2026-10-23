@@ -1,8 +1,8 @@
 //! Handlers for `rsmk build`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use resumake::{engine, schema, telemetry};
+use resumake::{engine, schema};
 
 use crate::cli::{ui, Error};
 
@@ -44,82 +44,43 @@ impl Default for BuildArgs {
   }
 }
 
-/// Compiles the document, optionally renders PDF, evaluates layout telemetry,
-/// and prints report.
-pub(crate) fn compile_and_evaluate(
-  content: &Path,
-  template_name: &str,
-  schema: Option<&Path>,
-  font_path: Option<&Path>,
-  output_pdf: Option<&Path>,
-  quiet: bool,
-) -> Result<(), Error> {
-  if !content.exists() {
-    return Err(
-      engine::Error::ContentNotFound {
-        path: content.to_path_buf(),
-      }
-      .into(),
-    );
-  }
-
-  // 1. Validate schema
-  schema::validate_schema_auto(content, schema)?;
-
-  // 2. Resolve paths and compile document once in-memory
-  let engine = engine::TypstEngine::new(font_path)?;
-  let resolved_template = engine.resolve_template(template_name)?;
-  let doc = engine.compile_paged(&resolved_template, content)?;
-
-  // 3. Render PDF directly from the in-memory document if requested
-  if let Some(out) = output_pdf {
-    engine.render_pdf(&doc, out)?;
-  }
-
-  // 4. Query telemetry directly from the same in-memory document
-  let page_json = engine::query_doc_metadata(&doc, "<pageinfo>")?;
-  let bullets_json = engine::query_doc_metadata(&doc, "<bulletinfo>")?;
-  let report = telemetry::evaluate_telemetry(&page_json, &bullets_json)?;
-
-  let name = schema::load_content_name(content)
-    .unwrap_or_else(|_| "Candidate".to_string());
-  let version = schema::load_content_version(content)
-    .unwrap_or_else(|_| "1.0.0".to_string());
-
-  let output_display = match output_pdf {
-    Some(out) => out.to_string_lossy(),
-    None => "[dry-run: no PDF written]".into(),
-  };
-
-  if !quiet {
-    ui::print_telemetry_table(&report, &name, &output_display, &version);
-  }
-
-  if !report.is_pass() {
-    return Err(engine::Error::LayoutConstraintViolation.into());
-  }
-
-  Ok(())
-}
-
 impl BuildArgs {
   /// Runs the build command.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error`] if schema validation, Typst compilation, or layout
+  /// constraint verification fails.
   pub fn run(self, quiet: bool) -> Result<(), Error> {
-    let template_name = self
-      .template
-      .as_deref()
-      .unwrap_or(engine::templates::DEFAULT_TEMPLATE);
     let output_pdf = match self.output {
       Some(out) => out,
       None => schema::derive_output_filename(&self.content),
     };
-    compile_and_evaluate(
-      &self.content,
-      template_name,
-      self.schema.as_deref(),
-      self.font_path.as_deref(),
-      Some(&output_pdf),
-      quiet,
-    )
+
+    let options = engine::BuildOptions {
+      content: &self.content,
+      template: self.template.as_deref(),
+      output: Some(&output_pdf),
+      schema: self.schema.as_deref(),
+      font_path: self.font_path.as_deref(),
+    };
+
+    let outcome = engine::build(&options)?;
+
+    if !quiet {
+      let output_display = output_pdf.to_string_lossy();
+      ui::print_telemetry_table(
+        &outcome.report,
+        &outcome.candidate_name,
+        &output_display,
+        &outcome.candidate_version,
+      );
+    }
+
+    if !outcome.is_pass() {
+      return Err(engine::Error::LayoutConstraintViolation.into());
+    }
+
+    Ok(())
   }
 }
