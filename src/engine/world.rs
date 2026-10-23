@@ -1,12 +1,11 @@
-//! Typst World implementation, virtual file system, font loader, and diagnostic formatting.
+//! Typst World implementation, virtual file system, font loader, and diagnostic
+//! formatting.
 
-use crate::engine::error::EngineError;
-use crate::engine::templates::{DEFAULT_TEMPLATE, TEMPLATES_DIR};
-use crate::utils::fs::normalize_posix_path;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+
 use typst::diag::{FileError, FileResult, Severity, SourceDiagnostic};
 use typst::foundations::{Bytes, Datetime, Dict, Duration, Str, Value};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
@@ -15,8 +14,12 @@ use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World, WorldExt};
 use typst_kit::fonts::{self, FontStore};
 
-/// In-process [`World`] implementation resolving embedded templates from memory,
-/// disk files from the project root, and system/custom fonts.
+use crate::engine::templates::{DEFAULT_TEMPLATE, TEMPLATES_DIR};
+use crate::engine::Error;
+use crate::utils::fs::normalize_posix_path;
+
+/// In-process [`World`] implementation resolving embedded templates from
+/// memory, disk files from the project root, and system/custom fonts.
 pub(crate) struct ResumakeWorld {
   library: LazyHash<Library>,
   fonts: FontStore,
@@ -36,16 +39,16 @@ impl ResumakeWorld {
   /// Constructs a new [`ResumakeWorld`].
   ///
   /// # Errors
-  /// Returns [`EngineError`] if font initialization fails.
+  /// Returns [`Error`] if font initialization fails.
   pub(crate) fn new(
     root_path: PathBuf,
     template_path: PathBuf,
     content_path: PathBuf,
     font_path: Option<PathBuf>,
-  ) -> Result<Self, EngineError> {
+  ) -> Self {
     let mut font_dirs = Vec::new();
-    if let Some(ref fp) = font_path {
-      font_dirs.push(fp.clone());
+    if let Some(fp) = font_path {
+      font_dirs.push(fp);
     }
     let candidate_fonts = root_path.join("fonts");
     if candidate_fonts.is_dir() {
@@ -92,7 +95,7 @@ impl ResumakeWorld {
 
     let main_id = project_file_id(&main_vpath);
 
-    Ok(Self {
+    Self {
       library,
       fonts,
       main_id,
@@ -105,7 +108,7 @@ impl ResumakeWorld {
       sources: Mutex::new(HashMap::new()),
       files: Mutex::new(HashMap::new()),
       now: std::time::SystemTime::now(),
-    })
+    }
   }
 
   fn read_bytes_uncached(&self, id: FileId) -> FileResult<Bytes> {
@@ -224,11 +227,17 @@ impl World for ResumakeWorld {
     self.fonts.font(index)
   }
 
+  #[expect(
+    clippy::cast_possible_truncation,
+    reason = "Timezone offset seconds fit in i64"
+  )]
   fn today(&self, offset: Option<Duration>) -> Option<Datetime> {
     let duration = self.now.duration_since(std::time::UNIX_EPOCH).ok()?;
     let secs = match offset {
-      None => duration.as_secs() as i64,
-      Some(offset) => (duration.as_secs() as i64) + offset.seconds() as i64,
+      None => i64::try_from(duration.as_secs()).ok()?,
+      Some(offset) => i64::try_from(duration.as_secs())
+        .ok()?
+        .checked_add(offset.seconds() as i64)?,
     };
     days_to_date(secs / 86400)
   }
@@ -247,18 +256,22 @@ fn project_file_id(vpath: &str) -> FileId {
 }
 
 fn days_to_date(days_since_epoch: i64) -> Option<Datetime> {
-  let z = days_since_epoch + 719468;
-  let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
-  let doe = (z - era * 146097) as u32;
-  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-  let y = (yoe as i64) + era * 400;
+  let z = days_since_epoch + 719_468;
+  let era = (if z >= 0 { z } else { z - 146_096 }) / 146_097;
+  let doe = u32::try_from(z - era * 146_097).ok()?;
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+  let y = i64::from(yoe) + era * 400;
   let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
   let mp = (5 * doy + 2) / 153;
   let d = doy - (153 * mp + 2) / 5 + 1;
   let m = if mp < 10 { mp + 3 } else { mp - 9 };
   let yr = if m <= 2 { y + 1 } else { y };
 
-  Datetime::from_ymd(yr as i32, m as u8, d as u8)
+  let yr_i32 = i32::try_from(yr).ok()?;
+  let m_u8 = u8::try_from(m).ok()?;
+  let d_u8 = u8::try_from(d).ok()?;
+
+  Datetime::from_ymd(yr_i32, m_u8, d_u8)
 }
 
 /// Formats a list of [`SourceDiagnostic`] into a readable diagnostic string.
@@ -286,21 +299,24 @@ pub(crate) fn format_diagnostics(
     }
     let mut msg = format!("{location}{severity}: {}", diag.message);
     for hint in &diag.hints {
-      msg.push_str(&format!("\n  = hint: {}", hint.v));
+      use std::fmt::Write as _;
+      let _ = write!(msg, "\n  = hint: {}", hint.v);
     }
     out.push(msg);
   }
   out.join("\n")
 }
 
-/// Discovers the font directory if present (user override, `./fonts`, or `assets/fonts`).
+/// Discovers the font directory if present (user override, `./fonts`, or
+/// `assets/fonts`).
 ///
 /// # Errors
-/// Returns an [`EngineError::FontDirNotFound`] if a custom font path was provided but does not exist.
+/// Returns an [`Error::FontDirNotFound`] if a custom font path was provided but
+/// does not exist.
 pub(crate) fn discover_font_dir(
   root: &Path,
   user_override: Option<&Path>,
-) -> Result<Option<PathBuf>, EngineError> {
+) -> Result<Option<PathBuf>, Error> {
   if let Some(custom) = user_override {
     if custom.is_dir() {
       return Ok(Some(custom.to_path_buf()));
@@ -309,7 +325,7 @@ pub(crate) fn discover_font_dir(
     if joined.is_dir() {
       return Ok(Some(joined));
     }
-    return Err(EngineError::FontDirNotFound {
+    return Err(Error::FontDirNotFound {
       searched: vec![joined, custom.to_path_buf()],
     });
   }

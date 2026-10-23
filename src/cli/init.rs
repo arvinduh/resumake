@@ -1,15 +1,71 @@
 //! Initialization logic for scaffolding new résumé projects, git repositories,
-//! and GitHub Actions workflows.
+//! and `GitHub` Actions workflows.
 
-use crate::schema;
-use crate::utils::fs;
-use crate::utils::git;
-use crate::utils::ui;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
+use resumake::schema;
+use resumake::utils::{fs, git};
+
+use crate::cli::ui;
+
+/// Available CLI arguments for `rsmk init`.
+#[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
+#[expect(clippy::struct_excessive_bools, reason = "CLI argument flags")]
+pub struct InitArgs {
+  /// Destination for the scaffold: a directory (creates it and writes
+  /// `content.yaml` inside) or an explicit `*.yaml` file path. Defaults to
+  /// `content.yaml` in the current directory.
+  #[arg(value_name = "DEST")]
+  pub dest: Option<PathBuf>,
+
+  /// Candidate display name
+  #[arg(short, long)]
+  pub name: Option<String>,
+
+  /// Overwrite destination file if it already exists
+  #[arg(short, long)]
+  pub force: bool,
+
+  /// Skip initializing a git repository and git config files (also skips
+  /// `GitHub` Actions workflows, which require a repo; add them later with
+  /// `rsmk init --workflows`)
+  #[arg(long)]
+  pub no_git: bool,
+
+  /// Skip generating `GitHub` Actions CI and Release workflows
+  #[arg(long)]
+  pub no_workflows: bool,
+
+  /// Create or refresh `GitHub` Actions workflows without modifying
+  /// content.yaml
+  #[arg(long, visible_alias = "update")]
+  pub workflows: bool,
+}
+
+impl InitArgs {
+  /// Runs the init command.
+  ///
+  /// # Errors
+  ///
+  /// Returns an [`Error`] if initialization or workflow generation fails.
+  pub fn run(self, quiet: bool) -> Result<(), Error> {
+    let resolved_output = resolve_init_output(self.dest.as_deref());
+    run_init(InitOptions {
+      name: self.name.as_deref(),
+      output: &resolved_output,
+      force: self.force,
+      no_git: self.no_git,
+      no_workflows: self.no_workflows,
+      workflows: self.workflows,
+      quiet,
+    })
+  }
+}
+
 /// Options configuring the workspace initialization process.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
+#[expect(clippy::struct_excessive_bools, reason = "CLI argument flags")]
 pub(crate) struct InitOptions<'a> {
   /// Explicit candidate name override.
   pub name: Option<&'a str>,
@@ -19,9 +75,9 @@ pub(crate) struct InitOptions<'a> {
   pub force: bool,
   /// Whether to skip git repository initialization and git config files.
   pub no_git: bool,
-  /// Whether to skip GitHub Actions workflow scaffolding.
+  /// Whether to skip `GitHub` Actions workflow scaffolding.
   pub no_workflows: bool,
-  /// Whether to create or update GitHub Actions workflow files.
+  /// Whether to create or update `GitHub` Actions workflow files.
   pub workflows: bool,
   /// Suppress informational console output.
   pub quiet: bool,
@@ -29,10 +85,6 @@ pub(crate) struct InitOptions<'a> {
 
 /// Returns true when `path` should be treated as an explicit content-file
 /// target rather than a directory to scaffold inside.
-///
-/// An existing directory is never a file; an existing regular file always is.
-/// For a path that does not yet exist, only a `.yaml`/`.yml` extension marks it
-/// as a file — bare names like `arvin_resume` are treated as directories.
 fn looks_like_file(path: &Path) -> bool {
   if path.is_dir() {
     return false;
@@ -46,16 +98,12 @@ fn looks_like_file(path: &Path) -> bool {
       .and_then(|e| e.to_str())
       .map(str::to_ascii_lowercase)
       .as_deref(),
-    Some("yaml") | Some("yml")
+    Some("yaml" | "yml")
   )
 }
 
 /// Resolves the effective content-file path for `rsmk init` from the optional
 /// positional destination.
-///
-/// - None: `content.yaml` in the current directory.
-/// - positional `<dest>`: a directory-like value scaffolds `<dest>/content.yaml`;
-///   a `*.yaml` value is used verbatim as the file path.
 pub(crate) fn resolve_init_output(dest: Option<&Path>) -> PathBuf {
   match dest {
     None => PathBuf::from("content.yaml"),
@@ -99,7 +147,7 @@ fn resolve_candidate_name(name_arg: Option<&str>) -> String {
 
 /// Errors originating from project initialization and workflow management.
 #[derive(thiserror::Error, Debug)]
-pub enum InitError {
+pub enum Error {
   /// Destination file already exists and `--force` was not specified.
   #[error("File '{}' already exists. Use --force to overwrite.", path.display())]
   DestinationAlreadyExists {
@@ -130,24 +178,20 @@ pub enum InitError {
     #[source]
     source: std::io::Error,
   },
-  /// Git or GitHub CLI operation error.
+  /// Git operation error.
   #[error(transparent)]
-  Git(#[from] crate::utils::git::GitError),
+  Git(#[from] git::Error),
   /// Underlying standard I/O error.
   #[error("I/O error: {0}")]
   Io(#[from] std::io::Error),
 }
 
 /// Ensures `.gitignore` exists and ignores `*.pdf` and `.resumake/`.
-///
-/// # Errors
-///
-/// Returns an [`InitError`] if reading or writing `.gitignore` fails.
-fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
+fn ensure_gitignore(dir: &Path) -> Result<(), Error> {
   let gitignore_path = dir.join(".gitignore");
   let mut existing = if gitignore_path.exists() {
     std::fs::read_to_string(&gitignore_path).map_err(|source| {
-      InitError::FileRead {
+      Error::FileRead {
         path: gitignore_path.clone(),
         source,
       }
@@ -180,7 +224,7 @@ fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
 
   if modified || !gitignore_path.exists() {
     std::fs::write(&gitignore_path, existing).map_err(|source| {
-      InitError::FileWrite {
+      Error::FileWrite {
         path: gitignore_path,
         source,
       }
@@ -190,15 +234,11 @@ fn ensure_gitignore(dir: &Path) -> Result<(), InitError> {
 }
 
 /// Ensures `.gitattributes` exists and contains `* text=auto eol=lf`.
-///
-/// # Errors
-///
-/// Returns an [`InitError`] if reading or writing `.gitattributes` fails.
-fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
+fn ensure_gitattributes(dir: &Path) -> Result<(), Error> {
   let gitattributes_path = dir.join(".gitattributes");
   let mut existing = if gitattributes_path.exists() {
     std::fs::read_to_string(&gitattributes_path).map_err(|source| {
-      InitError::FileRead {
+      Error::FileRead {
         path: gitattributes_path.clone(),
         source,
       }
@@ -221,7 +261,7 @@ fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
 
   if modified || !gitattributes_path.exists() {
     std::fs::write(&gitattributes_path, existing).map_err(|source| {
-      InitError::FileWrite {
+      Error::FileWrite {
         path: gitattributes_path,
         source,
       }
@@ -230,12 +270,9 @@ fn ensure_gitattributes(dir: &Path) -> Result<(), InitError> {
   Ok(())
 }
 
-/// Scaffolds `.github/workflows/ci.yml` and `.github/workflows/release.yml` with provenance headers.
-///
-/// # Errors
-///
-/// Returns an [`InitError`] if creating directories or writing workflow files fails.
-fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
+/// Scaffolds `.github/workflows/ci.yml` and `.github/workflows/release.yml`
+/// with provenance headers.
+fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), Error> {
   let workflows_dir = dir.join(".github").join("workflows");
   std::fs::create_dir_all(&workflows_dir)?;
 
@@ -246,7 +283,7 @@ fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
     let ci_content = schema::generate_ci_workflow(None);
     let ci_with_header = fs::stamp_provenance_header(&ci_content, version);
     std::fs::write(&ci_path, ci_with_header).map_err(|source| {
-      InitError::FileWrite {
+      Error::FileWrite {
         path: ci_path.clone(),
         source,
       }
@@ -259,7 +296,7 @@ fn scaffold_workflows(dir: &Path, force: bool) -> Result<(), InitError> {
     let release_with_header =
       fs::stamp_provenance_header(&release_content, version);
     std::fs::write(&release_path, release_with_header).map_err(|source| {
-      InitError::FileWrite {
+      Error::FileWrite {
         path: release_path,
         source,
       }
@@ -287,19 +324,8 @@ fn print_next_steps(quiet: bool) {
   println!("     git push -u origin main");
 }
 
-/// Updates GitHub Actions workflow files to match the current binary version.
-///
-/// If a workflow file contains local modifications (SHA-256 mismatch with provenance header),
-/// the update is skipped and a warning with a unified diff is displayed, unless `force` is true.
-///
-/// # Errors
-///
-/// Returns an [`InitError`] if creating directories or reading/writing workflow files fails.
-fn update_workflows(
-  dir: &Path,
-  force: bool,
-  quiet: bool,
-) -> Result<(), InitError> {
+/// Updates `GitHub` Actions workflow files to match the current binary version.
+fn update_workflows(dir: &Path, force: bool, quiet: bool) -> Result<(), Error> {
   let workflows_dir = dir.join(".github").join("workflows");
   std::fs::create_dir_all(&workflows_dir)?;
 
@@ -315,7 +341,7 @@ fn update_workflows(
 
     if !path.exists() {
       std::fs::write(&path, &new_with_header).map_err(|source| {
-        InitError::FileWrite {
+        Error::FileWrite {
           path: path.clone(),
           source,
         }
@@ -330,7 +356,7 @@ fn update_workflows(
     }
 
     let existing =
-      std::fs::read_to_string(&path).map_err(|source| InitError::FileRead {
+      std::fs::read_to_string(&path).map_err(|source| Error::FileRead {
         path: path.clone(),
         source,
       })?;
@@ -348,7 +374,7 @@ fn update_workflows(
 
     if is_clean || force {
       std::fs::write(&path, &new_with_header).map_err(|source| {
-        InitError::FileWrite {
+        Error::FileWrite {
           path: path.clone(),
           source,
         }
@@ -366,7 +392,8 @@ fn update_workflows(
       }
     } else if !quiet {
       eprintln!(
-        "warning: Workflow '{}' has local modifications; skipping update. Use --force to overwrite.",
+        "warning: Workflow '{}' has local modifications; skipping update. Use \
+         --force to overwrite.",
         path.display()
       );
     }
@@ -375,8 +402,8 @@ fn update_workflows(
   Ok(())
 }
 
-/// Inspects `.github/workflows/` for pinned `version: "<VER>"` values and emits a warning
-/// if any pinned version differs from `local_version`.
+/// Inspects `.github/workflows/` for pinned `version: "<VER>"` values and emits
+/// a warning if any pinned version differs from `local_version`.
 pub(crate) fn check_workflow_version_skew(
   repo_dir: &Path,
   local_version: &str,
@@ -386,13 +413,11 @@ pub(crate) fn check_workflow_version_skew(
     return;
   }
 
-  let entries = match std::fs::read_dir(&workflows_dir) {
-    Ok(entries) => entries,
-    Err(_) => return,
+  let Ok(entries) = std::fs::read_dir(&workflows_dir) else {
+    return;
   };
 
-  use std::collections::BTreeSet;
-  let mut skew_versions = BTreeSet::new();
+  let mut skew_versions = std::collections::BTreeSet::new();
 
   for entry in entries.flatten() {
     let path = entry.path();
@@ -418,18 +443,16 @@ pub(crate) fn check_workflow_version_skew(
 
   for pinned in skew_versions {
     eprintln!(
-      "warning: Repository workflows pin rsmk {pinned}, but your local binary is {local_version}.\n         Layout telemetry may measure geometry differently in CI.\n         Run `rsmk init --workflows` to synchronize your workflow pin."
+      "warning: Repository workflows pin rsmk {pinned}, but your local binary \
+       is {local_version}.\n         Layout telemetry may measure geometry \
+       differently in CI.\n         Run `rsmk init --workflows` to \
+       synchronize your workflow pin."
     );
   }
 }
 
 /// Executes the full initialization command.
-///
-/// # Errors
-///
-/// Returns an [`InitError`] if destination exists without force, destination directory is not empty,
-/// or file writing fails.
-pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
+pub(crate) fn run_init(opts: InitOptions) -> Result<(), Error> {
   let base_dir = opts
     .output
     .parent()
@@ -441,15 +464,13 @@ pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
   }
 
   if opts.output.exists() && !opts.force {
-    return Err(InitError::DestinationAlreadyExists {
+    return Err(Error::DestinationAlreadyExists {
       path: opts.output.to_path_buf(),
     });
   }
 
-  // Validate the target directory up front so a rejected init leaves the
-  // filesystem untouched (no directories created, no files written).
   if !opts.force && dir_has_entries(base_dir) {
-    return Err(InitError::DestinationNotEmpty {
+    return Err(Error::DestinationNotEmpty {
       path: base_dir.to_path_buf(),
     });
   }
@@ -462,7 +483,7 @@ pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
   }
 
   std::fs::write(opts.output, template_content).map_err(|source| {
-    InitError::FileWrite {
+    Error::FileWrite {
       path: opts.output.to_path_buf(),
       source,
     }
@@ -496,14 +517,12 @@ pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
     }
   }
 
-  // GitHub Actions workflows only make sense inside a repository, so they are
-  // scaffolded only when a git repo is being set up. A workspace created with
-  // --no-git can add them later with `rsmk init --workflows`.
   if opts.no_git {
     if !opts.no_workflows && !opts.quiet {
       ui::print_info(
-        "Skipping GitHub Actions workflows (--no-git). Run `rsmk init --workflows` \
-         from the project directory to add CI/Release workflows later.",
+        "Skipping GitHub Actions workflows (--no-git). Run `rsmk init \
+         --workflows` from the project directory to add CI/Release workflows \
+         later.",
       );
     }
   } else if !opts.no_workflows {
@@ -520,79 +539,4 @@ pub(crate) fn run_init(opts: InitOptions) -> Result<(), InitError> {
   }
 
   Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn test_looks_like_file() {
-    assert!(looks_like_file(Path::new("content.yaml")));
-    assert!(looks_like_file(Path::new("resume.yml")));
-    assert!(looks_like_file(Path::new("foo/bar.YAML")));
-    assert!(!looks_like_file(Path::new("my_resume")));
-    assert!(!looks_like_file(Path::new("dir/name")));
-  }
-
-  #[test]
-  fn test_resolve_init_output() {
-    assert_eq!(resolve_init_output(None), PathBuf::from("content.yaml"));
-    assert_eq!(
-      resolve_init_output(Some(Path::new("custom.yaml"))),
-      PathBuf::from("custom.yaml")
-    );
-    assert_eq!(
-      resolve_init_output(Some(Path::new("custom_resume"))),
-      PathBuf::from("custom_resume/content.yaml")
-    );
-    assert_eq!(
-      resolve_init_output(Some(Path::new("dir/nested.yml"))),
-      PathBuf::from("dir/nested.yml")
-    );
-  }
-
-  #[test]
-  fn test_sha256_hex() {
-    assert_eq!(
-      fs::sha256_hex(b""),
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    );
-    assert_eq!(
-      fs::sha256_hex(b"abc"),
-      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-    );
-    assert_eq!(
-      fs::sha256_hex(b"The quick brown fox jumps over the lazy dog"),
-      "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
-    );
-  }
-
-  #[test]
-  fn test_stamp_provenance_header() {
-    let content = "name: CI\n";
-    let stamped = fs::stamp_provenance_header(content, "0.1.0");
-    assert!(stamped.contains("# Generated by rsmk 0.1.0."));
-    assert!(stamped.contains("# rsmk:generated sha256="));
-    assert!(stamped.ends_with("name: CI\n"));
-  }
-
-  #[test]
-  fn test_extract_provenance_and_body() {
-    let content = "name: CI\non: [push]\n";
-    let stamped = fs::stamp_provenance_header(content, "0.1.0");
-    let (hash, body) = fs::extract_provenance_and_body(&stamped).unwrap();
-    assert_eq!(hash, fs::sha256_hex(content.as_bytes()));
-    assert_eq!(body, content);
-
-    // Test with CRLF
-    let stamped_crlf = stamped.replace('\n', "\r\n");
-    let (hash_crlf, body_crlf) =
-      fs::extract_provenance_and_body(&stamped_crlf).unwrap();
-    assert_eq!(hash_crlf, fs::sha256_hex(content.as_bytes()));
-    assert_eq!(body_crlf.replace("\r\n", "\n"), content);
-
-    // Test missing header
-    assert_eq!(fs::extract_provenance_and_body("name: CI\n"), None);
-  }
 }

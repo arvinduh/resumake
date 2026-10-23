@@ -1,12 +1,13 @@
-//! Centralized Git and GitHub CLI system operations.
+//! Centralized Git and `GitHub` CLI system operations.
 
-use semver::Version;
 use std::path::Path;
 use std::process::Command;
 
-/// Errors originating from Git and GitHub CLI operations.
+use semver::Version;
+
+/// Errors originating from Git and `GitHub` CLI operations.
 #[derive(thiserror::Error, Debug)]
-pub enum GitError {
+pub enum Error {
   /// Git CLI execution error.
   #[error("Git error: {0}")]
   Command(String),
@@ -49,32 +50,32 @@ pub enum GitError {
 }
 
 /// Checks if the target directory is inside an existing git work tree.
+#[must_use]
 pub fn is_inside_work_tree(dir: &Path) -> bool {
   Command::new("git")
     .args(["rev-parse", "--is-inside-work-tree"])
     .current_dir(dir)
     .output()
-    .map(|output| {
+    .is_ok_and(|output| {
       output.status.success()
         && String::from_utf8_lossy(&output.stdout).trim() == "true"
     })
-    .unwrap_or(false)
 }
 
 /// Initializes a new git repository in the target directory.
 ///
 /// # Errors
-/// Returns a [`GitError`] if `git init` cannot be spawned or fails.
-pub fn init_repo(dir: &Path) -> Result<(), GitError> {
+/// Returns a [`Error`] if `git init` cannot be spawned or fails.
+pub fn init_repo(dir: &Path) -> Result<(), Error> {
   let output = Command::new("git")
     .arg("init")
     .current_dir(dir)
     .output()
-    .map_err(GitError::Spawn)?;
+    .map_err(Error::Spawn)?;
 
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    return Err(GitError::Failed { stderr });
+    return Err(Error::Failed { stderr });
   }
   Ok(())
 }
@@ -82,40 +83,42 @@ pub fn init_repo(dir: &Path) -> Result<(), GitError> {
 /// Checks that the git working tree has no uncommitted or untracked changes.
 ///
 /// # Errors
-/// Returns a [`GitError`] if working tree is dirty or git inspection fails.
-pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), GitError> {
+/// Returns a [`Error`] if working tree is dirty or git inspection fails.
+pub fn check_working_tree_clean(repo_dir: &Path) -> Result<(), Error> {
   let output = Command::new("git")
     .args(["status", "--porcelain"])
     .current_dir(repo_dir)
     .output()
-    .map_err(|e| GitError::Command(format!("Failed to run git status: {e}")))?;
+    .map_err(|e| Error::Command(format!("Failed to run git status: {e}")))?;
 
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    return Err(GitError::Command(format!("git status failed: {stderr}")));
+    return Err(Error::Command(format!("git status failed: {stderr}")));
   }
 
   let stdout = String::from_utf8_lossy(&output.stdout);
   if !stdout.trim().is_empty() {
-    return Err(GitError::UncommittedChanges);
+    return Err(Error::UncommittedChanges);
   }
 
   Ok(())
 }
 
-/// Verifies that the current branch tracks an upstream remote branch and has 0 unpushed commits.
+/// Verifies that the current branch tracks an upstream remote branch and has 0
+/// unpushed commits.
 ///
 /// # Errors
-/// Returns a [`GitError`] if upstream branch is missing, commits are unpushed, or git fails.
-pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
+/// Returns a [`Error`] if upstream branch is missing, commits are unpushed, or
+/// git fails.
+pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), Error> {
   let repo_check = Command::new("git")
     .args(["rev-parse", "--git-dir"])
     .current_dir(repo_dir)
     .output()
-    .map_err(|e| GitError::Command(format!("Failed to run git: {e}")))?;
+    .map_err(|e| Error::Command(format!("Failed to run git: {e}")))?;
 
   if !repo_check.status.success() {
-    return Err(GitError::Command(format!(
+    return Err(Error::Command(format!(
       "Failed to open git repository: {}",
       String::from_utf8_lossy(&repo_check.stderr).trim()
     )));
@@ -125,40 +128,38 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
     .args(["rev-parse", "--verify", "HEAD"])
     .current_dir(repo_dir)
     .output()
-    .map_err(|e| GitError::Command(format!("Failed to run git: {e}")))?;
+    .map_err(|e| Error::Command(format!("Failed to run git: {e}")))?;
 
   if !head_check.status.success() {
-    return Err(GitError::NoHeadCommit);
+    return Err(Error::NoHeadCommit);
   }
 
   let upstream_check = Command::new("git")
     .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
     .current_dir(repo_dir)
     .output()
-    .map_err(|e| GitError::Command(format!("Failed to run git: {e}")))?;
+    .map_err(|e| Error::Command(format!("Failed to run git: {e}")))?;
 
   if !upstream_check.status.success() {
-    return Err(GitError::NoUpstreamBranch);
+    return Err(Error::NoUpstreamBranch);
   }
 
   let upstream_branch = String::from_utf8_lossy(&upstream_check.stdout)
     .trim()
     .to_string();
   if upstream_branch.is_empty() {
-    return Err(GitError::NoUpstreamBranch);
+    return Err(Error::NoUpstreamBranch);
   }
 
   let rev_list = Command::new("git")
     .args(["rev-list", "--left-right", "--count", "HEAD...@{u}"])
     .current_dir(repo_dir)
     .output()
-    .map_err(|e| {
-      GitError::Command(format!("Failed to run git rev-list: {e}"))
-    })?;
+    .map_err(|e| Error::Command(format!("Failed to run git rev-list: {e}")))?;
 
   if !rev_list.status.success() {
     let stderr = String::from_utf8_lossy(&rev_list.stderr).to_string();
-    return Err(GitError::Command(format!(
+    return Err(Error::Command(format!(
       "Failed to count unpushed commits: {stderr}"
     )));
   }
@@ -168,7 +169,7 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
   if let Some(ahead_str) = counts.first() {
     if let Ok(ahead) = ahead_str.parse::<u64>() {
       if ahead > 0 {
-        return Err(GitError::UnpushedCommits { count: ahead });
+        return Err(Error::UnpushedCommits { count: ahead });
       }
     }
   }
@@ -176,30 +177,15 @@ pub fn check_upstream_synced(repo_dir: &Path) -> Result<(), GitError> {
   Ok(())
 }
 
-/// Retrieves all existing semver git tags in the repository and returns the highest version, if any.
-///
-/// # Errors
-/// Returns a [`GitError`] if git tag inspection fails.
-pub fn get_latest_semver_tag(
-  repo_dir: &Path,
-) -> Result<Option<Version>, GitError> {
-  let output = Command::new("git")
-    .args(["tag", "-l"])
-    .current_dir(repo_dir)
-    .output()
-    .map_err(|e| GitError::Command(format!("Failed to run git tag: {e}")))?;
-
-  if !output.status.success() {
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    return Err(GitError::Command(format!(
-      "Failed to list git tags: {stderr}"
-    )));
-  }
-
-  let stdout = String::from_utf8_lossy(&output.stdout);
+/// Extracts the highest semantic version from an iterator of tag strings.
+#[must_use]
+pub fn find_highest_semver<'a, I>(tags: I) -> Option<Version>
+where
+  I: IntoIterator<Item = &'a str>,
+{
   let mut highest: Option<Version> = None;
 
-  for line in stdout.lines() {
+  for line in tags {
     let tag_name = line.trim();
     if tag_name.is_empty() {
       continue;
@@ -209,32 +195,50 @@ pub fn get_latest_semver_tag(
       .or_else(|| tag_name.strip_prefix('V'))
       .unwrap_or(tag_name);
     if let Ok(ver) = Version::parse(without_v) {
-      match &highest {
-        Some(cur) if ver > *cur => {
-          highest = Some(ver);
-        }
-        None => {
-          highest = Some(ver);
-        }
-        _ => {}
+      if highest.as_ref().is_none_or(|cur| ver > *cur) {
+        highest = Some(ver);
       }
     }
   }
 
-  Ok(highest)
+  highest
+}
+
+/// Retrieves all existing semver git tags in the repository and returns the
+/// highest version, if any.
+///
+/// # Errors
+/// Returns a [`Error`] if git tag inspection fails.
+pub fn get_latest_semver_tag(
+  repo_dir: &Path,
+) -> Result<Option<Version>, Error> {
+  let output = Command::new("git")
+    .args(["tag", "-l"])
+    .current_dir(repo_dir)
+    .output()
+    .map_err(|e| Error::Command(format!("Failed to run git tag: {e}")))?;
+
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    return Err(Error::Command(format!("Failed to list git tags: {stderr}")));
+  }
+
+  let stdout = String::from_utf8_lossy(&output.stdout);
+  Ok(find_highest_semver(stdout.lines()))
 }
 
 /// Gets the remote origin URL from git config.
 ///
 /// # Errors
-/// Returns a [`GitError`] if git repository cannot be opened or origin URL is not set.
-pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, GitError> {
+/// Returns a [`Error`] if git repository cannot be opened or origin URL is not
+/// set.
+pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, Error> {
   let output = Command::new("git")
     .args(["remote", "get-url", "origin"])
     .current_dir(repo_dir)
     .output()
     .map_err(|e| {
-      GitError::Command(format!("Failed to run git remote get-url: {e}"))
+      Error::Command(format!("Failed to run git remote get-url: {e}"))
     })?;
 
   if !output.status.success() {
@@ -243,14 +247,14 @@ pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, GitError> {
       || stderr.contains("not found")
       || stderr.contains("fatal:")
     {
-      return Err(GitError::NoRemoteUrl);
+      return Err(Error::NoRemoteUrl);
     }
-    return Err(GitError::RemoteError(stderr.trim().to_string()));
+    return Err(Error::RemoteError(stderr.trim().to_string()));
   }
 
   let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
   if url.is_empty() {
-    return Err(GitError::NoRemoteUrl);
+    return Err(Error::NoRemoteUrl);
   }
 
   Ok(url)
@@ -259,12 +263,13 @@ pub fn get_remote_origin_url(repo_dir: &Path) -> Result<String, GitError> {
 /// Creates an annotated git tag with the specified tag name and message.
 ///
 /// # Errors
-/// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
+/// Returns a [`Error`] if the git process fails to spawn or exits with a
+/// non-zero status.
 pub fn create_annotated_tag(
   repo_dir: &Path,
   tag: &str,
   message: &str,
-) -> Result<(), GitError> {
+) -> Result<(), Error> {
   let output = Command::new("git")
     .arg("tag")
     .arg("-a")
@@ -273,11 +278,11 @@ pub fn create_annotated_tag(
     .arg(message)
     .current_dir(repo_dir)
     .output()
-    .map_err(GitError::Spawn)?;
+    .map_err(Error::Spawn)?;
 
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    return Err(GitError::Failed { stderr });
+    return Err(Error::Failed { stderr });
   }
 
   Ok(())
@@ -286,23 +291,20 @@ pub fn create_annotated_tag(
 /// Pushes a git tag to a remote repository.
 ///
 /// # Errors
-/// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
-pub fn push_tag(
-  repo_dir: &Path,
-  remote: &str,
-  tag: &str,
-) -> Result<(), GitError> {
+/// Returns a [`Error`] if the git process fails to spawn or exits with a
+/// non-zero status.
+pub fn push_tag(repo_dir: &Path, remote: &str, tag: &str) -> Result<(), Error> {
   let output = Command::new("git")
     .arg("push")
     .arg(remote)
     .arg(tag)
     .current_dir(repo_dir)
     .output()
-    .map_err(GitError::Spawn)?;
+    .map_err(Error::Spawn)?;
 
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    return Err(GitError::Failed { stderr });
+    return Err(Error::Failed { stderr });
   }
 
   Ok(())
@@ -311,20 +313,46 @@ pub fn push_tag(
 /// Deletes a local git tag.
 ///
 /// # Errors
-/// Returns a [`GitError`] if the git process fails to spawn or exits with a non-zero status.
-pub fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), GitError> {
+/// Returns a [`Error`] if the git process fails to spawn or exits with a
+/// non-zero status.
+pub fn delete_tag(repo_dir: &Path, tag: &str) -> Result<(), Error> {
   let output = Command::new("git")
     .arg("tag")
     .arg("-d")
     .arg(tag)
     .current_dir(repo_dir)
     .output()
-    .map_err(GitError::Spawn)?;
+    .map_err(Error::Spawn)?;
 
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    return Err(GitError::Failed { stderr });
+    return Err(Error::Failed { stderr });
   }
 
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_find_highest_semver() {
+    let tags = [
+      "v0.1.0",
+      "s1.0",
+      "v1.2.0-rc.1",
+      "v1.2.0",
+      "1.1.5",
+      "invalid-tag",
+      "v0.9.9",
+    ];
+    let highest = find_highest_semver(tags).unwrap();
+    assert_eq!(highest, Version::parse("1.2.0").unwrap());
+  }
+
+  #[test]
+  fn test_find_highest_semver_empty() {
+    assert_eq!(find_highest_semver(["not-semver", ""]), None);
+  }
 }

@@ -6,9 +6,10 @@
 
 #![allow(clippy::large_enum_variant)]
 
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// Top-level Résumé document root.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -40,7 +41,7 @@ pub struct Meta {
   /// Keywords embedded into PDF document metadata for ATS optimization.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub keywords: Option<Vec<String>>,
-  /// Contact items (email, phone, LinkedIn, GitHub, portfolio, etc.).
+  /// Contact items (email, phone, `LinkedIn`, `GitHub`, portfolio, etc.).
   pub contact: Vec<ContactItem>,
   /// Visual styling tokens (typography, margins, colors, paper size).
   #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -153,7 +154,7 @@ pub struct Section {
   /// Skills", "Projects").
   pub title: String,
   /// Explicit block type descriptor (e.g. "experience", "education",
-  /// "skills", "projects", "publications", "split_line", "columns",
+  /// "skills", "projects", "publications", "`split_line`", "columns",
   /// "lines", "bullets", "text").
   #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
   pub section_type: Option<String>,
@@ -399,7 +400,7 @@ pub struct ProjectItem {
   /// Project accomplishment bullet points.
   #[serde(default)]
   pub bullets: Vec<String>,
-  /// Key metric or stats callout (e.g. "1.2k GitHub Stars").
+  /// Key metric or stats callout (e.g. "1.2k `GitHub` Stars").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub stats: Option<String>,
 }
@@ -415,7 +416,7 @@ pub struct PublicationItem {
   /// Authors list or string.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub authors: Option<StringOrList>,
-  /// Conference, journal, or workshop venue (e.g. "NeurIPS 2024").
+  /// Conference, journal, or workshop venue (e.g. "`NeurIPS` 2024").
   #[serde(
     alias = "journal",
     alias = "conference",
@@ -543,6 +544,11 @@ pub struct ReferenceItem {
 }
 
 /// Generates the canonical JSON Schema value for the Résumé document model.
+///
+/// # Panics
+///
+/// Panics if serialization of the derived JSON schema fails.
+#[must_use]
 pub fn generate_builtin_schema() -> serde_json::Value {
   let schema = schemars::schema_for!(ResumeDocument);
   serde_json::to_value(schema).expect("Failed to serialize derived JSON schema")

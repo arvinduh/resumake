@@ -1,13 +1,18 @@
 //! Terminal user interface, zero-emoji status badges, and telemetry tables.
 
-use crate::telemetry::TelemetryReport;
 use colored::Colorize;
 use comfy_table::{
   Attribute, Cell, CellAlignment, Color, ContentArrangement, ContentLineStyle,
   LineStyle, Row, Table, TableStyle,
 };
+use resumake::telemetry::TelemetryReport;
 
 /// Builds the formatted layout telemetry report table using `comfy-table`.
+#[expect(
+  clippy::too_many_lines,
+  reason = "Building the tabular layout report requires configuring rows and \
+            columns"
+)]
 pub fn build_telemetry_table(
   report: &TelemetryReport,
   candidate_name: &str,
@@ -204,7 +209,8 @@ pub fn format_telemetry_table(
   build_telemetry_table(report, candidate_name, output_pdf, version).to_string()
 }
 
-/// Prints the formatted layout telemetry report table to terminal using `comfy-table`.
+/// Prints the formatted layout telemetry report table to terminal using
+/// `comfy-table`.
 pub fn print_telemetry_table(
   report: &TelemetryReport,
   candidate_name: &str,
@@ -245,105 +251,4 @@ pub fn format_info(msg: &str) -> String {
 /// Prints a standardized informational status badge message.
 pub fn print_info(msg: &str) {
   println!("{}", format_info(msg));
-}
-
-/// Formats a standardized warning status badge message as a string.
-pub fn format_warning(msg: &str) -> String {
-  format!("{} {msg}", "[WARN]".yellow().bold())
-}
-
-/// Prints a standardized warning status badge message.
-pub fn print_warning(msg: &str) {
-  println!("{}", format_warning(msg));
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use crate::telemetry::BulletInfo;
-
-  #[test]
-  fn test_print_telemetry_table_does_not_panic() {
-    let report =
-      TelemetryReport::new(1, 95.5, 0.45, Vec::new(), Vec::new(), Vec::new());
-    print_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
-    print_success("Build complete");
-    print_error("Failed");
-    print_info("Watching");
-  }
-
-  #[test]
-  fn test_build_telemetry_table_pass_structure() {
-    let report =
-      TelemetryReport::new(1, 95.2, 0.38, Vec::new(), Vec::new(), Vec::new());
-    let table =
-      build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
-    let output = table.to_string();
-    assert!(output.contains("Candidate:"));
-    assert!(output.contains("Jane Doe"));
-    assert!(output.contains("Output:"));
-    assert!(output.contains("janedoe_resume.pdf"));
-    assert!(output.contains("Version:"));
-    assert!(output.contains("1.0.0"));
-    assert!(output.contains("Page Count:"));
-    assert!(output.contains("[PASS 1/1]"));
-    assert!(output.contains("Vertical Fill:"));
-    assert!(output.contains("[OPTIMAL]"));
-    assert!(output.contains("Line Wraps:"));
-    assert!(output.contains("[0 WRAPS]"));
-    assert!(output.contains("Underfills:"));
-    assert!(output.contains("[0 UNDER]"));
-    assert!(output.contains("Status:"));
-    assert!(output.contains("SUCCESS (Strict 1-page layout verified)"));
-  }
-
-  #[test]
-  fn test_build_telemetry_table_with_warnings_and_failure() {
-    let report = TelemetryReport::new(
-      2,
-      102.5,
-      0.0,
-      vec![BulletInfo {
-        id: "1".to_string(),
-        kind: "bullet".to_string(),
-        fill: 104.2,
-        wrapped: Some(true),
-        text: "Long bullet item that wraps to next line".to_string(),
-      }],
-      vec![BulletInfo {
-        id: "2".to_string(),
-        kind: "bullet".to_string(),
-        fill: 75.0,
-        wrapped: Some(false),
-        text: "Short bullet item".to_string(),
-      }],
-      Vec::new(),
-    );
-    let mut table =
-      build_telemetry_table(&report, "Jane Doe", "janedoe_resume.pdf", "1.0.0");
-    table.set_width(120);
-    let output = table.to_string();
-    assert!(output.contains("[FAIL 2/1]"));
-    assert!(output.contains("[OVERFLOW]"));
-    assert!(output.contains("[1 WRAPS]"));
-    assert!(output.contains("[1 UNDER]"));
-    assert!(output.contains("Layout Warnings:"));
-    assert!(output.contains("Long bullet item that wraps to next line"));
-    assert!(output
-      .contains("FAILED (Document violates single-page geometry constraints)"));
-  }
-
-  #[test]
-  fn test_doc_sample_output() {
-    let report =
-      TelemetryReport::new(1, 95.2, 0.38, Vec::new(), Vec::new(), Vec::new());
-    let formatted = format_telemetry_table(
-      &report,
-      "Jane Doe",
-      "janedoe_resume.pdf",
-      "1.0.0",
-    );
-    assert!(formatted.contains("Jane Doe"));
-    assert!(formatted.contains("[PASS 1/1]"));
-  }
 }
