@@ -56,7 +56,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 schemars = "1.2"
-jsonschema = "0.58"
+jsonschema = "0.59"
 semver = "1.0"
 colored = { version = "3.0", optional = true }
 comfy-table = { version = "8.0", features = [
