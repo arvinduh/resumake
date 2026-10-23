@@ -49,7 +49,15 @@
 }
 
 #let PAPER = if "paper_size" in theme { theme.paper_size } else { "us-letter" }
-#let MARGIN = if "margin" in theme { eval(str(theme.margin)) } else { 0.5in }
+#let MARGIN = if "margin" in theme {
+  eval(str(theme.margin))
+} else if DENSITY == "compact" {
+  0.35in
+} else if DENSITY == "spacious" {
+  0.65in
+} else {
+  0.5in
+}
 
 // Physical dimensions of the supported paper presets, mirrored here because
 // Typst does not expose a preset's resolved size back to script context.
@@ -98,10 +106,10 @@
 #show regex("\"[^\"]*\""): it => "“" + it.text.slice(1, -1) + "”"
 
 #let render-header(meta) = {
-  align(center)[
+  align(HEADER_ALIGN)[
     #block(below: NAME_BELOW, heading(level: 1, text(
       size: NAME,
-      weight: "semibold",
+      weight: NAME_WEIGHT,
       tracking: 0.02em,
     )[#meta.name]))
     #if "title" in meta and meta.title != "" {

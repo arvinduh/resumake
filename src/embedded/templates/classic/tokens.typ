@@ -36,6 +36,9 @@
   if meta != none and "theme" in meta { meta.theme } else { (:) }
 }
 
+// Spacing density preset overrides
+#let DENSITY = if "density" in THEME { THEME.density } else { "comfortable" }
+
 // Spacing rhythm.
 //
 // Typst measures leading and block spacing from one line's baseline to the
@@ -48,7 +51,13 @@
 //
 // All values resolve `em` against the body text (block spacing does not see
 // the enlarged name or section sizes), so they scale with `font_size` too.
-#let LEADING = if "leading" in THEME { eval(str(THEME.leading)) } else {
+#let LEADING = if "leading" in THEME {
+  eval(str(THEME.leading))
+} else if DENSITY == "compact" {
+  0.46em
+} else if DENSITY == "spacious" {
+  0.58em
+} else {
   0.52em
 }
 #let space(ratio) = LEADING * ratio
@@ -68,15 +77,58 @@
 // Bullets sit visibly inside the text column (indent) with room between
 // the marker and the text (body-indent); at 0.3em the markers read as
 // flush with the section's left edge.
-#let BULLET_INDENT = 0.55em
-#let BULLET_BODY_INDENT = 0.50em
+#let BULLET_INDENT = if "bullet_indent" in THEME {
+  eval(str(THEME.bullet_indent))
+} else if DENSITY == "compact" {
+  0.35em
+} else {
+  0.55em
+}
+
+#let BULLET_BODY_INDENT = if "bullet_body_indent" in THEME {
+  eval(str(THEME.bullet_body_indent))
+} else {
+  0.50em
+}
+
+#let BULLET_MARKER = if "bullet_marker" in THEME {
+  let m = THEME.bullet_marker
+  if m == "circle" { [○] } else if m == "square" { [▪] } else if (
+    m == "dash" or m == "hyphen"
+  ) { [–] } else if m == "triangle" { [‣] } else { [•] }
+} else {
+  [•]
+}
+
+// Typography & layout styling options
+#let NAME_WEIGHT = if "name_weight" in THEME { THEME.name_weight } else {
+  "semibold"
+}
+#let SECTION_WEIGHT = if "section_weight" in THEME {
+  THEME.section_weight
+} else { "semibold" }
+#let SECTION_CASE = if "section_case" in THEME { THEME.section_case } else {
+  "uppercase"
+}
+#let SECTION_STYLE = if "section_style" in THEME { THEME.section_style } else {
+  "underline"
+}
+#let HEADER_ALIGN = if (
+  "header_align" in THEME and THEME.header_align == "left"
+) { left } else { center }
 
 // Vertical fill. Leftover page height is shared out across the section and
 // entry gaps (weights set by `flex-gap` calls), but each unit of weight may
 // grow by at most STRETCH x LEADING, so a short résumé gets gently looser
 // rather than spread thin to the bottom margin. `theme.stretch: 0` turns the
 // behaviour off.
-#let STRETCH = if "stretch" in THEME { float(THEME.stretch) } else { 1.0 }
+#let STRETCH = if "stretch" in THEME {
+  float(THEME.stretch)
+} else if DENSITY == "compact" {
+  0.0
+} else {
+  1.0
+}
 
 // Symbols & Separators
 #let SEP = [ · ]

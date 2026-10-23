@@ -56,6 +56,16 @@
 )[#body]
 
 // Structural layout helpers
+#let format-section-title(title) = {
+  if SECTION_CASE == "uppercase" {
+    upper(title)
+  } else if SECTION_CASE == "small-caps" {
+    smallcaps(title)
+  } else {
+    title
+  }
+}
+
 #let section(
   title,
   sec-size: 13pt,
@@ -63,20 +73,23 @@
   rule-thick: 0.5pt,
 ) = {
   flex-gap(2, SEC_ABOVE)
-  // The rule is the block's own bottom border rather than a separate line
-  // pulled up with negative spacing, so its distance from the title stays
-  // fixed whatever the font's line metrics or the paragraph leading are.
+  let bottom-stroke = if SECTION_STYLE == "none" { none } else {
+    rule-thick + accent-color
+  }
+  let inset-val = if SECTION_STYLE == "none" { (bottom: 0em) } else {
+    (bottom: RULE_GAP)
+  }
   block(
     above: SEC_ABOVE,
     below: RULE_BELOW,
     width: 100%,
-    inset: (bottom: RULE_GAP),
-    stroke: (bottom: rule-thick + accent-color),
+    inset: inset-val,
+    stroke: (bottom: bottom-stroke),
     heading(level: 2, text(
       size: sec-size,
-      weight: "semibold",
+      weight: SECTION_WEIGHT,
       tracking: 0.08em,
-    )[#upper(title)]),
+    )[#format-section-title(title)]),
   )
 }
 
@@ -95,7 +108,7 @@
 
 #let bullets(items) = {
   set list(
-    marker: text(size: 0.85em)[•],
+    marker: text(size: 0.85em)[#BULLET_MARKER],
     indent: BULLET_INDENT,
     body-indent: BULLET_BODY_INDENT,
     spacing: BULLET_GAP,
