@@ -1,7 +1,8 @@
 //! Workspace and repository scaffolding for résumé projects.
 //!
-//! Owns generating starter `content.yaml` files, `.gitignore`, `.gitattributes`,
-//! and GitHub Actions workflows for continuous compilation and releases.
+//! Owns generating starter `content.yaml` files, `.gitignore`,
+//! `.gitattributes`, and GitHub Actions workflows for continuous compilation
+//! and releases.
 
 use std::fs;
 use std::path;
