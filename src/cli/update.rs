@@ -1,91 +1,58 @@
-//! `rsmk update` — replace the running binary in place via axoupdater.
+//! `rsmk update`: replace the running binary with the latest release.
+//!
+//! Owns checking that the binary can be replaced where it is and driving
+//! `axoupdater`, which runs the release's own installer into the binary's
+//! directory.
 
-use axoupdater::{AxoUpdater, ReleaseSource, ReleaseSourceType, Version};
+use std::env;
+use std::ffi;
+use std::fs;
+use std::io;
+use std::path;
 
-use crate::cli::ui;
+use axoupdater;
+use clap;
+use thiserror;
 
-/// Errors originating from the self-update process.
-#[derive(thiserror::Error, Debug)]
+use crate::cli;
+
+/// The cargo-dist app name, which names the binary and installers.
+const APP: &str = "rsmk";
+
+/// GitHub token for lifting anonymous API rate limits.
+const TOKEN: &str = "RSMK_GITHUB_TOKEN";
+
+/// Why `rsmk update` stopped.
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-  /// `AxoUpdater` error.
-  #[error("Self-update error: {0}")]
-  AxoUpdater(Box<axoupdater::AxoupdateError>),
-  /// Underlying I/O error.
-  #[error("I/O error: {0}")]
-  Io(#[from] std::io::Error),
-}
-
-impl From<axoupdater::AxoupdateError> for Error {
-  fn from(err: axoupdater::AxoupdateError) -> Self {
-    Self::AxoUpdater(Box::new(err))
-  }
-}
-
-/// How the install receipt relates to the running binary.
-#[derive(Debug, PartialEq, Eq)]
-enum Receipt {
-  /// A receipt exists and describes this executable.
-  Matches,
-  /// No receipt could be loaded.
-  Missing,
-  /// A receipt exists but describes a different install location.
-  Stale,
-}
-
-/// Builds an updater for the running binary.
-fn build_updater() -> Result<(AxoUpdater, Receipt), Error> {
-  let mut updater = AxoUpdater::new_for("resumake");
-  let receipt = if updater.load_receipt().is_err() {
-    Receipt::Missing
-  } else if updater.check_receipt_is_for_this_executable()? {
-    return Ok((updater, Receipt::Matches));
-  } else {
-    Receipt::Stale
-  };
-
-  let mut updater = AxoUpdater::new_for("resumake");
-  let current_exe = std::env::current_exe()?;
-  let install_dir = current_exe
-    .parent()
-    .unwrap_or_else(|| std::path::Path::new("."));
-  updater.set_release_source(ReleaseSource {
-    release_type: ReleaseSourceType::GitHub,
-    owner: "arvinduh".to_string(),
-    name: "resumake".to_string(),
-    app_name: "resumake".to_string(),
-  });
-  updater.set_install_dir(install_dir.to_str().unwrap_or("."));
-  if let Ok(ver) = Version::parse(env!("CARGO_PKG_VERSION")) {
-    let _ = updater.set_current_version(ver);
-  }
-  Ok((updater, receipt))
-}
-
-/// Explains failures a user can act on.
-fn failure_hint(err: &Error) -> Option<String> {
-  let io = match err {
-    Error::Io(io) => io,
-    Error::AxoUpdater(e) => match e.as_ref() {
-      axoupdater::AxoupdateError::Io(io) => io,
-      _ => return None,
-    },
-  };
-  if io.kind() != std::io::ErrorKind::PermissionDenied {
-    return None;
-  }
-  let exe = std::env::current_exe().map_or_else(
-    |_| "the rsmk binary".to_string(),
-    |p| p.display().to_string(),
-  );
-  Some(format!(
-    "No permission to replace {exe}. If it is in an admin-only folder \
-     (such as Program Files), uninstall that copy and reinstall per-user \
-     with the installer from the README, or rerun from an elevated shell."
-  ))
+  /// Binary name does not match expected app name.
+  #[error(
+    "{} is not named {APP}{}, so the installer would not replace it",
+    path.display(),
+    env::consts::EXE_SUFFIX
+  )]
+  NotNamedRsmk {
+    /// The running binary.
+    path: path::PathBuf,
+  },
+  /// The binary's directory is not writable.
+  #[error("cannot write to {}: {source}", dir.display())]
+  Unwritable {
+    /// Target directory.
+    dir: path::PathBuf,
+    /// Underlying error.
+    source: io::Error,
+  },
+  /// Failed to locate running executable.
+  #[error("cannot locate the running binary: {0}")]
+  Exe(io::Error),
+  /// Checking or installing update failed.
+  #[error(transparent)]
+  Update(#[from] Box<axoupdater::AxoupdateError>),
 }
 
 /// Available CLI arguments for `rsmk update`.
-#[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
+#[derive(clap::Args)]
 pub struct UpdateArgs {
   /// Report whether a newer release exists without installing it
   #[arg(long)]
@@ -100,111 +67,112 @@ impl UpdateArgs {
   /// Runs the update command.
   ///
   /// # Errors
-  ///
-  /// Returns an [`Error`] if update checks or downloads fail.
-  pub fn run(self, quiet: bool) -> Result<(), Error> {
-    run_update(self.check, self.force, quiet)
+  /// Returns [`cli::Error`] if checking or installing the release fails.
+  #[expect(clippy::print_stdout, reason = "CLI output")]
+  pub fn run(self, quiet: bool) -> Result<(), cli::Error> {
+    let current = env!("CARGO_PKG_VERSION");
+    let exe = running_exe().map_err(Error::Exe)?;
+    let dir = exe.parent().unwrap_or_else(|| path::Path::new("."));
+    let dir_utf8 = dir.to_str().ok_or_else(|| {
+      Error::Exe(io::Error::new(
+        io::ErrorKind::InvalidData,
+        "path is not UTF-8",
+      ))
+    })?;
+
+    let mut updater = axoupdater::AxoUpdater::new_for(APP);
+    if let Ok(token) = env::var(TOKEN) {
+      updater.set_github_token(&token);
+    }
+
+    let parsed_version = axoupdater::Version::parse(current).map_err(|e| {
+      Error::Exe(io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
+    })?;
+
+    updater
+      .set_release_source(axoupdater::ReleaseSource {
+        release_type: axoupdater::ReleaseSourceType::GitHub,
+        owner: "arvinduh".to_string(),
+        name: "resumake".to_string(),
+        app_name: APP.to_string(),
+      })
+      .set_install_dir(dir_utf8)
+      .set_current_version(parsed_version)
+      .map_err(Box::new)
+      .map_err(Error::from)?;
+
+    if self.check {
+      let needed = updater
+        .is_update_needed_sync()
+        .map_err(Box::new)
+        .map_err(Error::from)?;
+      if needed {
+        println!("a newer release of rsmk is available (current: {current})");
+      } else if !quiet {
+        println!("rsmk {current} is the latest release");
+      }
+      return Ok(());
+    }
+
+    if !self.force
+      && !updater
+        .is_update_needed_sync()
+        .map_err(Box::new)
+        .map_err(Error::from)?
+    {
+      if !quiet {
+        println!("rsmk {current} is already up to date");
+      }
+      return Ok(());
+    }
+
+    check_replaceable(&exe, dir)?;
+    let result = updater.run_sync().map_err(Box::new).map_err(Error::from)?;
+    let latest =
+      result.map_or_else(|| current.to_string(), |r| r.new_version.to_string());
+
+    if !quiet {
+      println!("updated rsmk from {current} to {latest}");
+    }
+
+    Ok(())
   }
 }
 
-/// Entry point for the `update` subcommand logic.
-///
-/// # Errors
-///
-/// Returns an [`Error`] if update checks or downloads fail.
-pub(crate) fn run_update(
-  check: bool,
-  force: bool,
-  quiet: bool,
-) -> Result<(), Error> {
-  let (mut updater, receipt) = build_updater()?;
-  if receipt == Receipt::Stale && !quiet {
-    ui::print_info(
-      "Ignoring an install receipt that belongs to a different rsmk \
-       install; checking GitHub releases for this binary directly.",
-    );
+/// The running binary's path.
+fn running_exe() -> io::Result<path::PathBuf> {
+  let exe = env::current_exe()?;
+  if cfg!(windows) {
+    Ok(exe)
+  } else {
+    exe.canonicalize()
+  }
+}
+
+/// Verifies `exe` is named `rsmk` and `dir` is writable.
+fn check_replaceable(exe: &path::Path, dir: &path::Path) -> Result<(), Error> {
+  let name = format!("{APP}{}", env::consts::EXE_SUFFIX);
+  let named =
+    exe
+      .file_name()
+      .and_then(ffi::OsStr::to_str)
+      .is_some_and(|actual| {
+        actual == name || (cfg!(windows) && actual.eq_ignore_ascii_case(&name))
+      });
+
+  if !named {
+    return Err(Error::NotNamedRsmk {
+      path: exe.to_path_buf(),
+    });
   }
 
-  if force {
-    updater.always_update(true);
-  }
-
-  let current_version_str = env!("CARGO_PKG_VERSION");
-
-  if check {
-    match updater.is_update_needed_sync() {
-      Ok(true) => {
-        if !quiet {
-          ui::print_info(
-            "A newer rsmk is available. Run `rsmk update` to upgrade.",
-          );
-        }
-      }
-      Ok(false) => {
-        if !quiet {
-          ui::print_success(&format!(
-            "rsmk is up to date (v{current_version_str})."
-          ));
-        }
-      }
-      Err(e) => {
-        if !quiet {
-          ui::print_error(&format!("Could not check for updates: {e}"));
-        }
-      }
-    }
-    return Ok(());
-  }
-
-  if !quiet {
-    ui::print_info("Checking for resumake updates...");
-  }
-  match updater.run_sync() {
-    Ok(Some(_res)) => {
-      if !quiet {
-        ui::print_success("rsmk was updated successfully!");
-      }
-    }
-    Ok(None) => {
-      if !quiet {
-        ui::print_success(&format!(
-          "rsmk is already up to date (v{current_version_str})."
-        ));
-      }
-    }
-    Err(e) => {
-      if !quiet {
-        ui::print_error(&format!("Self-update failed: {e}"));
-        let err = Error::from(e);
-        if let Some(hint) = failure_hint(&err) {
-          ui::print_info(&hint);
-        }
-      }
-    }
-  }
+  let probe = dir.join(".rsmk-write-test");
+  fs::write(&probe, b"")
+    .and_then(|()| fs::remove_file(&probe))
+    .map_err(|source| Error::Unwritable {
+      dir: dir.to_path_buf(),
+      source,
+    })?;
 
   Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn test_failure_hint_explains_permission_denied() {
-    let denied =
-      || std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
-    let wrapped =
-      Error::AxoUpdater(Box::new(axoupdater::AxoupdateError::Io(denied())));
-    let hint = failure_hint(&wrapped).expect("permission errors get a hint");
-    assert!(hint.contains("No permission to replace"));
-    assert!(failure_hint(&Error::Io(denied())).is_some());
-  }
-
-  #[test]
-  fn test_failure_hint_ignores_other_errors() {
-    let missing =
-      Error::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "x"));
-    assert!(failure_hint(&missing).is_none());
-  }
 }

@@ -1,99 +1,83 @@
 //! Handlers for `rsmk init`.
+//!
+//! Owns argument definitions and execution for scaffolding a new résumé
+//! workspace with example content, workflows, and git configurations.
 
-use std::io::{self, IsTerminal, Write};
-use std::path::{Path, PathBuf};
+use std::io;
+use std::io::IsTerminal;
+use std::io::Write;
+use std::path;
 
-use resumake::workspace;
+use clap;
+use resumake;
 
-use crate::cli::{ui, Error};
+use crate::cli;
 
 /// Command line arguments for `rsmk init`.
-#[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
+#[derive(clap::Args)]
 #[expect(clippy::struct_excessive_bools, reason = "CLI argument flags")]
 pub struct InitArgs {
-  /// Destination directory or file path for the content scaffold (defaults to
-  /// `./content.yaml`)
+  /// Destination directory for the scaffold (defaults to `.`)
   #[arg(value_name = "DEST")]
-  pub dest: Option<PathBuf>,
+  pub dest: Option<path::PathBuf>,
 
   /// Candidate display name
   #[arg(short, long)]
   pub name: Option<String>,
 
-  /// Overwrite destination file if it already exists
+  /// Overwrite destination files if they already exist
   #[arg(short, long)]
   pub force: bool,
 
-  /// Skip initializing a git repository and git config files (also skips
-  /// `GitHub` Actions workflows, which require a repo; add them later with
-  /// `rsmk init --workflows`)
+  /// Skip initializing a git repository and git config files
   #[arg(long)]
   pub no_git: bool,
 
-  /// Skip generating `GitHub` Actions CI and Release workflows
+  /// Skip generating GitHub Actions CI and Release workflows
   #[arg(long)]
   pub no_workflows: bool,
 
-  /// Create or refresh `GitHub` Actions workflows without modifying
-  /// content.yaml
-  #[arg(long, visible_alias = "update")]
-  pub workflows: bool,
+  /// Eject the template into templates/<name>.typ during initialization
+  #[arg(short = 'e', long)]
+  pub eject: bool,
+
+  /// Template to initialize with or eject (defaults to "classic")
+  #[arg(short = 't', long, default_value = "classic")]
+  pub template: String,
 }
 
 impl InitArgs {
   /// Runs the init command.
   ///
   /// # Errors
-  ///
-  /// Returns an [`Error`] if initialization or workflow generation fails.
-  pub fn run(self, quiet: bool) -> Result<(), Error> {
-    let resolved_output = workspace::resolve_init_output(self.dest.as_deref());
-    let base_dir = resolved_output
-      .parent()
-      .filter(|p| !p.as_os_str().is_empty())
-      .unwrap_or(Path::new("."));
-
-    if self.workflows {
-      return run_update_workflows(base_dir, self.force, quiet);
-    }
-
+  /// Returns [`cli::Error`] if file creation or directory setup fails.
+  #[expect(clippy::print_stdout, reason = "CLI output")]
+  pub fn run(self, quiet: bool) -> Result<(), cli::Error> {
+    let target_dir = self.dest.unwrap_or_else(|| path::PathBuf::from("."));
     let candidate_name = resolve_candidate_name(self.name.as_deref());
-    let opts = workspace::InitOptions {
+
+    let opts = resumake::scaffold::InitOptions {
       name: &candidate_name,
-      output: &resolved_output,
+      target_dir: &target_dir,
       force: self.force,
       no_git: self.no_git,
       no_workflows: self.no_workflows,
+      eject_template: self.eject,
+      template: &self.template,
     };
 
-    let outcome = workspace::init(&opts)?;
+    let outcome = resumake::scaffold::init(&opts)?;
 
     if !quiet {
-      ui::print_success(&format!(
-        "Initialized new résumé content scaffold at '{}'",
+      println!(
+        "Initialized résumé repository at '{}'",
         outcome.content_path.display()
-      ));
-
+      );
       if outcome.git_initialized {
-        ui::print_success("Initialized Git repository");
+        println!("  initialized git repository");
       }
-      if !self.no_git {
-        ui::print_success("Created .gitignore and .gitattributes");
-      }
-      if outcome.workflows_created {
-        ui::print_success(
-          "Created GitHub Actions workflows in .github/workflows/",
-        );
-      } else if self.no_git && !self.no_workflows {
-        ui::print_info(
-          "Skipping GitHub Actions workflows (--no-git). Run `rsmk init \
-           --workflows` from the project directory to add CI/Release \
-           workflows later.",
-        );
-      }
-
-      if !self.no_git {
-        print_next_steps();
+      for f in &outcome.created_files {
+        println!("  created {}", f.display());
       }
     }
 
@@ -101,17 +85,26 @@ impl InitArgs {
   }
 }
 
+/// Resolves candidate display name from flag, environment, or prompt.
 fn resolve_candidate_name(name_arg: Option<&str>) -> String {
-  if let Some(name) = name_arg {
-    let trimmed = name.trim();
-    if !trimmed.is_empty() {
-      return trimmed.to_string();
-    }
+  if let Some(n) = name_arg
+    && !n.trim().is_empty()
+  {
+    return n.trim().to_string();
   }
 
-  if io::stdin().is_terminal() && io::stdout().is_terminal() {
-    print!("Candidate name [Jane Doe]: ");
-    let _ = io::stdout().flush();
+  if let Ok(author) = std::env::var("GIT_AUTHOR_NAME")
+    && !author.trim().is_empty()
+  {
+    return author.trim().to_string();
+  }
+
+  if io::stdin().is_terminal() {
+    #[expect(clippy::print_stdout, reason = "Interactive CLI prompt")]
+    {
+      print!("Candidate Name [Jane Doe]: ");
+      let _ = io::stdout().flush();
+    }
     let mut input = String::new();
     if io::stdin().read_line(&mut input).is_ok() {
       let trimmed = input.trim();
@@ -122,63 +115,4 @@ fn resolve_candidate_name(name_arg: Option<&str>) -> String {
   }
 
   "Jane Doe".to_string()
-}
-
-fn run_update_workflows(
-  base_dir: &Path,
-  force: bool,
-  quiet: bool,
-) -> Result<(), Error> {
-  let version = env!("CARGO_PKG_VERSION");
-  let outcomes = workspace::update_workflows(base_dir, force)?;
-
-  if !quiet {
-    for outcome in outcomes {
-      match outcome.status {
-        workspace::WorkflowUpdateStatus::Created => {
-          ui::print_success(&format!(
-            "Created workflow '{}' pinned to rsmk v{version}",
-            outcome.path.display()
-          ));
-        }
-        workspace::WorkflowUpdateStatus::Updated => {
-          ui::print_success(&format!(
-            "Updated workflow '{}' to rsmk v{version}",
-            outcome.path.display()
-          ));
-        }
-        workspace::WorkflowUpdateStatus::ForceUpdated => {
-          ui::print_success(&format!(
-            "Force updated workflow '{}' to rsmk v{version}",
-            outcome.path.display()
-          ));
-        }
-        workspace::WorkflowUpdateStatus::SkippedLocalModifications => {
-          eprintln!(
-            "warning: Workflow '{}' has local modifications; skipping update. \
-             Use --force to overwrite.",
-            outcome.path.display()
-          );
-        }
-      }
-    }
-  }
-
-  Ok(())
-}
-
-fn print_next_steps() {
-  println!(
-    r#"
-Next steps to publish your résumé repository:
-  1. Track and commit your changes:
-     git add .
-     git commit -m "feat: initial résumé scaffold"
-  2. Push to GitHub:
-     gh repo create --source=. --push
-     # Or configure remote manually:
-     git remote add origin git@github.com:<username>/<repo>.git
-     git branch -M main
-     git push -u origin main"#
-  );
 }

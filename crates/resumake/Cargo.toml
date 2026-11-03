@@ -1,0 +1,27 @@
+[package]
+name = "resumake"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Modular, golden-ratio résumé compiler and layout telemetry engine."
+readme = "../../README.md"
+
+[dependencies]
+jsonschema = "0.58"
+schemars = "1.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+thiserror = "2.0"
+typst = "0.15"
+typst-kit = { version = "0.15", default-features = false, features = [
+  "scan-fonts",
+  "embedded-fonts",
+] }
+typst-layout = "0.15"
+typst-pdf = "0.15"
+
+[lints]
+workspace = true
