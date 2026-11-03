@@ -18,10 +18,10 @@ use typst::text;
 use typst::utils;
 use typst::{LibraryExt, World, WorldExt};
 use typst_kit::fonts;
-use typst_layout::PagedDocument;
+use typst_layout;
 
-use crate::telemetry::{self, TelemetryReport};
-use crate::templates::{self, TemplateSource};
+use crate::telemetry;
+use crate::templates;
 
 /// Errors originating from Typst rendering or PDF compilation.
 #[derive(Debug, thiserror::Error)]
@@ -91,7 +91,7 @@ pub struct ResumakeWorld {
   /// Workspace project root directory.
   root_path: path::PathBuf,
   /// Resolved template source (embedded or disk).
-  template_source: TemplateSource,
+  template_source: templates::TemplateSource,
   /// Path to content YAML file.
   content_path: path::PathBuf,
   /// Normalized virtual path to content file.
@@ -113,7 +113,7 @@ impl ResumakeWorld {
   #[must_use]
   pub fn new(
     project_root: path::PathBuf,
-    template_source: TemplateSource,
+    template_source: templates::TemplateSource,
     content_path: path::PathBuf,
     font_override: Option<&path::Path>,
   ) -> Self {
@@ -143,17 +143,21 @@ impl ResumakeWorld {
     let content_id = project_file_id(&content_vpath);
 
     let main_vpath = match &template_source {
-      TemplateSource::Embedded { name, .. } => format!("/{name}.typ"),
-      TemplateSource::File(p) => p.strip_prefix(&project_root).map_or_else(
-        |_| {
-          format!(
-            "/{}",
-            p.file_name()
-              .map_or("main.typ", |n| n.to_str().unwrap_or("main.typ"))
-          )
-        },
-        |rel| format!("/{}", rel.to_string_lossy().replace('\\', "/")),
-      ),
+      templates::TemplateSource::Embedded { name, .. } => {
+        format!("/{name}.typ")
+      }
+      templates::TemplateSource::File(p) => {
+        p.strip_prefix(&project_root).map_or_else(
+          |_| {
+            format!(
+              "/{}",
+              p.file_name()
+                .map_or("main.typ", |n| n.to_str().unwrap_or("main.typ"))
+            )
+          },
+          |rel| format!("/{}", rel.to_string_lossy().replace('\\', "/")),
+        )
+      }
     };
 
     let main_id = project_file_id(&main_vpath);
@@ -190,10 +194,10 @@ impl ResumakeWorld {
   ) -> diag::FileResult<foundations::Bytes> {
     if id == self.main_id {
       return match &self.template_source {
-        TemplateSource::Embedded { source, .. } => {
+        templates::TemplateSource::Embedded { source, .. } => {
           Ok(foundations::Bytes::new(source.as_bytes().to_vec()))
         }
-        TemplateSource::File(p) => fs::read(p)
+        templates::TemplateSource::File(p) => fs::read(p)
           .map(foundations::Bytes::new)
           .map_err(|e| diag::FileError::from_io(e, p)),
       };
@@ -332,7 +336,8 @@ fn format_diagnostics(
   msg
 }
 
-/// Compiles a résumé to an in-memory [`PagedDocument`] and evaluates telemetry.
+/// Compiles a résumé to an in-memory [`typst_layout::PagedDocument`] and
+/// evaluates telemetry.
 ///
 /// # Errors
 /// Returns [`Error`] if template resolution, Typst compilation, or telemetry
@@ -342,7 +347,7 @@ pub fn compile(
   template_name: Option<&str>,
   project_root: &path::Path,
   font_override: Option<&path::Path>,
-) -> Result<(PagedDocument, TelemetryReport), Error> {
+) -> Result<(typst_layout::PagedDocument, telemetry::TelemetryReport), Error> {
   let tname = template_name.unwrap_or(templates::DEFAULT_TEMPLATE);
   let template_source = templates::resolve(tname, project_root)?;
 
@@ -363,12 +368,13 @@ pub fn compile(
   Ok((doc, report))
 }
 
-/// Exports a compiled [`PagedDocument`] as PDF bytes written to `output_path`.
+/// Exports a compiled [`typst_layout::PagedDocument`] as PDF bytes written to
+/// `output_path`.
 ///
 /// # Errors
 /// Returns [`Error`] if PDF encoding or writing fails.
 pub fn export_pdf(
-  doc: &PagedDocument,
+  doc: &typst_layout::PagedDocument,
   output_path: &path::Path,
 ) -> Result<(), Error> {
   let pdf_bytes = typst_pdf::pdf(doc, &typst_pdf::PdfOptions::default())

@@ -7,9 +7,10 @@ use serde;
 use serde_json;
 use thiserror;
 use typst::foundations;
-use typst::introspection::{Introspector, MetadataElem};
-use typst::utils::PicoStr;
-use typst_layout::PagedDocument;
+use typst::introspection;
+use typst::introspection::Introspector;
+use typst::utils;
+use typst_layout;
 
 /// Errors originating from layout telemetry evaluation.
 #[derive(Debug, thiserror::Error)]
@@ -187,10 +188,11 @@ impl TelemetryReport {
 
 /// Queries metadata elements matching `label_name` from document introspector.
 fn query_metadata(
-  doc: &PagedDocument,
+  doc: &typst_layout::PagedDocument,
   label_name: &str,
 ) -> Vec<foundations::Value> {
-  let Some(label) = foundations::Label::new(PicoStr::intern(label_name)) else {
+  let Some(label) = foundations::Label::new(utils::PicoStr::intern(label_name))
+  else {
     return Vec::new();
   };
 
@@ -200,7 +202,7 @@ fn query_metadata(
   let mut values = Vec::new();
 
   for elem in elements {
-    if let Some(meta) = elem.to_packed::<MetadataElem>() {
+    if let Some(meta) = elem.to_packed::<introspection::MetadataElem>() {
       values.push(meta.value.clone());
     } else if let Ok(val) = elem.get_by_name("value") {
       values.push(val);
@@ -214,7 +216,9 @@ fn query_metadata(
 ///
 /// # Errors
 /// Returns [`Error::Deserialization`] if probe extraction fails.
-pub fn evaluate(doc: &PagedDocument) -> Result<TelemetryReport, Error> {
+pub fn evaluate(
+  doc: &typst_layout::PagedDocument,
+) -> Result<TelemetryReport, Error> {
   let doc_pages = doc.pages().len();
 
   let page_values = query_metadata(doc, "pageinfo");
