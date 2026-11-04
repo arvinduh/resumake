@@ -1,0 +1,9 @@
+# Clippy configuration
+# https://rust-lang.github.io/rust-clippy/master/index.html
+
+warn-on-all-wildcard-imports = true
+
+# Google Rust guide: never call `catch_unwind` in first-party code.
+disallowed-methods = [
+  { path = "std::panic::catch_unwind", reason = "panics abort; never catch" },
+]

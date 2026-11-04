@@ -1,23 +1,36 @@
-[package]
-name = "resumake"
-version = "0.5.0"
-edition = "2021"
+[workspace]
+members = ["crates/*"]
+default-members = [".", "crates/*"]
+resolver = "3"
 
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
 authors = ["Resumake Authors"]
-description = "Modular, golden-ratio résumé compiler and layout telemetry engine."
 license = "MIT"
-readme = "README.md"
 repository = "https://github.com/arvinduh/resumake"
+
+[workspace.dependencies]
+resumake = { package = "resumake", path = "crates/resumake" }
+
+[package]
+name = "rsmk"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "High-performance native CLI for compiling and verifying résumés with strict layout telemetry."
+readme = "README.md"
 keywords = ["resume", "typst", "compiler", "telemetry", "cli"]
 categories = ["command-line-utilities", "text-processing"]
 
 [[bin]]
 name = "rsmk"
 path = "src/main.rs"
-required-features = ["cli"]
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }.{ archive-format }"
+pkg-url = "{ repo }/releases/download/{ version }/{ name }-{ target }.{ archive-format }"
 bin-dir = "{ bin }{ binary-ext }"
 pkg-fmt = "tar.gz"
 
@@ -26,83 +39,56 @@ pkg-fmt = "zip"
 
 # Config for 'dist'
 [workspace.metadata.dist]
-# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.32.0"
-# CI backends to support
 ci = "github"
-# The installers to generate for each app
 installers = ["shell", "powershell"]
-# Skip checking whether the specified configuration files are up to date
-allow-dirty = ["ci"]
-# Target platforms to build apps for (Rust target-triple syntax)
 targets = [
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
   "x86_64-unknown-linux-gnu",
+  "aarch64-apple-darwin",
   "x86_64-pc-windows-msvc",
 ]
-# Host runners for each target. x86_64 macOS builds cross-compile on the
-# macos-14 runner to match aarch64 instead of queuing on the macos-13 runner.
-macos-runners = { x86_64-apple-darwin = "macos-14", aarch64-apple-darwin = "macos-14" }
-# Path that installers should place binaries in
-install-path = "CARGO_HOME"
-# Whether to install an updater program
+install-path = ["~/.local/bin", "~/.cargo/bin"]
 install-updater = false
-
+allow-dirty = ["ci"]
 
 [dependencies]
-clap = { version = "4.6", features = ["derive", "cargo"], optional = true }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_yaml = "0.9"
-schemars = "1.2"
-jsonschema = "0.58"
-semver = "1.0"
-colored = { version = "3.0", optional = true }
-comfy-table = { version = "8.0", features = [
-  "custom_styling",
-], optional = true }
-sha2 = "0.11"
-include_dir = "0.7"
-thiserror = "2.0"
-axoupdater = { version = "0.10", features = ["blocking"], optional = true }
-typst = "0.15"
-typst-pdf = "0.15"
-typst-layout = "0.15"
-typst-kit = { version = "0.15", default-features = false, features = [
-  "scan-fonts",
-  "embedded-fonts",
+axoupdater = { version = "0.10.2", default-features = false, features = [
+  "blocking",
+  "github_releases",
 ] }
+clap = { version = "4.5.31", features = ["derive", "string"] }
+env_logger = { version = "0.11", default-features = false }
+log = "0.4"
+resumake.workspace = true
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+serde_yaml = "0.9.34"
+thiserror = "2.0.12"
 
-[features]
-default = ["cli", "update"]
-cli = ["dep:clap", "dep:colored", "dep:comfy-table"]
-update = ["cli", "dep:axoupdater"]
+[lints]
+workspace = true
 
-[lints.rust]
+[workspace.lints.rust]
 missing_docs = "warn"
 unsafe_op_in_unsafe_fn = "deny"
 unused_qualifications = "warn"
 
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+# Imports
 wildcard_imports = "deny"
-single_component_path_imports = "allow"
+single_component_path_imports = "allow" # `use some_crate;` manifests
+# Hygiene
 dbg_macro = "deny"
 todo = "warn"
 undocumented_unsafe_blocks = "deny"
+missing_docs_in_private_items = "warn"
+# Google: expect over unwrap, and assert messages
+unwrap_used = "warn"
+missing_assert_message = "warn"
+# process::exit only in main; suppress with expect + reason, never allow
+exit = "deny"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+# Performance (nursery, outside pedantic)
 redundant_clone = "warn"
-
-
-[dev-dependencies]
-tempfile = "3.16"
-
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
-
-[profile.dist]
-inherits = "release"

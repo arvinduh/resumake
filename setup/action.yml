@@ -2,7 +2,7 @@ name: "Setup Resumake (rsmk)"
 description: "Install the rsmk CLI compiler"
 inputs:
   version:
-    description: "Version of rsmk to install (e.g. 0.1.1, latest)"
+    description: "Version of rsmk to install (e.g. 0.1.0, latest)"
     required: false
     default: "latest"
 runs:
@@ -16,10 +16,10 @@ runs:
         BASE="https://github.com/arvinduh/resumake/releases"
         if [ "$RESUMAKE_VERSION" = "latest" ] || \
            [ -z "$RESUMAKE_VERSION" ]; then
-          INSTALL_URL="${BASE}/latest/download/resumake-installer.sh"
+          INSTALL_URL="${BASE}/latest/download/rsmk-installer.sh"
         else
-          TAG="v${RESUMAKE_VERSION#v}"
-          INSTALL_URL="${BASE}/download/${TAG}/resumake-installer.sh"
+          TAG="${RESUMAKE_VERSION#v}"
+          INSTALL_URL="${BASE}/download/${TAG}/rsmk-installer.sh"
         fi
         curl --proto '=https' --tlsv1.2 -LsSf "$INSTALL_URL" | sh
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"

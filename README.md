@@ -38,13 +38,13 @@
 #### macOS & Linux
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/arvinduh/resumake/releases/latest/download/rsmk-installer.sh | sh
 ```
 
 #### Windows (PowerShell)
 
 ```powershell
-irm https://github.com/arvinduh/resumake/releases/latest/download/resumake-installer.ps1 | iex
+irm https://github.com/arvinduh/resumake/releases/latest/download/rsmk-installer.ps1 | iex
 ```
 
 Both installers download the release archive over HTTPS, verify checksums, and
@@ -95,7 +95,7 @@ This scaffolds:
 Resumake separates your career content from styling. Edit `content.yaml`:
 
 ```yaml
-# yaml-language-server: $schema=https://github.com/arvinduh/resumake/releases/download/s1.1/resume.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/arvinduh/resumake/main/schema.json
 meta:
   name: "Jane Doe"
   version: "1.0.0"

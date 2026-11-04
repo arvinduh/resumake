@@ -1,61 +1,78 @@
-//! Handlers for `rsmk template --list` and `rsmk template <NAME>`.
+//! Handlers for `rsmk template`.
+//!
+//! Owns argument definitions and CLI presentation for listing built-in résumé
+//! templates and ejecting single-file Typst templates into user projects.
 
-use std::path::Path;
+use std::path;
 
-use resumake::engine::templates;
+use clap;
+use resumake;
 
-use crate::cli::{ui, Error};
+use crate::cli;
 
 /// Available CLI arguments for `rsmk template`.
-#[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
+#[derive(clap::Args)]
 pub struct TemplateArgs {
-  /// Name of the template to eject (e.g. `classic`)
-  #[arg(value_name = "NAME", conflicts_with = "list")]
-  pub name: Option<String>,
+  /// Template operation to execute
+  #[command(subcommand)]
+  pub command: TemplateCommand,
+}
 
-  /// List all available built-in and discovered custom templates
-  #[arg(long, conflicts_with = "name")]
-  pub list: bool,
+/// Subcommands for `rsmk template`.
+#[derive(clap::Subcommand)]
+pub enum TemplateCommand {
+  /// List all available built-in templates
+  List,
+  /// Eject a single-file Typst template into templates/<name>.typ
+  Eject(EjectArgs),
+}
 
-  /// Overwrite destination directory if it already exists when ejecting
+/// Arguments for `rsmk template eject`.
+#[derive(clap::Args)]
+pub struct EjectArgs {
+  /// Name of the template to eject (defaults to "classic")
+  #[arg(value_name = "NAME", default_value = "classic")]
+  pub name: String,
+
+  /// Overwrite destination file if it already exists
   #[arg(short, long)]
   pub force: bool,
 }
 
 impl TemplateArgs {
   /// Runs the template command.
-  pub fn run(self, quiet: bool) -> Result<(), Error> {
-    if self.list {
-      let available = templates::list_templates();
-      println!("Available templates:");
-      for tpl in available {
-        println!("  - {tpl}");
-      }
-      Ok(())
-    } else if let Some(name) = self.name {
-      let target_dir = Path::new("templates").join(&name);
-      let ejected_files =
-        templates::eject_template(&name, &target_dir, self.force)?;
-
-      if !quiet {
-        ui::print_success(&format!(
-          "Ejected template '{name}' to ./templates/{name}/"
-        ));
-        for file in ejected_files {
-          println!("  - {file}");
+  ///
+  /// # Errors
+  /// Returns [`cli::Error`] if template lookup or disk ejection fails.
+  #[expect(clippy::print_stdout, reason = "CLI output")]
+  pub fn run(self, quiet: bool) -> Result<(), cli::Error> {
+    match self.command {
+      TemplateCommand::List => {
+        let available = resumake::templates::list();
+        println!("Available templates:");
+        for tpl in available {
+          println!("  - {tpl}");
         }
-        println!(
-          "Run `rsmk build --template ./templates/{name}/main.typ` to compile \
-           with your local template."
-        );
+        Ok(())
       }
-      Ok(())
-    } else {
-      println!(
-        "Usage: rsmk template [NAME] [--list] [--force]\n\nRun `rsmk template \
-         --help` for more information."
-      );
-      Ok(())
+      TemplateCommand::Eject(args) => {
+        let current_dir = path::Path::new(".");
+        let target_file =
+          resumake::templates::eject(&args.name, current_dir, args.force)?;
+
+        if !quiet {
+          println!(
+            "Ejected template '{}' to '{}'",
+            args.name,
+            target_file.display()
+          );
+          println!(
+            "Run `rsmk build --template {}` to compile with your local template.",
+            target_file.display()
+          );
+        }
+        Ok(())
+      }
     }
   }
 }
