@@ -36,7 +36,7 @@ pub struct BuildArgs {
   #[arg(long)]
   pub font_path: Option<path::PathBuf>,
 
-  /// Fail build if document exceeds this many pages
+  /// Most pages allowed before the build fails (default 1)
   #[arg(long)]
   pub max_pages: Option<usize>,
 }
@@ -78,24 +78,19 @@ impl BuildArgs {
   /// # Errors
   /// Returns [`cli::Error`] if schema validation, Typst compilation, or layout
   /// constraint verification fails.
-  #[expect(clippy::print_stderr, reason = "CLI error output")]
   pub fn run(self, quiet: bool) -> Result<(), cli::Error> {
     let output_pdf = self
       .output
       .unwrap_or_else(|| derive_output_name(&self.content));
 
-    let project_root = self
-      .content
-      .parent()
-      .filter(|p| !p.as_os_str().is_empty())
-      .unwrap_or_else(|| path::Path::new("."));
+    let project_root = cli::project_root(&self.content);
 
     resumake::schema::validate_file(&self.content, self.schema.as_deref())?;
 
     let (doc, report) = resumake::render::compile(
       &self.content,
       self.template.as_deref(),
-      project_root,
+      &project_root,
       self.font_path.as_deref(),
     )?;
 
@@ -105,18 +100,6 @@ impl BuildArgs {
       cli::print_report(&report, &format!("built {}", output_pdf.display()));
     }
 
-    if let Some(max) = self.max_pages
-      && report.page_count > max
-    {
-      eprintln!(
-        "error: document spans {} pages (exceeds --max-pages {max})",
-        report.page_count
-      );
-      return Err(
-        std::io::Error::other("page count constraint exceeded").into(),
-      );
-    }
-
-    Ok(())
+    cli::enforce_layout(&report, self.max_pages)
   }
 }

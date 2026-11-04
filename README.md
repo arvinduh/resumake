@@ -100,9 +100,9 @@ rsmk check   # validates and measures the layout without writing a PDF
 built jane_doe_resume.pdf (1 page, 42.8% fill)
 ```
 
-Each page's fill is listed when the résumé runs past one page, and a `note:`
-line names each bullet that wraps. Pass `--max-pages 1` to make the build fail
-instead.
+`build` and `check` fail when the résumé runs past one page or a bullet wraps
+onto a second line: each page's fill is listed, and a `note:` line names each
+wrapped bullet. `--max-pages` raises the page limit.
 
 To publish, tag the résumé repository. The scaffolded release workflow builds
 the PDF and attaches it to a GitHub release:
@@ -119,7 +119,7 @@ rsmk build [CONTENT]       Compile to PDF and report layout (default: content.ya
   -o, --output <PDF>       Output path (default: <name>_resume.pdf)
   --schema <FILE>          Validate against a custom JSON Schema
   --font-path <DIR>        Extra font directory (./fonts is picked up on its own)
-  --max-pages <N>          Fail when the document has more than N pages
+  --max-pages <N>          Most pages allowed (default 1)
 rsmk check [CONTENT]       Same checks as build, without writing a PDF
 
 rsmk init [DEST]           Scaffold a résumé repository (default: .)
