@@ -32,12 +32,6 @@ pub enum Error {
     /// Conflicting path.
     path: path::PathBuf,
   },
-  /// Target directory is not empty and `--force` was not provided.
-  #[error("target directory '{}' is not empty; use --force to proceed", path.display())]
-  DirectoryNotEmpty {
-    /// Non-empty directory path.
-    path: path::PathBuf,
-  },
   /// Template ejection failure.
   #[error(transparent)]
   Template(#[from] crate::templates::Error),
