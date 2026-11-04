@@ -2,7 +2,7 @@
   "$defs": {
     "AwardItem": {
       "additionalProperties": false,
-      "description": "Award or honor.",
+      "description": "Award, honor, or competitive fellowship.",
       "properties": {
         "date": {
           "anyOf": [
@@ -16,12 +16,16 @@
           "description": "Date or year awarded."
         },
         "issuer": {
-          "description": "Issuing institution.",
+          "description": "Issuing organization or institution.",
           "type": ["string", "null"]
         },
         "name": {
           "description": "Award title.",
           "type": "string"
+        },
+        "summary": {
+          "description": "Summary or award context.",
+          "type": ["string", "null"]
         }
       },
       "required": ["name"],
@@ -29,26 +33,31 @@
     },
     "CertificationItem": {
       "additionalProperties": false,
-      "description": "Professional certification or credential.",
+      "description": "Professional certification or licensure.",
       "properties": {
+        "credential_id": {
+          "description": "Credential ID.",
+          "type": ["string", "null"]
+        },
         "date": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StringOrNumber"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Issue date or validity range."
+          "description": "Issue date.",
+          "type": ["string", "null"]
+        },
+        "expiry": {
+          "description": "Expiration date.",
+          "type": ["string", "null"]
         },
         "issuer": {
-          "description": "Issuing organization.",
+          "description": "Issuing body or authority (e.g. \"AWS\", \"Google Cloud\").",
           "type": ["string", "null"]
         },
         "name": {
-          "description": "Certification title.",
+          "description": "Credential name.",
           "type": "string"
+        },
+        "url": {
+          "description": "Verification URL.",
+          "type": ["string", "null"]
         }
       },
       "required": ["name"],
@@ -84,7 +93,7 @@
     },
     "EducationItem": {
       "additionalProperties": false,
-      "description": "Higher education degree or certification program.",
+      "description": "Academic degree or institution item.",
       "properties": {
         "coursework": {
           "anyOf": [
@@ -95,40 +104,19 @@
               "type": "null"
             }
           ],
-          "description": "Relevant coursework."
+          "description": "Relevant coursework (inline tags or comma-separated)."
         },
         "dates": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StringOrNumber"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Graduation date or active enrollment range."
+          "description": "Attendance dates (e.g. \"Sep 2020 – Jun 2022\").",
+          "type": ["string", "null"]
         },
         "degree": {
-          "description": "Degree title.",
-          "type": "string"
+          "description": "Degree and major (e.g. \"B.S. in Computer Science\").",
+          "type": ["string", "null"]
         },
         "gpa": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StringOrNumber"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Cumulative GPA."
-        },
-        "highlights": {
-          "description": "Highlights or key achievements.",
-          "items": {
-            "type": "string"
-          },
-          "type": ["array", "null"]
+          "description": "GPA representation (e.g. \"3.95 / 4.00\").",
+          "type": ["string", "null"]
         },
         "honors": {
           "anyOf": [
@@ -139,80 +127,100 @@
               "type": "null"
             }
           ],
-          "description": "Academic honors."
+          "description": "Academic honors or distinctions (e.g. \"Summa Cum Laude\")."
         },
         "institution": {
-          "description": "College, university, or granting institution name.",
-          "type": "string"
+          "description": "Name of university or institution.",
+          "type": ["string", "null"]
+        },
+        "lines": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Custom key-value lines attached to this degree.",
+          "type": ["object", "null"]
         },
         "location": {
-          "description": "City, state, or country.",
+          "description": "City, State / Country.",
           "type": ["string", "null"]
+        },
+        "thesis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThesisValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Thesis title and optional advisor."
         }
       },
-      "required": ["degree", "institution"],
       "type": "object"
     },
     "EducationValue": {
       "anyOf": [
-        {
-          "description": "Multiple education entries.",
-          "items": {
-            "$ref": "#/$defs/EducationItem"
-          },
-          "type": "array"
-        },
         {
           "allOf": [
             {
               "$ref": "#/$defs/EducationItem"
             }
           ],
-          "description": "Single education entry."
+          "description": "Single university / institution."
+        },
+        {
+          "description": "List of multiple degrees or institutions.",
+          "items": {
+            "$ref": "#/$defs/EducationItem"
+          },
+          "type": "array"
         }
       ],
-      "description": "Polymorphic representation of education entries."
+      "description": "Polymorphic representation of education (single entry or multiple entries)."
     },
     "ExperienceItem": {
       "additionalProperties": false,
-      "description": "Professional work experience role.",
+      "description": "Work experience organization holding one or more roles.",
       "properties": {
-        "dates": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StringOrNumber"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Employment date range."
-        },
-        "highlights": {
-          "description": "Bulleted impact statements.",
+        "bullets": {
+          "description": "Accomplishment bullet points (for single-role shorthand).",
           "items": {
             "type": "string"
           },
           "type": ["array", "null"]
         },
+        "dates": {
+          "description": "Employment dates (for single-role shorthand).",
+          "type": ["string", "null"]
+        },
         "location": {
-          "description": "Office location.",
+          "description": "City, State or \"Remote\".",
           "type": ["string", "null"]
         },
         "org": {
-          "description": "Employer, organization, or client name.",
-          "type": "string"
+          "description": "Company or organization name.",
+          "type": ["string", "null"]
         },
-        "role": {
-          "description": "Job title or appointment.",
-          "type": "string"
+        "roles": {
+          "description": "One or more roles held at this organization (supports promotion ladders).",
+          "items": {
+            "$ref": "#/$defs/RoleItem"
+          },
+          "type": ["array", "null"]
         },
-        "summary": {
-          "description": "Summary description.",
+        "stack": {
+          "description": "Tech stack or tools used.",
+          "type": ["string", "null"]
+        },
+        "title": {
+          "description": "Job title (if specifying a single-role company without `roles` array).",
+          "type": ["string", "null"]
+        },
+        "url": {
+          "description": "Organization website or URL.",
           "type": ["string", "null"]
         }
       },
-      "required": ["org", "role"],
       "type": "object"
     },
     "Meta": {
@@ -275,40 +283,34 @@
     },
     "ProjectItem": {
       "additionalProperties": false,
-      "description": "Software project, open source repository, or technical portfolio entry.",
+      "description": "Technical project or open-source initiative.",
       "properties": {
-        "dates": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StringOrNumber"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Dates or timeline."
-        },
-        "highlights": {
-          "description": "Bullets of achievements.",
+        "bullets": {
+          "default": [],
+          "description": "Project accomplishment bullet points.",
           "items": {
             "type": "string"
           },
-          "type": ["array", "null"]
+          "type": "array"
+        },
+        "date": {
+          "description": "Date or period (e.g. \"Jan 2024\").",
+          "type": ["string", "null"]
         },
         "name": {
           "description": "Project title.",
           "type": "string"
         },
-        "role": {
-          "description": "Role or leadership position.",
+        "stack": {
+          "description": "Tech stack or subtitle (e.g. \"Rust · CUDA · Triton\").",
           "type": ["string", "null"]
         },
-        "summary": {
-          "description": "Description summary.",
+        "stats": {
+          "description": "Key metric or stats callout (e.g. \"1.2k `GitHub` Stars\").",
           "type": ["string", "null"]
         },
         "url": {
-          "description": "Project URI.",
+          "description": "Link to demo or repository.",
           "type": ["string", "null"]
         }
       },
@@ -317,7 +319,7 @@
     },
     "PublicationItem": {
       "additionalProperties": false,
-      "description": "Academic publication, conference paper, or preprint.",
+      "description": "Academic publication or preprint.",
       "properties": {
         "authors": {
           "anyOf": [
@@ -328,9 +330,25 @@
               "type": "null"
             }
           ],
-          "description": "Co-authors list."
+          "description": "Authors list or string."
         },
-        "date": {
+        "notes": {
+          "description": "Acceptance rate or extra notes (e.g. \"Oral Presentation, top 2%\").",
+          "type": ["string", "null"]
+        },
+        "title": {
+          "description": "Publication title.",
+          "type": "string"
+        },
+        "url": {
+          "description": "DOI or publication link.",
+          "type": ["string", "null"]
+        },
+        "venue": {
+          "description": "Conference, journal, or workshop venue (e.g. \"`NeurIPS` 2024\").",
+          "type": ["string", "null"]
+        },
+        "year": {
           "anyOf": [
             {
               "$ref": "#/$defs/StringOrNumber"
@@ -340,62 +358,92 @@
             }
           ],
           "description": "Publication year or date."
-        },
-        "title": {
-          "description": "Publication title.",
-          "type": "string"
-        },
-        "url": {
-          "description": "DOI or URL link.",
-          "type": ["string", "null"]
-        },
-        "venue": {
-          "description": "Journal, proceedings, or publisher name.",
-          "type": "string"
         }
       },
-      "required": ["title", "venue"],
+      "required": ["title"],
       "type": "object"
     },
     "ReferenceItem": {
       "additionalProperties": false,
-      "description": "Professional reference contact.",
+      "description": "Professional reference item.",
       "properties": {
         "contact": {
-          "description": "Contact email or phone.",
+          "description": "Optional email or contact line.",
           "type": ["string", "null"]
         },
         "name": {
-          "description": "Reference name.",
+          "description": "Reference person's name.",
           "type": "string"
         },
         "org": {
-          "description": "Organization or affiliation.",
-          "type": ["string", "null"]
+          "description": "Company or university.",
+          "type": "string"
         },
         "role": {
-          "description": "Professional role or title.",
-          "type": ["string", "null"]
+          "description": "Job title or role.",
+          "type": "string"
         }
       },
-      "required": ["name"],
+      "required": ["name", "role", "org"],
       "type": "object"
     },
     "ReferencesValue": {
       "anyOf": [
         {
-          "description": "List of professional references.",
+          "description": "Array of references.",
           "items": {
             "$ref": "#/$defs/ReferenceItem"
           },
           "type": "array"
         },
         {
-          "description": "Availability note (e.g. \"Available upon request\").",
-          "type": "string"
+          "description": "Dictionary containing items list.",
+          "properties": {
+            "items": {
+              "description": "References list.",
+              "items": {
+                "$ref": "#/$defs/ReferenceItem"
+              },
+              "type": "array"
+            }
+          },
+          "required": ["items"],
+          "type": "object"
         }
       ],
       "description": "References representation."
+    },
+    "RoleItem": {
+      "additionalProperties": false,
+      "description": "A specific role within an organization.",
+      "properties": {
+        "bullets": {
+          "default": [],
+          "description": "High-impact accomplishment bullet points.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dates": {
+          "description": "Employment date range (e.g. \"Jul 2023 – Present\").",
+          "type": "string"
+        },
+        "stack": {
+          "description": "Tech stack or technologies used in this role.",
+          "type": ["string", "null"]
+        },
+        "team": {
+          "description": "Team, group, or division name (e.g. \"Inference Systems\").",
+          "type": ["string", "null"]
+        },
+        "title": {
+          "description": "Job title or position (e.g. \"Staff AI Systems Engineer\").",
+          "type": "string"
+        }
+      },
+      "required": ["title", "dates"],
+      "type": "object"
     },
     "Section": {
       "additionalProperties": false,
@@ -511,22 +559,22 @@
     },
     "SkillCategoryItem": {
       "additionalProperties": false,
-      "description": "Structured skill category.",
+      "description": "Explicit skill category item.",
       "properties": {
         "category": {
-          "description": "Category name.",
+          "description": "Category name (e.g. \"Languages\", \"ML & Systems\", \"Cloud\").",
           "type": "string"
         },
-        "skills": {
+        "items": {
           "allOf": [
             {
               "$ref": "#/$defs/StringOrList"
             }
           ],
-          "description": "Comma-separated or listed skill items."
+          "description": "Comma-separated string or array of skills."
         }
       },
-      "required": ["category", "skills"],
+      "required": ["category", "items"],
       "type": "object"
     },
     "SkillsValue": {
@@ -535,18 +583,18 @@
           "additionalProperties": {
             "$ref": "#/$defs/StringOrList"
           },
-          "description": "Key-value skill categories (e.g. \"Languages: Rust, Python\").",
+          "description": "Key-value dictionary mapping category name to comma-separated\nskills or array of skills.",
           "type": "object"
         },
         {
-          "description": "Structured list of skills.",
+          "description": "List of skill categories with explicit category name and items.",
           "items": {
             "$ref": "#/$defs/SkillCategoryItem"
           },
           "type": "array"
         }
       ],
-      "description": "Skills representation (dictionary or list)."
+      "description": "Skills representation (dictionary or list of categorized skills)."
     },
     "SpeakingItem": {
       "additionalProperties": false,
@@ -561,18 +609,26 @@
               "type": "null"
             }
           ],
-          "description": "Presentation date."
+          "description": "Date of presentation."
         },
         "event": {
-          "description": "Event, conference, or meetup name.",
-          "type": "string"
+          "description": "Conference or event name.",
+          "type": ["string", "null"]
+        },
+        "link": {
+          "description": "Slides or recording URL.",
+          "type": ["string", "null"]
+        },
+        "location": {
+          "description": "Location or virtual venue.",
+          "type": ["string", "null"]
         },
         "title": {
-          "description": "Talk or presentation title.",
+          "description": "Talk title.",
           "type": "string"
         }
       },
-      "required": ["title", "event"],
+      "required": ["title"],
       "type": "object"
     },
     "StringOrList": {
@@ -668,6 +724,30 @@
         }
       },
       "type": "object"
+    },
+    "ThesisValue": {
+      "anyOf": [
+        {
+          "description": "Simple thesis title string.",
+          "type": "string"
+        },
+        {
+          "description": "Structured thesis title and advisor.",
+          "properties": {
+            "advisor": {
+              "description": "Advisor name.",
+              "type": ["string", "null"]
+            },
+            "title": {
+              "description": "Thesis title.",
+              "type": "string"
+            }
+          },
+          "required": ["title"],
+          "type": "object"
+        }
+      ],
+      "description": "Academic thesis specification."
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",

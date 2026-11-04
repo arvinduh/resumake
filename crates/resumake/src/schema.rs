@@ -281,7 +281,7 @@ pub struct Section {
   pub text: Option<String>,
 }
 
-/// Polymorphic representation of education entries.
+/// Polymorphic representation of education (single entry or multiple entries).
 #[derive(
   Debug,
   Clone,
@@ -292,13 +292,13 @@ pub struct Section {
 )]
 #[serde(untagged)]
 pub enum EducationValue {
-  /// Multiple education entries.
-  List(Vec<EducationItem>),
-  /// Single education entry.
-  Single(EducationItem),
+  /// Single university / institution.
+  Single(Box<EducationItem>),
+  /// List of multiple degrees or institutions.
+  Multiple(Vec<EducationItem>),
 }
 
-/// Higher education degree or certification program.
+/// Academic degree or institution item.
 #[derive(
   Debug,
   Clone,
@@ -310,31 +310,64 @@ pub enum EducationValue {
 )]
 #[serde(deny_unknown_fields)]
 pub struct EducationItem {
-  /// Degree title.
-  pub degree: String,
-  /// College, university, or granting institution name.
-  pub institution: String,
-  /// City, state, or country.
+  /// Name of university or institution.
+  #[serde(
+    alias = "school",
+    alias = "university",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub institution: Option<String>,
+  /// City, State / Country.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub location: Option<String>,
-  /// Graduation date or active enrollment range.
+  /// Degree and major (e.g. "B.S. in Computer Science").
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub dates: Option<StringOrNumber>,
-  /// Cumulative GPA.
+  pub degree: Option<String>,
+  /// GPA representation (e.g. "3.95 / 4.00").
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub gpa: Option<StringOrNumber>,
-  /// Academic honors.
+  pub gpa: Option<String>,
+  /// Attendance dates (e.g. "Sep 2020 – Jun 2022").
+  #[serde(alias = "date", default, skip_serializing_if = "Option::is_none")]
+  pub dates: Option<String>,
+  /// Academic honors or distinctions (e.g. "Summa Cum Laude").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub honors: Option<StringOrList>,
-  /// Relevant coursework.
+  /// Thesis title and optional advisor.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub thesis: Option<ThesisValue>,
+  /// Relevant coursework (inline tags or comma-separated).
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub coursework: Option<StringOrList>,
-  /// Highlights or key achievements.
+  /// Custom key-value lines attached to this degree.
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub highlights: Option<Vec<String>>,
+  pub lines: Option<collections::BTreeMap<String, String>>,
 }
 
-/// Skills representation (dictionary or list).
+/// Academic thesis specification.
+#[derive(
+  Debug,
+  Clone,
+  serde::Serialize,
+  serde::Deserialize,
+  schemars::JsonSchema,
+  PartialEq,
+)]
+#[serde(untagged)]
+pub enum ThesisValue {
+  /// Simple thesis title string.
+  Title(String),
+  /// Structured thesis title and advisor.
+  Detailed {
+    /// Thesis title.
+    title: String,
+    /// Advisor name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    advisor: Option<String>,
+  },
+}
+
+/// Skills representation (dictionary or list of categorized skills).
 #[derive(
   Debug,
   Clone,
@@ -345,13 +378,14 @@ pub struct EducationItem {
 )]
 #[serde(untagged)]
 pub enum SkillsValue {
-  /// Key-value skill categories (e.g. "Languages: Rust, Python").
-  Dict(collections::BTreeMap<String, StringOrList>),
-  /// Structured list of skills.
+  /// Key-value dictionary mapping category name to comma-separated
+  /// skills or array of skills.
+  Dictionary(collections::BTreeMap<String, StringOrList>),
+  /// List of skill categories with explicit category name and items.
   List(Vec<SkillCategoryItem>),
 }
 
-/// Structured skill category.
+/// Explicit skill category item.
 #[derive(
   Debug,
   Clone,
@@ -362,13 +396,14 @@ pub enum SkillsValue {
 )]
 #[serde(deny_unknown_fields)]
 pub struct SkillCategoryItem {
-  /// Category name.
+  /// Category name (e.g. "Languages", "ML & Systems", "Cloud").
+  #[serde(alias = "name")]
   pub category: String,
-  /// Comma-separated or listed skill items.
-  pub skills: StringOrList,
+  /// Comma-separated string or array of skills.
+  pub items: StringOrList,
 }
 
-/// Professional work experience role.
+/// Work experience organization holding one or more roles.
 #[derive(
   Debug,
   Clone,
@@ -380,25 +415,82 @@ pub struct SkillCategoryItem {
 )]
 #[serde(deny_unknown_fields)]
 pub struct ExperienceItem {
-  /// Employer, organization, or client name.
-  pub org: String,
-  /// Job title or appointment.
-  pub role: String,
-  /// Office location.
+  /// Company or organization name.
+  #[serde(
+    alias = "company",
+    alias = "organization",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub org: Option<String>,
+  /// City, State or "Remote".
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub location: Option<String>,
-  /// Employment date range.
+  /// Organization website or URL.
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub dates: Option<StringOrNumber>,
-  /// Summary description.
+  pub url: Option<String>,
+  /// One or more roles held at this organization (supports promotion ladders).
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub summary: Option<String>,
-  /// Bulleted impact statements.
+  pub roles: Option<Vec<RoleItem>>,
+
+  // Single-role shorthand fields:
+  /// Job title (if specifying a single-role company without `roles` array).
+  #[serde(
+    alias = "role",
+    alias = "position",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub title: Option<String>,
+  /// Employment dates (for single-role shorthand).
+  #[serde(alias = "date", default, skip_serializing_if = "Option::is_none")]
+  pub dates: Option<String>,
+  /// Tech stack or tools used.
+  #[serde(
+    alias = "technologies",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub stack: Option<String>,
+  /// Accomplishment bullet points (for single-role shorthand).
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub highlights: Option<Vec<String>>,
+  pub bullets: Option<Vec<String>>,
 }
 
-/// Software project, open source repository, or technical portfolio entry.
+/// A specific role within an organization.
+#[derive(
+  Debug,
+  Clone,
+  serde::Serialize,
+  serde::Deserialize,
+  schemars::JsonSchema,
+  PartialEq,
+  Default,
+)]
+#[serde(deny_unknown_fields)]
+pub struct RoleItem {
+  /// Job title or position (e.g. "Staff AI Systems Engineer").
+  #[serde(alias = "role", alias = "position")]
+  pub title: String,
+  /// Employment date range (e.g. "Jul 2023 – Present").
+  #[serde(alias = "date")]
+  pub dates: String,
+  /// Team, group, or division name (e.g. "Inference Systems").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub team: Option<String>,
+  /// Tech stack or technologies used in this role.
+  #[serde(
+    alias = "technologies",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub stack: Option<String>,
+  /// High-impact accomplishment bullet points.
+  #[serde(default)]
+  pub bullets: Vec<String>,
+}
+
+/// Technical project or open-source initiative.
 #[derive(
   Debug,
   Clone,
@@ -412,24 +504,28 @@ pub struct ExperienceItem {
 pub struct ProjectItem {
   /// Project title.
   pub name: String,
-  /// Role or leadership position.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub role: Option<String>,
-  /// Dates or timeline.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub dates: Option<StringOrNumber>,
-  /// Project URI.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
+  /// Tech stack or subtitle (e.g. "Rust · CUDA · Triton").
+  #[serde(
+    alias = "technologies",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub stack: Option<String>,
+  /// Date or period (e.g. "Jan 2024").
+  #[serde(alias = "dates", default, skip_serializing_if = "Option::is_none")]
+  pub date: Option<String>,
+  /// Link to demo or repository.
+  #[serde(alias = "link", default, skip_serializing_if = "Option::is_none")]
   pub url: Option<String>,
-  /// Description summary.
+  /// Project accomplishment bullet points.
+  #[serde(default)]
+  pub bullets: Vec<String>,
+  /// Key metric or stats callout (e.g. "1.2k `GitHub` Stars").
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub summary: Option<String>,
-  /// Bullets of achievements.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub highlights: Option<Vec<String>>,
+  pub stats: Option<String>,
 }
 
-/// Academic publication, conference paper, or preprint.
+/// Academic publication or preprint.
 #[derive(
   Debug,
   Clone,
@@ -443,20 +539,29 @@ pub struct ProjectItem {
 pub struct PublicationItem {
   /// Publication title.
   pub title: String,
-  /// Journal, proceedings, or publisher name.
-  pub venue: String,
-  /// Publication year or date.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub date: Option<StringOrNumber>,
-  /// Co-authors list.
+  /// Authors list or string.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub authors: Option<StringOrList>,
-  /// DOI or URL link.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
+  /// Conference, journal, or workshop venue (e.g. "`NeurIPS` 2024").
+  #[serde(
+    alias = "journal",
+    alias = "conference",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub venue: Option<String>,
+  /// Publication year or date.
+  #[serde(alias = "date", default, skip_serializing_if = "Option::is_none")]
+  pub year: Option<StringOrNumber>,
+  /// DOI or publication link.
+  #[serde(alias = "doi", default, skip_serializing_if = "Option::is_none")]
   pub url: Option<String>,
+  /// Acceptance rate or extra notes (e.g. "Oral Presentation, top 2%").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub notes: Option<String>,
 }
 
-/// Professional certification or credential.
+/// Professional certification or licensure.
 #[derive(
   Debug,
   Clone,
@@ -468,17 +573,30 @@ pub struct PublicationItem {
 )]
 #[serde(deny_unknown_fields)]
 pub struct CertificationItem {
-  /// Certification title.
+  /// Credential name.
   pub name: String,
-  /// Issuing organization.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
+  /// Issuing body or authority (e.g. "AWS", "Google Cloud").
+  #[serde(
+    alias = "organization",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
   pub issuer: Option<String>,
-  /// Issue date or validity range.
+  /// Issue date.
+  #[serde(alias = "dates", default, skip_serializing_if = "Option::is_none")]
+  pub date: Option<String>,
+  /// Expiration date.
   #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub date: Option<StringOrNumber>,
+  pub expiry: Option<String>,
+  /// Credential ID.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub credential_id: Option<String>,
+  /// Verification URL.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub url: Option<String>,
 }
 
-/// Award or honor.
+/// Award, honor, or competitive fellowship.
 #[derive(
   Debug,
   Clone,
@@ -492,12 +610,19 @@ pub struct CertificationItem {
 pub struct AwardItem {
   /// Award title.
   pub name: String,
-  /// Issuing institution.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
+  /// Issuing organization or institution.
+  #[serde(
+    alias = "organization",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
   pub issuer: Option<String>,
   /// Date or year awarded.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
+  #[serde(alias = "year", default, skip_serializing_if = "Option::is_none")]
   pub date: Option<StringOrNumber>,
+  /// Summary or award context.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub summary: Option<String>,
 }
 
 /// Speaking engagement or conference presentation.
@@ -512,13 +637,24 @@ pub struct AwardItem {
 )]
 #[serde(deny_unknown_fields)]
 pub struct SpeakingItem {
-  /// Talk or presentation title.
+  /// Talk title.
   pub title: String,
-  /// Event, conference, or meetup name.
-  pub event: String,
-  /// Presentation date.
+  /// Conference or event name.
+  #[serde(
+    alias = "conference",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub event: Option<String>,
+  /// Location or virtual venue.
   #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub location: Option<String>,
+  /// Date of presentation.
+  #[serde(alias = "year", default, skip_serializing_if = "Option::is_none")]
   pub date: Option<StringOrNumber>,
+  /// Slides or recording URL.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub link: Option<String>,
 }
 
 /// References representation.
@@ -532,13 +668,16 @@ pub struct SpeakingItem {
 )]
 #[serde(untagged)]
 pub enum ReferencesValue {
-  /// List of professional references.
+  /// Array of references.
   List(Vec<ReferenceItem>),
-  /// Availability note (e.g. "Available upon request").
-  Text(String),
+  /// Dictionary containing items list.
+  Structured {
+    /// References list.
+    items: Vec<ReferenceItem>,
+  },
 }
 
-/// Professional reference contact.
+/// Professional reference item.
 #[derive(
   Debug,
   Clone,
@@ -550,15 +689,13 @@ pub enum ReferencesValue {
 )]
 #[serde(deny_unknown_fields)]
 pub struct ReferenceItem {
-  /// Reference name.
+  /// Reference person's name.
   pub name: String,
-  /// Professional role or title.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub role: Option<String>,
-  /// Organization or affiliation.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub org: Option<String>,
-  /// Contact email or phone.
+  /// Job title or role.
+  pub role: String,
+  /// Company or university.
+  pub org: String,
+  /// Optional email or contact line.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub contact: Option<String>,
 }
