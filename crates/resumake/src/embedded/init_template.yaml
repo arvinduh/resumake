@@ -33,15 +33,13 @@ sections:
         gpa: "3.90 / 4.00"
         dates: "Sep 2018 - Jun 2022"
         honors: "Dean's Honor List"
-        coursework:
-          "Data Structures, Algorithms, Operating Systems, Distributed Systems"
+        coursework: "Algorithms, Operating Systems, Distributed Systems"
 
   - title: "Technical Skills"
     type: "skills"
     items:
       Languages: "Rust, Python, C++, TypeScript, SQL, Bash"
-      Frameworks & Tools:
-        "Git, Docker, Kubernetes, GitHub Actions, Linux / POSIX"
+      Frameworks & Tools: "Git, Docker, Kubernetes, GitHub Actions, Linux"
 
   - title: "Experience"
     type: "experience"

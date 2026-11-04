@@ -1,0 +1,13 @@
+# fml's built-in yamllint rules, plus one exemption: dist generates
+# release.yml, and its long expressions cannot be wrapped by hand.
+extends: default
+ignore: |
+  .github/workflows/release.yml
+rules:
+  comments:
+    min-spaces-from-content: 1
+  document-start: disable
+  line-length:
+    max: 80
+  truthy:
+    check-keys: false
