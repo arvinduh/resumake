@@ -11,6 +11,7 @@ mod template;
 mod update;
 
 use std::io;
+use std::path;
 
 use clap;
 use resumake;
@@ -48,6 +49,20 @@ pub enum Error {
   /// Standard I/O failure.
   #[error(transparent)]
   Io(#[from] io::Error),
+  /// The résumé broke the layout contract: too many pages or a wrapped
+  /// bullet.
+  #[error(
+    "layout check failed: {pages} page(s) (limit {max_pages}), {wraps} \
+     wrapped bullet(s)"
+  )]
+  Layout {
+    /// Pages the document spans.
+    pages: usize,
+    /// Most pages allowed.
+    max_pages: usize,
+    /// Bullets that wrap onto a second line.
+    wraps: usize,
+  },
 }
 
 impl Error {
@@ -132,6 +147,48 @@ impl Cli {
       Command::Schema(args) => Ok(args.run(quiet)?),
     }
   }
+}
+
+/// Finds the project a content file belongs to.
+///
+/// Walks up from the content file's directory to the nearest one holding
+/// `.git` or `content.yaml`, so `fonts/` and `templates/` resolve the same
+/// for `tracks/ml.yaml` as for the root `content.yaml`. Falls back to the
+/// content file's own directory.
+pub(crate) fn project_root(content: &path::Path) -> path::PathBuf {
+  let dir = content
+    .parent()
+    .filter(|p| !p.as_os_str().is_empty())
+    .unwrap_or_else(|| path::Path::new("."));
+  let Ok(dir) = dir.canonicalize() else {
+    return dir.to_path_buf();
+  };
+  dir
+    .ancestors()
+    .find(|d| d.join(".git").exists() || d.join("content.yaml").is_file())
+    .unwrap_or(&dir)
+    .to_path_buf()
+}
+
+/// Fails unless the résumé fits in `max_pages` (default 1) with no wrapped
+/// bullets.
+///
+/// # Errors
+/// Returns [`Error::Layout`] when either limit is exceeded.
+pub(crate) fn enforce_layout(
+  report: &resumake::telemetry::TelemetryReport,
+  max_pages: Option<usize>,
+) -> Result<(), Error> {
+  let max_pages = max_pages.unwrap_or(1);
+  let wraps = report.line_wraps.len();
+  if report.page_count > max_pages || wraps > 0 {
+    return Err(Error::Layout {
+      pages: report.page_count,
+      max_pages,
+      wraps,
+    });
+  }
+  Ok(())
 }
 
 /// Truncates a string to at most `max_chars` UTF-8 characters with an ellipsis.
