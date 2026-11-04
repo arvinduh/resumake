@@ -92,3 +92,14 @@ allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
 # Performance (nursery, outside pedantic)
 redundant_clone = "warn"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# dist builds release artifacts with this profile.
+[profile.dist]
+inherits = "release"
