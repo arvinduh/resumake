@@ -1,7 +1,8 @@
 //! Workspace and repository scaffolding for résumé projects.
 //!
-//! Owns generating starter `content.yaml` files, `.gitignore`, `.gitattributes`,
-//! and GitHub Actions workflows for continuous compilation and releases.
+//! Owns generating starter `content.yaml` files, `.gitignore`,
+//! `.gitattributes`, and GitHub Actions workflows for continuous compilation
+//! and releases.
 
 use std::fs;
 use std::path;
@@ -25,16 +26,10 @@ pub const SCHEMA_URL: &str =
 /// Errors originating from workspace scaffolding.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-  /// Target file already exists and `--force` was not provided.
-  #[error("file '{}' already exists; use --force to overwrite", path.display())]
+  /// Target file already exists and overwriting was not requested.
+  #[error("file '{}' already exists", path.display())]
   AlreadyExists {
     /// Conflicting path.
-    path: path::PathBuf,
-  },
-  /// Target directory is not empty and `--force` was not provided.
-  #[error("target directory '{}' is not empty; use --force to proceed", path.display())]
-  DirectoryNotEmpty {
-    /// Non-empty directory path.
     path: path::PathBuf,
   },
   /// Template ejection failure.

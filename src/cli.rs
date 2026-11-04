@@ -50,6 +50,26 @@ pub enum Error {
   Io(#[from] io::Error),
 }
 
+impl Error {
+  /// Returns the CLI flag that resolves this error, when one exists.
+  ///
+  /// The library reports what went wrong; only the CLI knows its flags.
+  pub fn hint(&self) -> Option<&'static str> {
+    match self {
+      Self::Scaffold(
+        resumake::scaffold::Error::AlreadyExists { .. }
+        | resumake::scaffold::Error::Template(
+          resumake::templates::Error::AlreadyExists { .. },
+        ),
+      )
+      | Self::Template(resumake::templates::Error::AlreadyExists { .. }) => {
+        Some("use --force to overwrite")
+      }
+      _ => None,
+    }
+  }
+}
+
 /// High-performance native Rust résumé compilation and telemetry engine.
 #[derive(clap::Parser)]
 #[command(
