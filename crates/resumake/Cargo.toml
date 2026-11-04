@@ -9,7 +9,7 @@ description = "Modular, golden-ratio résumé compiler and layout telemetry engi
 readme = "../../README.md"
 
 [dependencies]
-jsonschema = "0.58"
+jsonschema = "0.60"
 schemars = "1.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
