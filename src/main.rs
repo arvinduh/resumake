@@ -33,6 +33,9 @@ fn main() -> process::ExitCode {
     Ok(()) => process::ExitCode::SUCCESS,
     Err(err) => {
       eprintln!("{err}");
+      if let Some(hint) = err.hint() {
+        eprintln!("hint: {hint}");
+      }
       process::ExitCode::FAILURE
     }
   }

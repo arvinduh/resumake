@@ -26,8 +26,8 @@ pub const SCHEMA_URL: &str =
 /// Errors originating from workspace scaffolding.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-  /// Target file already exists and `--force` was not provided.
-  #[error("file '{}' already exists; use --force to overwrite", path.display())]
+  /// Target file already exists and overwriting was not requested.
+  #[error("file '{}' already exists", path.display())]
   AlreadyExists {
     /// Conflicting path.
     path: path::PathBuf,

@@ -30,7 +30,7 @@ pub enum Error {
     known: Vec<String>,
   },
   /// Target template file already exists and overwrite was not forced.
-  #[error("template file '{}' already exists; use --force to overwrite", path.display())]
+  #[error("template file '{}' already exists", path.display())]
   AlreadyExists {
     /// Path to existing file.
     path: path::PathBuf,
