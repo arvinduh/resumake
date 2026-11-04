@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: arvinduh/resumake/setup@v1
+      - uses: arvinduh/resumake/setup@RSMK_VERSION
         with:
           version: "RSMK_VERSION"
       - run: rsmk check

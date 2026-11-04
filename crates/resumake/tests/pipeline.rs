@@ -99,3 +99,18 @@ fn unknown_template_is_rejected() {
     "the error lists the known templates"
   );
 }
+
+#[test]
+fn scaffolded_workflows_pin_the_setup_action_to_this_release() {
+  let pinned = format!("setup@{}", env!("CARGO_PKG_VERSION"));
+
+  for workflow in [
+    resumake::scaffold::ci_workflow(),
+    resumake::scaffold::release_workflow(),
+  ] {
+    assert!(
+      workflow.contains(&pinned),
+      "the setup action ref is a tag that exists for this release"
+    );
+  }
+}
