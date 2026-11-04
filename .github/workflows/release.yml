@@ -34,8 +34,7 @@ jobs:
           submodules: recursive
       - name: Install dist
         shell: bash
-        run:
-          "curl --proto '=https' --tlsv1.2 -LsSf
+        run: "curl --proto '=https' --tlsv1.2 -LsSf
           https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh
           | sh"
       - name: Cache dist
@@ -72,8 +71,7 @@ jobs:
     container: ${{ matrix.container && matrix.container.image || null }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      BUILD_MANIFEST_NAME:
-        target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
+      BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
     steps:
       - name: enable windows longpaths
         run: |
@@ -216,12 +214,10 @@ jobs:
           rm -f artifacts/*-dist-manifest.json
       - name: Create GitHub Release
         env:
-          PRERELEASE_FLAG:
-            "${{
+          PRERELEASE_FLAG: "${{
             fromJson(steps.host.outputs.manifest).announcement_is_prerelease &&
             '--prerelease' || '' }}"
-          ANNOUNCEMENT_TITLE:
-            "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
+          ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
         run: |
           gh release create "${{ needs.plan.outputs.tag }}" \
             $PRERELEASE_FLAG \
