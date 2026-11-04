@@ -10,9 +10,6 @@ env:
   CARGO_TERM_COLOR: always
   CLICOLOR_FORCE: "1"
   FORCE_COLOR: "1"
-  # Pinned deliberately: `latest` silently re-floats the whole lint gate onto
-  # a new formatter fleet the moment upstream tags a release.
-  FML_VERSION: 0.1.0
 
 jobs:
   lint:
@@ -33,13 +30,13 @@ jobs:
 
       - name: Install Formality (fml)
         run: |
-          FML_URL="https://github.com/arvinduh/formality/releases/download/${FML_VERSION}/fml-x86_64-unknown-linux-gnu.tar.xz"
+          FML_URL="https://github.com/arvinduh/formality/releases/latest/download/fml-x86_64-unknown-linux-gnu.tar.xz"
           curl -fsSL "$FML_URL" | tar -xJ --strip-components=1
           sudo mv fml /usr/local/bin/
           fml --version
 
-      # fml runs these but does not install them. Pinned for the same reason
-      # as FML_VERSION.
+      # fml runs these but does not install them. Pinned, unlike fml: their
+      # output changes between versions and we don't control their releases.
       - name: Install surface toolchains
         run: |
           npm install -g @taplo/cli@0.7.0 markdownlint-cli2@0.24.0 \
