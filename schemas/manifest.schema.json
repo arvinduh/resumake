@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "BuildDefaults": {
+      "additionalProperties": false,
+      "description": "Shared build configuration defaults under `[build]` in `resumake.toml`.",
+      "properties": {
+        "font_path": {
+          "default": null,
+          "description": "Custom font directory relative to project root (or absolute).",
+          "type": ["string", "null"]
+        },
+        "out_dir": {
+          "default": null,
+          "description": "Default PDF output directory relative to project root (or absolute).",
+          "type": ["string", "null"]
+        },
+        "schema": {
+          "default": null,
+          "description": "Custom content JSON Schema path relative to project root (or absolute).",
+          "type": ["string", "null"]
+        },
+        "template": {
+          "default": null,
+          "description": "Default template name, local template directory, or `.typ` file path.",
+          "type": ["string", "null"]
+        }
+      },
+      "type": "object"
+    },
+    "DocConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for a single named document entry under `[docs.<name>]`.",
+      "properties": {
+        "content": {
+          "description": "Path to the résumé content file (`.yaml`, `.yml`, or `.json`).",
+          "type": "string"
+        },
+        "font_path": {
+          "default": null,
+          "description": "Optional per-document font directory override.",
+          "type": ["string", "null"]
+        },
+        "output": {
+          "default": null,
+          "description": "Optional explicit output PDF filename or path for this document.",
+          "type": ["string", "null"]
+        },
+        "publish": {
+          "default": false,
+          "description": "Whether bare `rsmk build` (and release builds) include this document\n(default `false` so new variants remain drafts until opted in).",
+          "type": "boolean"
+        },
+        "schema": {
+          "default": null,
+          "description": "Optional per-document content JSON Schema override.",
+          "type": ["string", "null"]
+        },
+        "template": {
+          "default": null,
+          "description": "Optional per-document template override.",
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["content"],
+      "type": "object"
+    },
+    "OrphanPolicy": {
+      "description": "Handling policy for wrapped bullets ending in a short trailing line.",
+      "oneOf": [
+        {
+          "const": "ignore",
+          "description": "Ignore short trailing line wraps.",
+          "type": "string"
+        },
+        {
+          "const": "warn",
+          "description": "Emit a diagnostic warning without failing the run.",
+          "type": "string"
+        },
+        {
+          "const": "error",
+          "description": "Fail layout checks when a wrapped bullet ends with a short tail.",
+          "type": "string"
+        }
+      ]
+    },
+    "TelemetryPolicy": {
+      "additionalProperties": false,
+      "description": "Configurable layout telemetry thresholds enforced by `check` and `build`.",
+      "properties": {
+        "max_bullet_lines": {
+          "default": 1,
+          "description": "Maximum rendered lines permitted per guarded bullet or row (default `1`).",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_pages": {
+          "default": 1,
+          "description": "Maximum allowed rendered pages (default `1`).",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_fill": {
+          "default": null,
+          "description": "Optional minimum final-page fill percentage (`0.0`..=`100.0`).",
+          "format": "double",
+          "type": ["number", "null"]
+        },
+        "min_pages": {
+          "default": 1,
+          "description": "Minimum allowed rendered pages (default `1`).",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "orphan_lines": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/OrphanPolicy"
+            }
+          ],
+          "description": "Policy for wrapped bullets with short trailing lines (`ignore`, `warn`,\n`error`; default `ignore`)."
+        },
+        "strict_fonts": {
+          "default": true,
+          "description": "Require requested `theme.font_family` fonts to exist locally without\nfallback (default `true`).",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "description": "Top-level `resumake.toml` project manifest.",
+  "properties": {
+    "build": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/BuildDefaults"
+        }
+      ],
+      "description": "Shared build defaults under `[build]`."
+    },
+    "docs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/DocConfig"
+      },
+      "description": "Named résumé document targets under `[docs.<name>]`.",
+      "type": "object"
+    },
+    "telemetry": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/TelemetryPolicy"
+        }
+      ],
+      "description": "Layout telemetry thresholds under `[telemetry]`."
+    }
+  },
+  "title": "Manifest",
+  "type": "object"
+}
