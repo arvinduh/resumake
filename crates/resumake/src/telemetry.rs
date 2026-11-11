@@ -3,12 +3,12 @@
 //! Owns extracting layout geometry probes (`<pageinfo>`, `<bulletinfo>`)
 //! from compiled Typst documents and calculating page fill percentages.
 
+use schemars;
 use serde;
 use serde_json;
 use thiserror;
 use typst::foundations;
 use typst::introspection;
-use typst::introspection::Introspector;
 use typst::utils;
 use typst_layout;
 
@@ -21,23 +21,20 @@ pub enum Error {
 }
 
 /// Page geometry metrics probed from `<pageinfo>`.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
-pub struct PageInfo {
+#[derive(serde::Deserialize)]
+struct PageInfo {
   /// Total pages in document.
   #[serde(default = "default_pages")]
-  pub pages: usize,
+  pages: usize,
   /// Margin size in points.
   #[serde(default = "default_margin")]
-  pub margin: f64,
-  /// Page width in points.
-  #[serde(default = "default_width")]
-  pub page_w: f64,
+  margin: f64,
   /// Page height in points.
   #[serde(default = "default_height")]
-  pub page_h: f64,
+  page_h: f64,
   /// Y cursor coordinate at document end in points.
   #[serde(default)]
-  pub y: f64,
+  y: f64,
 }
 
 /// Default page count fallback.
@@ -50,11 +47,6 @@ const fn default_margin() -> f64 {
   36.0
 }
 
-/// Default page width fallback in points.
-const fn default_width() -> f64 {
-  612.0
-}
-
 /// Default page height fallback in points.
 const fn default_height() -> f64 {
   792.0
@@ -65,34 +57,68 @@ impl Default for PageInfo {
     Self {
       pages: default_pages(),
       margin: default_margin(),
-      page_w: default_width(),
       page_h: default_height(),
       y: 0.0,
     }
   }
 }
 
+/// Default trailing-line fill threshold (percentage) below which a wrapped
+/// bullet is considered an orphan tail wrap.
+pub const ORPHAN_TAIL_PCT: f64 = 20.0;
+
 /// Text item probe queried from `<bulletinfo>`.
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct BulletInfo {
-  /// Probe identifier tag.
-  #[serde(default)]
-  pub id: String,
   /// Content item kind (e.g. "bullet").
   #[serde(default)]
   pub kind: String,
-  /// Measured width fill percentage.
+  /// Measured single-line width fill percentage.
   #[serde(default)]
   pub fill: f64,
-  /// Explicit wrap flag emitted by newer templates.
+  /// Explicit wrap flag emitted by templates.
   #[serde(default)]
   pub wrapped: Option<bool>,
+  /// Total rendered line count for this item.
+  #[serde(default)]
+  pub lines: Option<usize>,
+  /// Rendered final-line width fill percentage for wrapped items.
+  #[serde(default)]
+  pub tail_fill: Option<f64>,
   /// Text content of the bullet item.
   #[serde(default)]
   pub text: String,
 }
 
 impl BulletInfo {
+  /// Returns `true` when this item wrapped past a single line.
+  #[must_use]
+  pub fn is_wrapped(&self) -> bool {
+    self
+      .wrapped
+      .unwrap_or_else(|| self.lines.is_some_and(|l| l > 1) || self.fill > 100.0)
+  }
+
+  /// Rendered line count for this item (falls back to wrap status when omitted
+  /// by custom templates).
+  #[must_use]
+  pub fn line_count(&self) -> usize {
+    self
+      .lines
+      .unwrap_or_else(|| if self.is_wrapped() { 2 } else { 1 })
+  }
+
+  /// Returns `true` when a wrapped bullet ends with a short trailing line under
+  /// [`ORPHAN_TAIL_PCT`].
+  #[must_use]
+  pub fn is_orphan_tail(&self) -> bool {
+    self.kind == "bullet"
+      && self.is_wrapped()
+      && self
+        .tail_fill
+        .is_some_and(|pct| pct > 0.0 && pct < ORPHAN_TAIL_PCT)
+  }
+
   /// Calculates where a wrapped line breaks onto a second line.
   #[must_use]
   pub fn wrap_boundary(&self) -> Option<WrapBoundary<'_>> {
@@ -101,12 +127,10 @@ impl BulletInfo {
 }
 
 /// Calculated character and text boundaries for a wrapped line.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct WrapBoundary<'a> {
   /// Character index where line 1 ends.
   pub fit_char_idx: usize,
-  /// Text fitting on the first line.
-  pub fit_text: &'a str,
   /// Text overflowing onto the second line.
   pub spill_text: &'a str,
 }
@@ -152,13 +176,12 @@ pub fn calculate_wrap_boundary(
 
   Some(WrapBoundary {
     fit_char_idx,
-    fit_text,
     spill_text,
   })
 }
 
 /// Comprehensive layout evaluation report.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct TelemetryReport {
   /// Total number of pages.
   pub page_count: usize,
@@ -168,21 +191,37 @@ pub struct TelemetryReport {
   pub fill_pct: f64,
   /// Spare vertical space on final page in inches.
   pub spare_in: f64,
-  /// List of bullet items that wrapped across lines.
+  /// List of items that wrapped across lines.
   pub line_wraps: Vec<BulletInfo>,
+  /// Requested `theme.font_family` names missing from loaded fonts.
+  pub missing_fonts: Vec<String>,
 }
 
 impl TelemetryReport {
-  /// Returns `true` if document fits strictly on a single page with no wraps.
-  #[must_use]
-  pub fn is_single_page_clean(&self) -> bool {
-    self.page_count == 1 && self.line_wraps.is_empty()
-  }
-
   /// Returns `true` if document has 1 page.
   #[must_use]
   pub fn is_single_page(&self) -> bool {
     self.page_count == 1
+  }
+
+  /// Returns wrapped items whose rendered line count exceeds `max_lines`.
+  #[must_use]
+  pub fn items_exceeding_lines(&self, max_lines: usize) -> Vec<&BulletInfo> {
+    self
+      .line_wraps
+      .iter()
+      .filter(|b| b.line_count() > max_lines)
+      .collect()
+  }
+
+  /// Returns wrapped bullets ending in a short orphan trailing line.
+  #[must_use]
+  pub fn orphan_tails(&self) -> Vec<&BulletInfo> {
+    self
+      .line_wraps
+      .iter()
+      .filter(|b| b.is_orphan_tail())
+      .collect()
   }
 }
 
@@ -196,9 +235,10 @@ fn query_metadata(
     return Vec::new();
   };
 
-  let elements = doc
-    .introspector()
-    .query(&foundations::Selector::Label(label));
+  let elements = introspection::Introspector::query(
+    doc.introspector().as_ref(),
+    &foundations::Selector::Label(label),
+  );
   let mut values = Vec::new();
 
   for elem in elements {
@@ -210,6 +250,166 @@ fn query_metadata(
   }
 
   values
+}
+
+/// Handling policy for wrapped bullets ending in a short trailing line.
+#[derive(
+  Debug, Clone, Copy, Default, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum OrphanPolicy {
+  /// Ignore short trailing line wraps.
+  #[default]
+  Ignore,
+  /// Emit a diagnostic warning without failing the run.
+  Warn,
+  /// Fail layout checks when a wrapped bullet ends with a short tail.
+  Error,
+}
+
+/// Default single-unit limit fallback (`1`) for telemetry limits.
+const fn default_one() -> usize {
+  1
+}
+
+/// Default `true` helper for `strict_fonts`.
+const fn default_true() -> bool {
+  true
+}
+
+/// Configurable layout telemetry thresholds enforced by `check` and `build`.
+#[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TelemetryPolicy {
+  /// Minimum allowed rendered pages (default `1`).
+  #[serde(default = "default_one")]
+  pub min_pages: usize,
+  /// Maximum allowed rendered pages (default `1`).
+  #[serde(default = "default_one")]
+  pub max_pages: usize,
+  /// Maximum rendered lines permitted per guarded bullet or row (default `1`).
+  #[serde(default = "default_one")]
+  pub max_bullet_lines: usize,
+  /// Require requested `theme.font_family` fonts to exist locally without
+  /// fallback (default `true`).
+  #[serde(default = "default_true")]
+  pub strict_fonts: bool,
+  /// Optional minimum final-page fill percentage (`0.0`..=`100.0`).
+  #[serde(default)]
+  pub min_fill: Option<f64>,
+  /// Policy for wrapped bullets with short trailing lines (`ignore`, `warn`,
+  /// `error`; default `ignore`).
+  #[serde(default)]
+  pub orphan_lines: OrphanPolicy,
+}
+
+impl Default for TelemetryPolicy {
+  fn default() -> Self {
+    Self {
+      min_pages: 1,
+      max_pages: 1,
+      max_bullet_lines: 1,
+      strict_fonts: true,
+      min_fill: None,
+      orphan_lines: OrphanPolicy::Ignore,
+    }
+  }
+}
+
+/// Outcome of evaluating [`TelemetryPolicy`] against a [`TelemetryReport`].
+#[derive(Debug, Default)]
+pub struct PolicyOutcome {
+  /// Non-fatal telemetry warnings.
+  pub warnings: Vec<String>,
+  /// Fatal layout policy violations.
+  pub failures: Vec<String>,
+}
+
+impl PolicyOutcome {
+  /// Returns `true` when zero policy violations occurred.
+  #[must_use]
+  pub fn passed(&self) -> bool {
+    self.failures.is_empty()
+  }
+}
+
+impl TelemetryPolicy {
+  /// Evaluates this policy against `report` and collects warnings and failures.
+  #[must_use]
+  pub fn evaluate(&self, report: &TelemetryReport) -> PolicyOutcome {
+    let mut out = PolicyOutcome::default();
+
+    if !report.missing_fonts.is_empty() {
+      let missing = report.missing_fonts.join(", ");
+      if self.strict_fonts {
+        out.failures.push(format!(
+          "missing requested font(s): {missing} (add font files to ./fonts/ or \
+           set font_path)"
+        ));
+      } else {
+        out.warnings.push(format!(
+          "missing requested font(s): {missing} (using fallback font)"
+        ));
+      }
+    }
+
+    if report.page_count < self.min_pages {
+      out.failures.push(format!(
+        "too few pages: {} page(s) (minimum {})",
+        report.page_count, self.min_pages
+      ));
+    }
+
+    if report.page_count > self.max_pages {
+      out.failures.push(format!(
+        "page limit exceeded: {} page(s) (maximum {})",
+        report.page_count, self.max_pages
+      ));
+    }
+
+    if let Some(min_fill) = self.min_fill
+      && report.fill_pct < min_fill
+    {
+      out.failures.push(format!(
+        "final page fill {:.1}% is below minimum {min_fill:.1}%",
+        report.fill_pct
+      ));
+    }
+
+    let excess = report.items_exceeding_lines(self.max_bullet_lines);
+    if !excess.is_empty() {
+      out.failures.push(format!(
+        "{} item(s) exceed max_bullet_lines ({})",
+        excess.len(),
+        self.max_bullet_lines
+      ));
+    }
+
+    let orphans = report.orphan_tails();
+    if !orphans.is_empty() {
+      match self.orphan_lines {
+        OrphanPolicy::Ignore => {}
+        OrphanPolicy::Warn => {
+          for b in orphans {
+            let tail = b.tail_fill.unwrap_or(0.0);
+            out.warnings.push(format!(
+              "orphan tail wrap ({tail:.0}% final line): \"{}\"",
+              b.text
+            ));
+          }
+        }
+        OrphanPolicy::Error => {
+          out.failures.push(format!(
+            "{} bullet(s) end with a short trailing wrap (< {ORPHAN_TAIL_PCT:.0}% \
+             last line)",
+            orphans.len()
+          ));
+        }
+      }
+    }
+
+    out
+  }
 }
 
 /// Evaluates layout telemetry from a compiled Typst document.
@@ -243,17 +443,9 @@ pub fn evaluate(
   let available_h = (page_info.page_h - 2.0 * page_info.margin).max(1.0);
   let used_h = (page_info.y - page_info.margin).clamp(0.0, page_info.page_h);
 
-  let fill_pct = if effective_pages > 1 {
-    100.0
-  } else {
-    (used_h / available_h * 100.0).clamp(0.0, 100.0)
-  };
-
-  let spare_in = if effective_pages > 1 {
-    0.0
-  } else {
-    ((page_info.page_h - page_info.margin - page_info.y) / 72.0).max(0.0)
-  };
+  let fill_pct = (used_h / available_h * 100.0).clamp(0.0, 100.0);
+  let spare_in =
+    ((page_info.page_h - page_info.margin - page_info.y) / 72.0).max(0.0);
 
   let mut page_fills = Vec::new();
   for i in 1..=effective_pages {
@@ -264,10 +456,8 @@ pub fn evaluate(
     }
   }
 
-  let line_wraps: Vec<BulletInfo> = bullets
-    .into_iter()
-    .filter(|b| b.wrapped.unwrap_or(b.fill > 100.0))
-    .collect();
+  let line_wraps: Vec<BulletInfo> =
+    bullets.into_iter().filter(BulletInfo::is_wrapped).collect();
 
   Ok(TelemetryReport {
     page_count: effective_pages,
@@ -275,5 +465,6 @@ pub fn evaluate(
     fill_pct,
     spare_in,
     line_wraps,
+    missing_fonts: Vec::new(),
   })
 }
