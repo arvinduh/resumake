@@ -5,9 +5,17 @@
 // 1. Data and Theme Resolution
 // ---------------------------------------------------------------------------
 #let content-path = sys.inputs.at("content", default: "/content.yaml")
-#let data = yaml(content-path)
+#let data = if lower(content-path).ends-with(".json") {
+  json(content-path)
+} else {
+  yaml(content-path)
+}
 #let meta = data.at("meta", default: (:))
-#let THEME = if meta != none and "theme" in meta { meta.theme } else { (:) }
+#let THEME = if "theme" in data and data.theme != none {
+  data.theme
+} else {
+  (:)
+}
 
 // ---------------------------------------------------------------------------
 // 2. Design Tokens and Typography Scale
@@ -151,12 +159,8 @@
   FONT_FALLBACKS
 }
 
-#let PAGE_DIMS = if "paper" in THEME {
-  if THEME.paper == "a4" {
-    (w: 210mm, h: 297mm)
-  } else {
-    (w: 8.5in, h: 11in)
-  }
+#let PAGE_DIMS = if "paper_size" in THEME and THEME.paper_size == "a4" {
+  (w: 210mm, h: 297mm)
 } else {
   (w: 8.5in, h: 11in)
 }
@@ -483,7 +487,13 @@
   let first-item = true
   let item-list = if type(items) == array { items } else { (items,) }
   for it in item-list {
-    let name = it.name
+    let name = if "name" in it {
+      it.name
+    } else if "title" in it {
+      it.title
+    } else {
+      ""
+    }
     let sub = if "issuer" in it { it.issuer } else if "organization" in it {
       it.organization
     } else if "event" in it { it.event } else { "" }
