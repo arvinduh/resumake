@@ -2768,6 +2768,7 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "thiserror",
+ "toml",
  "typst",
  "typst-kit",
  "typst-layout",
@@ -2844,9 +2845,7 @@ dependencies = [
  "env_logger",
  "log",
  "resumake",
- "serde",
  "serde_json",
- "serde_yaml",
  "thiserror",
 ]
 
