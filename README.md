@@ -3,24 +3,31 @@
 [![CI](https://github.com/arvinduh/resumake/actions/workflows/ci.yml/badge.svg)](https://github.com/arvinduh/resumake/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-`rsmk` compiles a résumé written in YAML to a one-page PDF, and checks the
-layout as it goes: page count, how full the page is, and which bullets wrap.
+`rsmk` compiles a résumé written in YAML or JSON to a PDF using Typst, and
+checks layout telemetry as it builds: page count, final-page fill, line wraps,
+orphan trailing lines, and font availability.
 
 ## Features
 
-- **One binary**: Typst is compiled in, with its fonts, so there is no Typst
-  CLI or font download to set up.
-- **Layout telemetry**: every build reports page count and vertical fill, and
-  flags bullets that wrap a word or two onto a second line.
-- **Schema validation**: `content.yaml` is checked against a JSON Schema that
-  your editor can use for completion.
-- **Accessible PDFs**: output is a tagged PDF, so pasted text keeps its line
+- **One binary**: Typst is compiled in, with embedded fonts, so there is no
+  Typst CLI or external toolchain to install.
+- **Project manifest (`resumake.toml`)**: Configure shared `[build]` defaults,
+  `[telemetry]` gates, and multiple named `[docs.<name>]` tracks (`publish`
+  defaults to `false` so drafts never ship accidentally).
+- **Layout telemetry**: Every check and build reports page fill percentages,
+  spare vertical height, wrapped bullets, trailing orphan lines, and missing
+  requested fonts (`strict_fonts`).
+- **Multi-format + IDE IntelliSense**: Author résumés in YAML (`.yaml`, `.yml`)
+  or JSON (`.json`), backed by Draft-07 JSON Schemas
+  (`schemas/content.schema.json` and `schemas/manifest.schema.json`).
+- **Accessible PDFs**: Output is a tagged PDF, so pasted text preserves line
   breaks and parsers see headings and lists.
-- **Adaptive spacing**: every gap derives from `theme.leading`, and spare page
-  height is shared across the gaps (capped by `theme.stretch`), so a short
-  résumé loosens instead of ending half-empty.
-- **Résumé CI**: `rsmk init` scaffolds GitHub Actions workflows that check
-  every push and publish the PDF when you push a tag.
+- **Adaptive spacing**: Every gap derives from `theme.leading`, and spare page
+  height is shared across gaps (capped by `theme.stretch`), so shorter résumés
+  breathe evenly.
+- **Résumé CI**: `rsmk init` scaffolds GitHub Actions workflows that run `rsmk
+  check` on every push and stage built PDFs into `.rsmk/dist/*.pdf` on tag
+  releases.
 
 ## Install
 
@@ -41,8 +48,8 @@ The installers verify checksums and put `rsmk` in `~/.local/bin`, or
 platform are also attached to every
 [release](https://github.com/arvinduh/resumake/releases/latest).
 
-`rsmk update` replaces the running `rsmk` with the latest release, and
-`rsmk update --check` only reports whether one exists.
+`rsmk update` replaces the running `rsmk` with the latest release, and `rsmk
+update --check` only reports whether one exists.
 
 ## Quickstart
 
@@ -53,23 +60,29 @@ rsmk init --name "Jane Doe"
 
 This writes:
 
-- `content.yaml`: starter sections, with a schema header for your editor.
-- `.github/workflows/`: a CI check and a release workflow.
+- `resumake.toml`: build defaults, telemetry rules, and `[docs.main]` target.
+- `content.yaml` (or `content.json` with `--format json`): starter sections with
+  IDE schema IntelliSense.
+- `.github/workflows/`: CI (`rsmk check`) and release workflows.
 - `.gitignore` and `.gitattributes`, and runs `git init`.
 
-Edit `content.yaml`. A minimal one looks like this:
+Edit `content.yaml`. Résumé documents separate `meta`, `theme`, and `sections`:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/arvinduh/resumake/main/schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/arvinduh/resumake/main/schemas/content.schema.json
 meta:
   name: "Jane Doe"
-  version: "1.0.0"
   title: "Software Engineer"
   contact:
     - name: "jane@example.com"
       link: "mailto:jane@example.com"
     - name: "github.com/janedoe"
       link: "https://github.com/janedoe"
+
+theme:
+  font_family: "Libertinus Serif"
+  paper_size: "us-letter"
+  margin: "0.5in"
 
 sections:
   - title: "Experience"
@@ -89,23 +102,45 @@ sections:
       Languages: "Rust, Python, TypeScript, Go"
 ```
 
-Then build it:
+Manage build settings and tracks in `resumake.toml`:
+
+```toml
+#:schema https://raw.githubusercontent.com/arvinduh/resumake/main/schemas/manifest.schema.json
+
+[build]
+template = "classic"
+
+[telemetry]
+max_pages = 1
+max_bullet_lines = 1
+strict_fonts = true
+# min_pages = 1
+# min_fill = 75.0
+# orphan_lines = "ignore" # "ignore" | "warn" | "error"
+
+[docs.main]
+content = "content.yaml"
+publish = true
+```
+
+Then verify and build:
 
 ```sh
-rsmk build   # writes jane_doe_resume.pdf
-rsmk check   # validates and measures the layout without writing a PDF
+rsmk build # builds all publish = true docs (e.g. jane_doe_resume.pdf)
+rsmk check # checks all [docs] targets without writing PDFs
 ```
 
 ```text
-built jane_doe_resume.pdf (1 page, 42.8% fill)
+[main] built jane_doe_resume.pdf (1 page, 42.8% fill)
 ```
 
-`build` and `check` fail when the résumé runs past one page or a bullet wraps
-onto a second line: each page's fill is listed, and a `note:` line names each
-wrapped bullet. `--max-pages` raises the page limit.
+`build` compiles every `[docs.<name>]` entry with `publish = true` (or a named
+target such as `rsmk build ml`, `--all`, or standalone `content.{yaml,yml,json}`
+when no manifest exists). `check` validates all `[docs]` entries, including
+drafts (`publish = false`).
 
 To publish, tag the résumé repository. The scaffolded release workflow builds
-the PDF and attaches it to a GitHub release:
+published targets into `.rsmk/dist` and attaches them to a GitHub Release:
 
 ```sh
 git tag 1.0.0 && git push origin 1.0.0
@@ -114,29 +149,40 @@ git tag 1.0.0 && git push origin 1.0.0
 ## Commands
 
 ```text
-rsmk build [CONTENT]       Compile to PDF and report layout (default: content.yaml)
-  -t, --template <TPL>     Built-in template name or a .typ file
-  -o, --output <PDF>       Output path (default: <name>_resume.pdf)
-  --schema <FILE>          Validate against a custom JSON Schema
-  --font-path <DIR>        Extra font directory (./fonts is picked up on its own)
-  --max-pages <N>          Most pages allowed (default 1)
-rsmk check [CONTENT]       Same checks as build, without writing a PDF
+rsmk build [TARGET]           Compile doc name, content path, or all publish=true docs
+  -t, --template <TPL>        Built-in template name, dir, or .typ file
+  -o, --output <PDF>          Output path (single target only)
+  --out-dir <DIR>             Output directory (overrides [build].out_dir)
+  --all                       Build all [docs] regardless of publish
+  --schema <FILE>             Custom content JSON Schema
+  --font-path <DIR>           Extra font directory (./fonts auto-detected)
+  --min-pages <N>             Minimum pages required (default 1)
+  --max-pages <N>             Maximum pages allowed (default 1)
+  --max-bullet-lines <N>      Maximum lines per bullet/row (default 1)
+  --min-fill <PCT>            Minimum final-page fill percentage
+  --strict-fonts <BOOL>       Fail when requested font_family is missing (true/false)
+  --orphan-lines <POLICY>     Short tail wraps: ignore | warn | error
+rsmk check [TARGET]           Validate schema and layout telemetry without PDFs
 
-rsmk init [DEST]           Scaffold a résumé repository (default: .)
-  -n, --name <NAME>        Candidate name
-  -e, --eject              Also copy the template to templates/<name>.typ
-  --no-git                 Skip git init, .gitignore and .gitattributes
-  --no-workflows           Skip the GitHub Actions workflows
-  -f, --force              Overwrite existing files
+rsmk init [DEST]              Scaffold a résumé repository (default: .)
+  -n, --name <NAME>           Candidate name
+  --format <FMT>              Starter content format: yaml | json (default yaml)
+  --no-manifest               Skip generating resumake.toml
+  -e, --eject                 Copy template to templates/<name>.typ
+  --no-git                    Skip git init, .gitignore, and .gitattributes
+  --no-workflows              Skip GitHub Actions workflows
+  -f, --force                 Overwrite existing files
 
-rsmk template list         List built-in templates
-rsmk template eject <NAME> Copy a template to templates/<NAME>.typ to edit it
+rsmk template list            List built-in templates
+rsmk template eject <NAME>    Copy a template to templates/<NAME>.typ
 
-rsmk update                Install the latest release
-  --check                  Only report whether a newer release exists
-rsmk schema [-o FILE]      Print the JSON Schema for content.yaml
+rsmk update                   Install the latest release
+  --check                     Only check whether a newer release exists
+rsmk schema                   Print canonical JSON Schema
+  --kind <KIND>               Schema kind: content | manifest (default content)
+  -o, --output <FILE>         Write schema JSON to FILE
 
--q, --quiet                Print only errors (any command)
+-q, --quiet                   Print only errors (any command)
 ```
 
 ## Development
