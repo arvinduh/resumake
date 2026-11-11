@@ -20,6 +20,7 @@ use typst::{LibraryExt, World, WorldExt};
 use typst_kit::fonts;
 use typst_layout;
 
+use crate::schema;
 use crate::telemetry;
 use crate::templates;
 
@@ -58,6 +59,14 @@ fn project_file_id(vpath: &str) -> syntax::FileId {
   ))
 }
 
+/// Matches fallback `content.{yaml,yml,json}` virtual paths.
+fn is_default_content_vpath(trimmed: &str) -> bool {
+  matches!(
+    trimmed.rsplit('/').next(),
+    Some("content.yaml" | "content.yml" | "content.json")
+  )
+}
+
 /// Converts days since Unix epoch to a [`foundations::Datetime`].
 fn days_to_date(days_since_epoch: i64) -> Option<foundations::Datetime> {
   let z = days_since_epoch + 719_468;
@@ -79,7 +88,7 @@ fn days_to_date(days_since_epoch: i64) -> Option<foundations::Datetime> {
 }
 
 /// In-process Typst [`World`] implementation.
-pub struct ResumakeWorld {
+struct ResumakeWorld {
   /// Standard library configuration with CLI sys.inputs.
   library: utils::LazyHash<typst::Library>,
   /// Font store containing embedded, system, and local fonts.
@@ -111,7 +120,7 @@ pub struct ResumakeWorld {
 impl ResumakeWorld {
   /// Constructs a new [`ResumakeWorld`].
   #[must_use]
-  pub fn new(
+  fn new(
     project_root: path::PathBuf,
     template_source: templates::TemplateSource,
     content_path: path::PathBuf,
@@ -208,8 +217,7 @@ impl ResumakeWorld {
 
     if id == self.content_id
       || rooted == self.content_vpath
-      || trimmed == "content.yaml"
-      || trimmed.ends_with("/content.yaml")
+      || is_default_content_vpath(trimmed)
     {
       return fs::read(&self.content_path)
         .map(foundations::Bytes::new)
@@ -226,6 +234,17 @@ impl ResumakeWorld {
     Err(diag::FileError::NotFound(path::PathBuf::from(
       id.vpath().get_without_slash(),
     )))
+  }
+
+  /// Returns requested font families absent from the loaded font book.
+  #[must_use]
+  fn missing_fonts(&self, families: &[String]) -> Vec<String> {
+    let book = self.book();
+    families
+      .iter()
+      .filter(|fam| !book.contains_family(&fam.to_lowercase()))
+      .cloned()
+      .collect()
   }
 }
 
@@ -364,7 +383,10 @@ pub fn compile(
     Error::Compilation { stderr }
   })?;
 
-  let report = telemetry::evaluate(&doc)?;
+  let mut report = telemetry::evaluate(&doc)?;
+  let requested =
+    schema::requested_fonts_from_file(content_path).unwrap_or_default();
+  report.missing_fonts = world.missing_fonts(&requested);
   Ok((doc, report))
 }
 

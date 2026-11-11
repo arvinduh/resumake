@@ -12,8 +12,7 @@ use thiserror;
 pub const DEFAULT_TEMPLATE: &str = "classic";
 
 /// Bundled canonical classic Typst template.
-pub const EMBEDDED_CLASSIC: &str =
-  include_str!("embedded/templates/classic.typ");
+const EMBEDDED_CLASSIC: &str = include_str!("embedded/templates/classic.typ");
 
 /// Known embedded template names.
 const KNOWN_TEMPLATES: &[&str] = &[DEFAULT_TEMPLATE];
@@ -41,7 +40,7 @@ pub enum Error {
 }
 
 /// Resolved template source: either raw embedded Typst code or a path on disk.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum TemplateSource {
   /// Embedded in-memory Typst source string.
   Embedded {
@@ -62,7 +61,7 @@ pub fn list() -> &'static [&'static str] {
 
 /// Returns the embedded template source by name if present.
 #[must_use]
-pub fn get_embedded(name: &str) -> Option<&'static str> {
+fn get_embedded(name: &str) -> Option<&'static str> {
   let clean = name.trim().trim_end_matches(".typ");
   if clean.eq_ignore_ascii_case(DEFAULT_TEMPLATE) {
     Some(EMBEDDED_CLASSIC)

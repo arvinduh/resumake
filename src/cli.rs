@@ -6,6 +6,7 @@
 mod build;
 mod check;
 mod init;
+mod run;
 mod schema;
 mod template;
 mod update;
@@ -40,6 +41,9 @@ pub enum Error {
   /// Template resolution or ejection failure.
   #[error(transparent)]
   Template(#[from] resumake::templates::Error),
+  /// Project manifest parsing or loading failure.
+  #[error(transparent)]
+  Manifest(#[from] resumake::manifest::Error),
   /// Self-update failure.
   #[error(transparent)]
   Update(#[from] update::Error),
@@ -49,19 +53,26 @@ pub enum Error {
   /// Standard I/O failure.
   #[error(transparent)]
   Io(#[from] io::Error),
-  /// The résumé broke the layout contract: too many pages or a wrapped
-  /// bullet.
-  #[error(
-    "layout check failed: {pages} page(s) (limit {max_pages}), {wraps} \
-     wrapped bullet(s)"
-  )]
+  /// CLI configuration or target selection error.
+  #[error("{0}")]
+  Config(String),
+  /// A document broke one or more layout telemetry gates.
+  #[error("layout check failed for '{doc}':\n{reasons}")]
   Layout {
-    /// Pages the document spans.
-    pages: usize,
-    /// Most pages allowed.
-    max_pages: usize,
-    /// Bullets that wrap onto a second line.
-    wraps: usize,
+    /// Target document label.
+    doc: String,
+    /// Formatted telemetry failure reasons.
+    reasons: String,
+  },
+  /// One or more documents failed during a multi-document run.
+  #[error("{failed} of {total} document(s) failed:\n{details}")]
+  BatchFailed {
+    /// Count of failed documents.
+    failed: usize,
+    /// Total documents attempted.
+    total: usize,
+    /// Per-document formatted errors.
+    details: String,
   },
 }
 
@@ -119,7 +130,7 @@ pub enum Command {
   Template(template::TemplateArgs),
   /// Replace the installed binary with the latest `GitHub` release
   Update(update::UpdateArgs),
-  /// Output canonical JSON schema for content.yaml
+  /// Output canonical JSON Schema for content or manifest files
   Schema(schema::SchemaArgs),
 }
 
@@ -152,8 +163,8 @@ impl Cli {
 /// Finds the project a content file belongs to.
 ///
 /// Walks up from the content file's directory to the nearest one holding
-/// `.git` or `content.yaml`, so `fonts/` and `templates/` resolve the same
-/// for `tracks/ml.yaml` as for the root `content.yaml`. Falls back to the
+/// `resumake.toml`, `.git`, or `content.{yaml,yml,json}` so `fonts/` and
+/// `templates/` resolve uniformly for track sub-files. Falls back to the
 /// content file's own directory.
 pub(crate) fn project_root(content: &path::Path) -> path::PathBuf {
   let dir = content
@@ -165,30 +176,15 @@ pub(crate) fn project_root(content: &path::Path) -> path::PathBuf {
   };
   dir
     .ancestors()
-    .find(|d| d.join(".git").exists() || d.join("content.yaml").is_file())
+    .find(|d| {
+      d.join(resumake::manifest::MANIFEST_FILE).is_file()
+        || d.join(".git").exists()
+        || d.join("content.yaml").is_file()
+        || d.join("content.yml").is_file()
+        || d.join("content.json").is_file()
+    })
     .unwrap_or(&dir)
     .to_path_buf()
-}
-
-/// Fails unless the résumé fits in `max_pages` (default 1) with no wrapped
-/// bullets.
-///
-/// # Errors
-/// Returns [`Error::Layout`] when either limit is exceeded.
-pub(crate) fn enforce_layout(
-  report: &resumake::telemetry::TelemetryReport,
-  max_pages: Option<usize>,
-) -> Result<(), Error> {
-  let max_pages = max_pages.unwrap_or(1);
-  let wraps = report.line_wraps.len();
-  if report.page_count > max_pages || wraps > 0 {
-    return Err(Error::Layout {
-      pages: report.page_count,
-      max_pages,
-      wraps,
-    });
-  }
-  Ok(())
 }
 
 /// Truncates a string to at most `max_chars` UTF-8 characters with an ellipsis.
@@ -207,6 +203,7 @@ fn truncate_ellipsis(s: &str, max_chars: usize) -> String {
 #[expect(clippy::print_stdout, reason = "CLI output")]
 pub(crate) fn print_report(
   report: &resumake::telemetry::TelemetryReport,
+  outcome: &resumake::telemetry::PolicyOutcome,
   prefix: &str,
 ) {
   if report.page_count == 1 {
@@ -227,19 +224,28 @@ pub(crate) fn print_report(
   }
 
   for wrap in &report.line_wraps {
+    let lines = wrap.line_count();
+    let tail_note = wrap
+      .tail_fill
+      .map_or_else(String::new, |t| format!(", tail {t:.0}%"));
     if let Some(b) = wrap.wrap_boundary() {
       println!(
-        "  note: wrap at {:.0}% (fits to char {}): spills \"{}\"",
+        "  note: {lines} lines{tail_note}, wrap at {:.0}% (fits to char {}): \
+         spills \"{}\"",
         wrap.fill,
         b.fit_char_idx,
         truncate_ellipsis(b.spill_text, 40)
       );
     } else {
       println!(
-        "  note: wrap at {:.0}%: \"{}\"",
+        "  note: {lines} lines{tail_note}, wrap at {:.0}%: \"{}\"",
         wrap.fill,
         truncate_ellipsis(&wrap.text, 50)
       );
     }
+  }
+
+  for warning in &outcome.warnings {
+    println!("  warning: {warning}");
   }
 }

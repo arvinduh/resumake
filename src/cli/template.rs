@@ -23,7 +23,7 @@ pub struct TemplateArgs {
 pub enum TemplateCommand {
   /// List all available built-in templates
   List,
-  /// Eject a single-file Typst template into templates/<name>.typ
+  /// Eject a single-file Typst template into `templates/<name>.typ`
   Eject(EjectArgs),
 }
 

@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=RESUMAKE_SCHEMA_URL
 meta:
   name: "CANDIDATE_NAME"
-  version: "1.0.0"
   title: "Software Engineer"
   contact:
     - name: "(555) 019-2834"
@@ -11,17 +10,18 @@ meta:
       link: "https://linkedin.com/in/janedoe"
     - name: "github.com/janedoe"
       link: "https://github.com/janedoe"
-  theme:
-    # Typst ships this family inside the binary, so the PDF renders with
-    # identical metrics locally and in CI regardless of installed system fonts.
-    font_family: "Libertinus Serif"
-    paper_size: "us-letter"
-    margin: "0.5in"
-    accent_color: "#2a2a2a"
-    # Spacing: every gap is a multiple of `leading`; `stretch` caps how far
-    # gaps may grow to fill spare page height (0 keeps them fixed).
-    # leading: "0.52em"
-    # stretch: 1.0
+
+theme:
+  # Typst ships this family inside the binary, so the PDF renders with
+  # identical metrics locally and in CI regardless of installed system fonts.
+  font_family: "Libertinus Serif"
+  paper_size: "us-letter"
+  margin: "0.5in"
+  accent_color: "#2a2a2a"
+  # Spacing: every gap is a multiple of `leading`; `stretch` caps how far
+  # gaps may grow to fill spare page height (0 keeps them fixed).
+  # leading: "0.52em"
+  # stretch: 1.0
 
 sections:
   - title: "Education"

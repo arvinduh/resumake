@@ -5,9 +5,17 @@
 // 1. Data and Theme Resolution
 // ---------------------------------------------------------------------------
 #let content-path = sys.inputs.at("content", default: "/content.yaml")
-#let data = yaml(content-path)
+#let data = if lower(content-path).ends-with(".json") {
+  json(content-path)
+} else {
+  yaml(content-path)
+}
 #let meta = data.at("meta", default: (:))
-#let THEME = if meta != none and "theme" in meta { meta.theme } else { (:) }
+#let THEME = if "theme" in data and data.theme != none {
+  data.theme
+} else {
+  (:)
+}
 
 // ---------------------------------------------------------------------------
 // 2. Design Tokens and Typography Scale
@@ -151,12 +159,8 @@
   FONT_FALLBACKS
 }
 
-#let PAGE_DIMS = if "paper" in THEME {
-  if THEME.paper == "a4" {
-    (w: 210mm, h: 297mm)
-  } else {
-    (w: 8.5in, h: 11in)
-  }
+#let PAGE_DIMS = if "paper_size" in THEME and THEME.paper_size == "a4" {
+  (w: 210mm, h: 297mm)
 } else {
   (w: 8.5in, h: 11in)
 }
@@ -196,22 +200,58 @@
   let fill = calc.round(nat.width / size.width * 100.0, digits: 1)
   let height = measure(par(body), width: size.width).height
   let line = measure(par[x], width: size.width).height
+  let two = measure(par[x \ x], width: size.width).height
+  let step = two - line
+  let lines = if height <= line * 1.5 {
+    1
+  } else if step > 0pt {
+    1 + int(calc.round((height - line) / step))
+  } else {
+    2
+  }
+  let wrapped = lines > 1
+  let tail-fill = if not wrapped {
+    fill
+  } else if kind == "bullet" and size.width > 0pt {
+    let edges = query(<bulletedge>).filter(m => m.value.id == n)
+    if edges.len() >= 2 {
+      let span = (
+        edges.at(1).location().position().x
+          - edges.at(0).location().position().x
+      )
+      calc.round(calc.max(0.0, span / size.width * 100.0), digits: 1)
+    } else {
+      none
+    }
+  } else {
+    none
+  }
   let chars = repr(body).clusters()
   [#metadata((
     id: kind + "-" + str(n),
     kind: kind,
     fill: fill,
-    wrapped: height > line * 1.5,
+    wrapped: wrapped,
+    lines: lines,
+    tail_fill: tail-fill,
     text: chars.slice(0, calc.min(80, chars.len())).join(default: ""),
   )) <bulletinfo>]
-  par(body)
+  if wrapped and kind == "bullet" {
+    par([#metadata((id: n)) <bulletedge>#body#metadata((id: n)) <bulletedge>])
+  } else {
+    par(body)
+  }
 })
 
 #let flex-counter = counter("resumake-flex")
 #let flex-gap(weight, base) = {
   flex-counter.update(n => n + int(weight * 100))
   v(base)
-  v(weight * 1fr)
+  context {
+    if query(<resumake-unbounded>).len() == 0 {
+      v(weight * 1fr)
+    }
+  }
 }
 
 #let bold(body) = text(weight: "bold")[#body]
@@ -483,7 +523,13 @@
   let first-item = true
   let item-list = if type(items) == array { items } else { (items,) }
   for it in item-list {
-    let name = it.name
+    let name = if "name" in it {
+      it.name
+    } else if "title" in it {
+      it.title
+    } else {
+      ""
+    }
     let sub = if "issuer" in it { it.issuer } else if "organization" in it {
       it.organization
     } else if "event" in it { it.event } else { "" }
@@ -770,6 +816,7 @@
     weight * STRETCH * measure(v(LEADING)).height,
   )
   if natural > size.height or slack <= 0pt {
+    [#metadata(true) <resumake-unbounded>]
     body
     page-probe(auto)
   } else {

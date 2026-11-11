@@ -1,0 +1,19 @@
+#:schema RESUMAKE_MANIFEST_SCHEMA_URL
+
+[build]
+template = "classic"
+# font_path = "fonts"
+# schema = "schemas/content.schema.json"
+# out_dir = "dist"
+
+[telemetry]
+max_pages = 1
+max_bullet_lines = 1
+strict_fonts = true
+# min_pages = 1
+# min_fill = 75.0
+# orphan_lines = "ignore" # "ignore" | "warn" | "error"
+
+[docs.main]
+content = "INIT_CONTENT_FILE"
+publish = true

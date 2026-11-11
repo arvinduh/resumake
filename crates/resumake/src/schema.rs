@@ -14,11 +14,40 @@ use serde_json;
 use serde_yaml;
 use thiserror;
 
+/// Supported serialization formats for résumé content documents.
+#[derive(Debug, Clone, Copy)]
+pub enum ContentFormat {
+  /// YAML document (`.yaml`, `.yml`).
+  Yaml,
+  /// JSON document (`.json`).
+  Json,
+}
+
+impl ContentFormat {
+  /// Infers the content format from a file path extension, defaulting to YAML.
+  #[must_use]
+  pub fn from_path(path: &path::Path) -> Self {
+    match path.extension().and_then(|e| e.to_str()) {
+      Some(ext) if ext.eq_ignore_ascii_case("json") => Self::Json,
+      _ => Self::Yaml,
+    }
+  }
+
+  /// Canonical starter filename for this content format.
+  #[must_use]
+  pub const fn default_filename(self) -> &'static str {
+    match self {
+      Self::Yaml => "content.yaml",
+      Self::Json => "content.json",
+    }
+  }
+}
+
 /// Errors originating from schema validation and document parsing.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
   /// YAML parsing failure.
-  #[error("failed to parse YAML content at '{path}': {source}")]
+  #[error("failed to parse YAML content at '{}': {source}", path.display())]
   YamlParse {
     /// Target file path.
     path: path::PathBuf,
@@ -26,7 +55,16 @@ pub enum Error {
     #[source]
     source: serde_yaml::Error,
   },
-  /// JSON parsing failure.
+  /// JSON content parsing failure.
+  #[error("failed to parse JSON content at '{}': {source}", path.display())]
+  JsonContentParse {
+    /// Target file path.
+    path: path::PathBuf,
+    /// Underlying JSON error.
+    #[source]
+    source: serde_json::Error,
+  },
+  /// JSON schema parsing or serialization failure.
   #[error("failed to parse JSON schema: {0}")]
   JsonParse(#[from] serde_json::Error),
   /// Content failed JSON Schema validation.
@@ -41,77 +79,53 @@ pub enum Error {
 }
 
 /// Metadata extracted from a résumé document.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ContentMeta {
   /// Candidate name from `meta.name`.
   pub name: String,
-  /// Document version from `meta.version`.
-  pub version: String,
 }
 
 /// Top-level Résumé document root.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ResumeDocument {
-  /// Document metadata, contact details, ATS keywords, and theme tokens.
+  /// Optional JSON Schema URI for editor completion.
+  #[serde(
+    rename = "$schema",
+    default,
+    skip_serializing_if = "Option::is_none"
+  )]
+  pub schema: Option<String>,
+  /// Candidate metadata and contact details.
   pub meta: Meta,
+  /// Visual styling tokens (typography, margins, colors, paper size).
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub theme: Option<ThemeConfig>,
   /// Ordered list of modular résumé sections.
   pub sections: Vec<Section>,
 }
 
-/// Metadata, author info, ATS targets, contact items, and styling theme.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+/// Candidate identity and contact items.
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Meta {
   /// Full display name of the candidate.
   pub name: String,
-  /// Semantic milestone version of the résumé (e.g. "1.0.0").
-  pub version: String,
   /// Professional headline or role tagline.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub title: Option<String>,
-  /// Short bio or document summary.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub description: Option<String>,
   /// Availability badge, clearance, or work authorization status.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub badge: Option<String>,
-  /// Keywords embedded into PDF document metadata for ATS optimization.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub keywords: Option<Vec<String>>,
   /// Contact items (email, phone, `LinkedIn`, GitHub, portfolio, etc.).
   pub contact: Vec<ContactItem>,
-  /// Visual styling tokens (typography, margins, colors, paper size).
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub theme: Option<ThemeConfig>,
   /// Extensible custom metadata key-values.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub extra: Option<collections::BTreeMap<String, serde_json::Value>>,
 }
 
 /// A contact item representation (string or structured object).
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum ContactItem {
   /// Raw string label (e.g. "(555) 019-2834").
@@ -124,22 +138,11 @@ pub enum ContactItem {
     /// URI link (e.g. "mailto:...", "https://...").
     #[serde(alias = "url", default, skip_serializing_if = "Option::is_none")]
     link: Option<String>,
-    /// Optional icon identifier.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    icon: Option<String>,
   },
 }
 
-/// Theme design tokens configurable directly via YAML.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+/// Visual theme design tokens configurable in the root `theme` block.
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ThemeConfig {
   /// Pinned font family name (e.g. "Libertinus Serif", "Inter").
@@ -164,12 +167,24 @@ pub struct ThemeConfig {
   /// Candidate name display size (e.g. "24pt", "26pt").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub name_size: Option<String>,
+  /// Candidate name font weight (e.g. "semibold", "bold").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub name_weight: Option<String>,
   /// Organization / employer heading size (e.g. "12pt").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub org_size: Option<String>,
   /// Section header font size (e.g. "13pt").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub section_size: Option<String>,
+  /// Section header font weight (e.g. "semibold", "bold").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub section_weight: Option<String>,
+  /// Section header case transform ("uppercase", "small-caps", "none").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub section_case: Option<String>,
+  /// Section header underline style ("underline", "none").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub section_style: Option<String>,
   /// Section divider line stroke thickness (e.g. "0.5pt", "0pt").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub rule_thickness: Option<String>,
@@ -179,6 +194,15 @@ pub struct ThemeConfig {
   /// Adaptive space elasticity multiplier (e.g. 1.0, 0.0).
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub stretch: Option<f64>,
+  /// Bullet left indentation (e.g. "0.55em", "0.35em").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub bullet_indent: Option<String>,
+  /// Space between bullet marker and body text (e.g. "0.50em").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub bullet_body_indent: Option<String>,
+  /// Bullet glyph preset ("bullet", "circle", "square", "dash", "triangle").
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub bullet_marker: Option<String>,
   /// Secondary text color for dates, locations, and metadata.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub muted_color: Option<String>,
@@ -188,17 +212,13 @@ pub struct ThemeConfig {
   /// Spacing density preset ("compact", "comfortable", "spacious").
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub density: Option<String>,
+  /// Extensible custom theme tokens for ejected or third-party templates.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub extra: Option<collections::BTreeMap<String, serde_json::Value>>,
 }
 
 /// Generic string or list of strings.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum StringOrList {
   /// Single string.
@@ -208,14 +228,7 @@ pub enum StringOrList {
 }
 
 /// Generic string or number (for years / counts).
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum StringOrNumber {
   /// String value.
@@ -225,14 +238,7 @@ pub enum StringOrNumber {
 }
 
 /// A modular résumé section supporting polymorphic block types.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Section {
   /// Section header title.
@@ -282,14 +288,7 @@ pub struct Section {
 }
 
 /// Polymorphic representation of education (single entry or multiple entries).
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum EducationValue {
   /// Single university / institution.
@@ -299,15 +298,7 @@ pub enum EducationValue {
 }
 
 /// Academic degree or institution item.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EducationItem {
   /// Name of university or institution.
@@ -345,14 +336,7 @@ pub struct EducationItem {
 }
 
 /// Academic thesis specification.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum ThesisValue {
   /// Simple thesis title string.
@@ -368,14 +352,7 @@ pub enum ThesisValue {
 }
 
 /// Skills representation (dictionary or list of categorized skills).
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum SkillsValue {
   /// Key-value dictionary mapping category name to comma-separated
@@ -386,14 +363,7 @@ pub enum SkillsValue {
 }
 
 /// Explicit skill category item.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SkillCategoryItem {
   /// Category name (e.g. "Languages", "ML & Systems", "Cloud").
@@ -404,15 +374,7 @@ pub struct SkillCategoryItem {
 }
 
 /// Work experience organization holding one or more roles.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExperienceItem {
   /// Company or organization name.
@@ -426,9 +388,6 @@ pub struct ExperienceItem {
   /// City, State or "Remote".
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub location: Option<String>,
-  /// Organization website or URL.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub url: Option<String>,
   /// One or more roles held at this organization (supports promotion ladders).
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub roles: Option<Vec<RoleItem>>,
@@ -458,15 +417,7 @@ pub struct ExperienceItem {
 }
 
 /// A specific role within an organization.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RoleItem {
   /// Job title or position (e.g. "Staff AI Systems Engineer").
@@ -475,9 +426,6 @@ pub struct RoleItem {
   /// Employment date range (e.g. "Jul 2023 – Present").
   #[serde(alias = "date")]
   pub dates: String,
-  /// Team, group, or division name (e.g. "Inference Systems").
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub team: Option<String>,
   /// Tech stack or technologies used in this role.
   #[serde(
     alias = "technologies",
@@ -491,15 +439,7 @@ pub struct RoleItem {
 }
 
 /// Technical project or open-source initiative.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectItem {
   /// Project title.
@@ -520,21 +460,10 @@ pub struct ProjectItem {
   /// Project accomplishment bullet points.
   #[serde(default)]
   pub bullets: Vec<String>,
-  /// Key metric or stats callout (e.g. "1.2k `GitHub` Stars").
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub stats: Option<String>,
 }
 
 /// Academic publication or preprint.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PublicationItem {
   /// Publication title.
@@ -562,15 +491,7 @@ pub struct PublicationItem {
 }
 
 /// Professional certification or licensure.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CertificationItem {
   /// Credential name.
@@ -585,27 +506,13 @@ pub struct CertificationItem {
   /// Issue date.
   #[serde(alias = "dates", default, skip_serializing_if = "Option::is_none")]
   pub date: Option<String>,
-  /// Expiration date.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub expiry: Option<String>,
-  /// Credential ID.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub credential_id: Option<String>,
   /// Verification URL.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub url: Option<String>,
 }
 
 /// Award, honor, or competitive fellowship.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AwardItem {
   /// Award title.
@@ -626,15 +533,7 @@ pub struct AwardItem {
 }
 
 /// Speaking engagement or conference presentation.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SpeakingItem {
   /// Talk title.
@@ -658,14 +557,7 @@ pub struct SpeakingItem {
 }
 
 /// References representation.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum ReferencesValue {
   /// Array of references.
@@ -678,15 +570,7 @@ pub enum ReferencesValue {
 }
 
 /// Professional reference item.
-#[derive(
-  Debug,
-  Clone,
-  serde::Serialize,
-  serde::Deserialize,
-  schemars::JsonSchema,
-  PartialEq,
-  Default,
-)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReferenceItem {
   /// Reference person's name.
@@ -695,65 +579,105 @@ pub struct ReferenceItem {
   pub role: String,
   /// Company or university.
   pub org: String,
-  /// Optional email or contact line.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub contact: Option<String>,
 }
 
 /// Generates the canonical JSON Schema (Draft-07) for `ResumeDocument`.
 #[must_use]
 pub fn generate_schema() -> serde_json::Value {
   let settings = schemars::generate::SchemaSettings::draft07().with(|s| {
-    s.definitions_path = "#/$defs/".to_string().into();
+    s.definitions_path = "#/$defs/".into();
   });
   let generator = settings.into_generator();
   let schema = generator.into_root_schema_for::<ResumeDocument>();
   serde_json::to_value(schema).unwrap_or(serde_json::Value::Null)
 }
 
-/// Extracts metadata (name and version) from a content YAML string.
-///
-/// # Errors
-/// Returns [`Error::YamlParse`] if the string cannot be parsed as a value.
-pub fn load_meta(content_yaml: &str) -> Result<ContentMeta, Error> {
-  let val: serde_yaml::Value =
-    serde_yaml::from_str(content_yaml).map_err(|source| Error::YamlParse {
-      path: path::PathBuf::from("content.yaml"),
-      source,
-    })?;
-
-  let meta = val.get("meta");
-  let name = meta
-    .and_then(|m| m.get("name"))
-    .and_then(serde_yaml::Value::as_str)
-    .unwrap_or("Candidate")
-    .to_string();
-  let version = meta
-    .and_then(|m| m.get("version"))
-    .and_then(serde_yaml::Value::as_str)
-    .unwrap_or("1.0.0")
-    .to_string();
-
-  Ok(ContentMeta { name, version })
+/// Parses YAML or JSON content into a canonical [`serde_json::Value`].
+fn parse_value(
+  content: &str,
+  format: ContentFormat,
+  path: &path::Path,
+) -> Result<serde_json::Value, Error> {
+  match format {
+    ContentFormat::Yaml => {
+      let yaml_val: serde_yaml::Value =
+        serde_yaml::from_str(content).map_err(|source| Error::YamlParse {
+          path: path.to_path_buf(),
+          source,
+        })?;
+      Ok(serde_json::to_value(&yaml_val)?)
+    }
+    ContentFormat::Json => {
+      serde_json::from_str(content).map_err(|source| Error::JsonContentParse {
+        path: path.to_path_buf(),
+        source,
+      })
+    }
+  }
 }
 
-/// Validates a YAML content string against JSON Schema.
+/// Extracts candidate metadata from a YAML or JSON content string.
 ///
 /// # Errors
-/// Returns [`Error::ValidationFailed`] if validation checks fail, or
-/// [`Error::YamlParse`] / [`Error::JsonParse`] on malformed content.
-pub fn validate(
-  content_yaml: &str,
+/// Returns [`Error::YamlParse`] or [`Error::JsonContentParse`] if the content
+/// cannot be parsed.
+pub fn load_meta(
+  content: &str,
+  format: ContentFormat,
+) -> Result<ContentMeta, Error> {
+  let val =
+    parse_value(content, format, path::Path::new(format.default_filename()))?;
+
+  let name = val
+    .get("meta")
+    .and_then(|m| m.get("name"))
+    .and_then(serde_json::Value::as_str)
+    .unwrap_or("Candidate")
+    .to_string();
+
+  Ok(ContentMeta { name })
+}
+
+/// Extracts requested `theme.font_family` names from a résumé content file.
+///
+/// # Errors
+/// Returns [`Error`] if the file cannot be read or parsed.
+pub fn requested_fonts_from_file(
+  content_path: &path::Path,
+) -> Result<Vec<String>, Error> {
+  let raw = fs::read_to_string(content_path)?;
+  let val =
+    parse_value(&raw, ContentFormat::from_path(content_path), content_path)?;
+  Ok(extract_requested_fonts(&val))
+}
+
+/// Pulls font family names from `theme.font_family`.
+fn extract_requested_fonts(val: &serde_json::Value) -> Vec<String> {
+  let Some(font_val) = val.get("theme").and_then(|t| t.get("font_family"))
+  else {
+    return Vec::new();
+  };
+  match font_val {
+    serde_json::Value::String(s) if !s.trim().is_empty() => {
+      vec![s.trim().to_string()]
+    }
+    serde_json::Value::Array(items) => items
+      .iter()
+      .filter_map(serde_json::Value::as_str)
+      .map(str::trim)
+      .filter(|s| !s.is_empty())
+      .map(str::to_string)
+      .collect(),
+    _ => Vec::new(),
+  }
+}
+
+/// Validates parsed JSON content against either a custom schema or the built-in
+/// schema.
+fn validate_parsed(
+  json_content: &serde_json::Value,
   custom_schema_json: Option<&str>,
 ) -> Result<(), Error> {
-  let yaml_val: serde_yaml::Value = serde_yaml::from_str(content_yaml)
-    .map_err(|source| Error::YamlParse {
-      path: path::PathBuf::from("content.yaml"),
-      source,
-    })?;
-
-  let json_content = serde_json::to_value(&yaml_val)?;
-
   let schema_val = if let Some(custom) = custom_schema_json {
     serde_json::from_str::<serde_json::Value>(custom)?
   } else {
@@ -770,7 +694,7 @@ pub fn validate(
   };
 
   let mut errors = Vec::new();
-  for err in validator.iter_errors(&json_content) {
+  for err in validator.iter_errors(json_content) {
     let path = if err.instance_path().as_str().is_empty() {
       "<root>".to_string()
     } else {
@@ -788,6 +712,21 @@ pub fn validate(
   }
 }
 
+/// Validates a YAML or JSON content string against JSON Schema.
+///
+/// # Errors
+/// Returns [`Error::ValidationFailed`] if validation checks fail, or parse/JSON
+/// errors on malformed content.
+pub fn validate(
+  content: &str,
+  format: ContentFormat,
+  custom_schema_json: Option<&str>,
+) -> Result<(), Error> {
+  let json_content =
+    parse_value(content, format, path::Path::new(format.default_filename()))?;
+  validate_parsed(&json_content, custom_schema_json)
+}
+
 /// Validates a content file from disk, optionally using a custom schema file.
 ///
 /// # Errors
@@ -796,10 +735,12 @@ pub fn validate_file(
   content_path: &path::Path,
   custom_schema_path: Option<&path::Path>,
 ) -> Result<(), Error> {
-  let content_yaml = fs::read_to_string(content_path)?;
+  let raw = fs::read_to_string(content_path)?;
+  let json_content =
+    parse_value(&raw, ContentFormat::from_path(content_path), content_path)?;
   let custom_schema = match custom_schema_path {
     Some(p) => Some(fs::read_to_string(p)?),
     None => None,
   };
-  validate(&content_yaml, custom_schema.as_deref())
+  validate_parsed(&json_content, custom_schema.as_deref())
 }

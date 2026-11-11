@@ -35,16 +35,8 @@
       "additionalProperties": false,
       "description": "Professional certification or licensure.",
       "properties": {
-        "credential_id": {
-          "description": "Credential ID.",
-          "type": ["string", "null"]
-        },
         "date": {
           "description": "Issue date.",
-          "type": ["string", "null"]
-        },
-        "expiry": {
-          "description": "Expiration date.",
           "type": ["string", "null"]
         },
         "issuer": {
@@ -72,10 +64,6 @@
         {
           "description": "Structured contact item with label and optional URI link.",
           "properties": {
-            "icon": {
-              "description": "Optional icon identifier.",
-              "type": ["string", "null"]
-            },
             "link": {
               "description": "URI link (e.g. \"mailto:...\", \"https://...\").",
               "type": ["string", "null"]
@@ -215,17 +203,13 @@
         "title": {
           "description": "Job title (if specifying a single-role company without `roles` array).",
           "type": ["string", "null"]
-        },
-        "url": {
-          "description": "Organization website or URL.",
-          "type": ["string", "null"]
         }
       },
       "type": "object"
     },
     "Meta": {
       "additionalProperties": false,
-      "description": "Metadata, author info, ATS targets, contact items, and styling theme.",
+      "description": "Candidate identity and contact items.",
       "properties": {
         "badge": {
           "description": "Availability badge, clearance, or work authorization status.",
@@ -238,47 +222,21 @@
           },
           "type": "array"
         },
-        "description": {
-          "description": "Short bio or document summary.",
-          "type": ["string", "null"]
-        },
         "extra": {
           "additionalProperties": true,
           "description": "Extensible custom metadata key-values.",
           "type": ["object", "null"]
         },
-        "keywords": {
-          "description": "Keywords embedded into PDF document metadata for ATS optimization.",
-          "items": {
-            "type": "string"
-          },
-          "type": ["array", "null"]
-        },
         "name": {
           "description": "Full display name of the candidate.",
           "type": "string"
         },
-        "theme": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ThemeConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Visual styling tokens (typography, margins, colors, paper size)."
-        },
         "title": {
           "description": "Professional headline or role tagline.",
           "type": ["string", "null"]
-        },
-        "version": {
-          "description": "Semantic milestone version of the résumé (e.g. \"1.0.0\").",
-          "type": "string"
         }
       },
-      "required": ["name", "version", "contact"],
+      "required": ["name", "contact"],
       "type": "object"
     },
     "ProjectItem": {
@@ -303,10 +261,6 @@
         },
         "stack": {
           "description": "Tech stack or subtitle (e.g. \"Rust · CUDA · Triton\").",
-          "type": ["string", "null"]
-        },
-        "stats": {
-          "description": "Key metric or stats callout (e.g. \"1.2k `GitHub` Stars\").",
           "type": ["string", "null"]
         },
         "url": {
@@ -367,10 +321,6 @@
       "additionalProperties": false,
       "description": "Professional reference item.",
       "properties": {
-        "contact": {
-          "description": "Optional email or contact line.",
-          "type": ["string", "null"]
-        },
         "name": {
           "description": "Reference person's name.",
           "type": "string"
@@ -431,10 +381,6 @@
         },
         "stack": {
           "description": "Tech stack or technologies used in this role.",
-          "type": ["string", "null"]
-        },
-        "team": {
-          "description": "Team, group, or division name (e.g. \"Inference Systems\").",
           "type": ["string", "null"]
         },
         "title": {
@@ -663,7 +609,7 @@
     },
     "ThemeConfig": {
       "additionalProperties": false,
-      "description": "Theme design tokens configurable directly via YAML.",
+      "description": "Visual theme design tokens configurable in the root `theme` block.",
       "properties": {
         "accent_color": {
           "description": "Primary hex or named brand accent color (e.g. \"#2a2a2a\", \"#1a365d\").",
@@ -673,9 +619,26 @@
           "description": "Primary base body font size (e.g. \"11pt\", \"10.5pt\").",
           "type": ["string", "null"]
         },
+        "bullet_body_indent": {
+          "description": "Space between bullet marker and body text (e.g. \"0.50em\").",
+          "type": ["string", "null"]
+        },
+        "bullet_indent": {
+          "description": "Bullet left indentation (e.g. \"0.55em\", \"0.35em\").",
+          "type": ["string", "null"]
+        },
+        "bullet_marker": {
+          "description": "Bullet glyph preset (\"bullet\", \"circle\", \"square\", \"dash\", \"triangle\").",
+          "type": ["string", "null"]
+        },
         "density": {
           "description": "Spacing density preset (\"compact\", \"comfortable\", \"spacious\").",
           "type": ["string", "null"]
+        },
+        "extra": {
+          "additionalProperties": true,
+          "description": "Extensible custom theme tokens for ejected or third-party templates.",
+          "type": ["object", "null"]
         },
         "font_family": {
           "description": "Pinned font family name (e.g. \"Libertinus Serif\", \"Inter\").",
@@ -701,6 +664,10 @@
           "description": "Candidate name display size (e.g. \"24pt\", \"26pt\").",
           "type": ["string", "null"]
         },
+        "name_weight": {
+          "description": "Candidate name font weight (e.g. \"semibold\", \"bold\").",
+          "type": ["string", "null"]
+        },
         "org_size": {
           "description": "Organization / employer heading size (e.g. \"12pt\").",
           "type": ["string", "null"]
@@ -713,8 +680,20 @@
           "description": "Section divider line stroke thickness (e.g. \"0.5pt\", \"0pt\").",
           "type": ["string", "null"]
         },
+        "section_case": {
+          "description": "Section header case transform (\"uppercase\", \"small-caps\", \"none\").",
+          "type": ["string", "null"]
+        },
         "section_size": {
           "description": "Section header font size (e.g. \"13pt\").",
+          "type": ["string", "null"]
+        },
+        "section_style": {
+          "description": "Section header underline style (\"underline\", \"none\").",
+          "type": ["string", "null"]
+        },
+        "section_weight": {
+          "description": "Section header font weight (e.g. \"semibold\", \"bold\").",
           "type": ["string", "null"]
         },
         "stretch": {
@@ -754,13 +733,17 @@
   "additionalProperties": false,
   "description": "Top-level Résumé document root.",
   "properties": {
+    "$schema": {
+      "description": "Optional JSON Schema URI for editor completion.",
+      "type": ["string", "null"]
+    },
     "meta": {
       "allOf": [
         {
           "$ref": "#/$defs/Meta"
         }
       ],
-      "description": "Document metadata, contact details, ATS keywords, and theme tokens."
+      "description": "Candidate metadata and contact details."
     },
     "sections": {
       "description": "Ordered list of modular résumé sections.",
@@ -768,6 +751,17 @@
         "$ref": "#/$defs/Section"
       },
       "type": "array"
+    },
+    "theme": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ThemeConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Visual styling tokens (typography, margins, colors, paper size)."
     }
   },
   "required": ["meta", "sections"],
