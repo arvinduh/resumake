@@ -3,3 +3,4 @@ indent_size = 2
 line_length = 80
 quote_style = "double"
 end_of_line = "lf"
+ignore = [".github/workflows/release.yml"]
