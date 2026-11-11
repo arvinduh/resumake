@@ -200,22 +200,58 @@
   let fill = calc.round(nat.width / size.width * 100.0, digits: 1)
   let height = measure(par(body), width: size.width).height
   let line = measure(par[x], width: size.width).height
+  let two = measure(par[x \ x], width: size.width).height
+  let step = two - line
+  let lines = if height <= line * 1.5 {
+    1
+  } else if step > 0pt {
+    1 + int(calc.round((height - line) / step))
+  } else {
+    2
+  }
+  let wrapped = lines > 1
+  let tail-fill = if not wrapped {
+    fill
+  } else if kind == "bullet" and size.width > 0pt {
+    let edges = query(<bulletedge>).filter(m => m.value.id == n)
+    if edges.len() >= 2 {
+      let span = (
+        edges.at(1).location().position().x
+          - edges.at(0).location().position().x
+      )
+      calc.round(calc.max(0.0, span / size.width * 100.0), digits: 1)
+    } else {
+      none
+    }
+  } else {
+    none
+  }
   let chars = repr(body).clusters()
   [#metadata((
     id: kind + "-" + str(n),
     kind: kind,
     fill: fill,
-    wrapped: height > line * 1.5,
+    wrapped: wrapped,
+    lines: lines,
+    tail_fill: tail-fill,
     text: chars.slice(0, calc.min(80, chars.len())).join(default: ""),
   )) <bulletinfo>]
-  par(body)
+  if wrapped and kind == "bullet" {
+    par([#metadata((id: n)) <bulletedge>#body#metadata((id: n)) <bulletedge>])
+  } else {
+    par(body)
+  }
 })
 
 #let flex-counter = counter("resumake-flex")
 #let flex-gap(weight, base) = {
   flex-counter.update(n => n + int(weight * 100))
   v(base)
-  v(weight * 1fr)
+  context {
+    if query(<resumake-unbounded>).len() == 0 {
+      v(weight * 1fr)
+    }
+  }
 }
 
 #let bold(body) = text(weight: "bold")[#body]
@@ -780,6 +816,7 @@
     weight * STRETCH * measure(v(LEADING)).height,
   )
   if natural > size.height or slack <= 0pt {
+    [#metadata(true) <resumake-unbounded>]
     body
     page-probe(auto)
   } else {
