@@ -30,12 +30,10 @@ jobs:
 
       - name: Install Formality (fml)
         run: |
-          FML_URL="https://github.com/arvinduh/formality/releases/latest/download/fml-x86_64-unknown-linux-gnu.tar.xz"
-          tmp=$(mktemp -d)
-          curl -fsSL "$FML_URL" | tar -xJ --strip-components=1 -C "$tmp"
-          sudo mv "$tmp/fml" /usr/local/bin/
-          rm -rf "$tmp"
-          fml --version
+          base="https://github.com/arvinduh/formality/releases/latest/download"
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            "${base}/fml-installer.sh" | sh
+          "${HOME}/.local/bin/fml" --version
 
       # fml runs these but does not install them. Pinned, unlike fml: their
       # output changes between versions and we don't control their releases.
