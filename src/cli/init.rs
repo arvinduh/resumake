@@ -3,15 +3,32 @@
 //! Owns argument definitions and execution for scaffolding a new résumé
 //! workspace with example content, workflows, and git configurations.
 
+use std::env;
 use std::io;
-use std::io::IsTerminal;
-use std::io::Write;
 use std::path;
 
 use clap;
 use resumake;
 
 use crate::cli;
+
+/// Starter résumé document serialization format.
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum InitFormat {
+  /// YAML document (`content.yaml`).
+  Yaml,
+  /// JSON document (`content.json`).
+  Json,
+}
+
+impl From<InitFormat> for resumake::schema::ContentFormat {
+  fn from(format: InitFormat) -> Self {
+    match format {
+      InitFormat::Yaml => Self::Yaml,
+      InitFormat::Json => Self::Json,
+    }
+  }
+}
 
 /// Command line arguments for `rsmk init`.
 #[derive(clap::Args)]
@@ -25,6 +42,14 @@ pub struct InitArgs {
   #[arg(short, long)]
   pub name: Option<String>,
 
+  /// Format for the starter résumé content file (`yaml` or `json`)
+  #[arg(long, value_enum, default_value_t = InitFormat::Yaml)]
+  pub format: InitFormat,
+
+  /// Skip generating a starter `resumake.toml` manifest
+  #[arg(long)]
+  pub no_manifest: bool,
+
   /// Overwrite destination files if they already exist
   #[arg(short, long)]
   pub force: bool,
@@ -37,7 +62,7 @@ pub struct InitArgs {
   #[arg(long)]
   pub no_workflows: bool,
 
-  /// Eject the template into templates/<name>.typ during initialization
+  /// Eject the template into `templates/<name>.typ` during initialization
   #[arg(short = 'e', long)]
   pub eject: bool,
 
@@ -59,6 +84,8 @@ impl InitArgs {
     let opts = resumake::scaffold::InitOptions {
       name: &candidate_name,
       target_dir: &target_dir,
+      format: self.format.into(),
+      no_manifest: self.no_manifest,
       force: self.force,
       no_git: self.no_git,
       no_workflows: self.no_workflows,
@@ -93,17 +120,17 @@ fn resolve_candidate_name(name_arg: Option<&str>) -> String {
     return n.trim().to_string();
   }
 
-  if let Ok(author) = std::env::var("GIT_AUTHOR_NAME")
+  if let Ok(author) = env::var("GIT_AUTHOR_NAME")
     && !author.trim().is_empty()
   {
     return author.trim().to_string();
   }
 
-  if io::stdin().is_terminal() {
+  if io::IsTerminal::is_terminal(&io::stdin()) {
     #[expect(clippy::print_stdout, reason = "Interactive CLI prompt")]
     {
       print!("Candidate Name [Jane Doe]: ");
-      let _ = io::stdout().flush();
+      let _ = io::Write::flush(&mut io::stdout());
     }
     let mut input = String::new();
     if io::stdin().read_line(&mut input).is_ok() {
