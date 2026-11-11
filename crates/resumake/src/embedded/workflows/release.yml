@@ -15,7 +15,7 @@ jobs:
       - uses: arvinduh/resumake/setup@RSMK_VERSION
         with:
           version: "RSMK_VERSION"
-      - run: rsmk build
+      - run: rsmk build --out-dir .rsmk/dist
       - uses: softprops/action-gh-release@v3
         with:
-          files: "*.pdf"
+          files: ".rsmk/dist/*.pdf"
