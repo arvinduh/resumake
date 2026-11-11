@@ -4,8 +4,8 @@ resumake is a modular résumé compiler and layout telemetry engine.
 
 ## Toolchain
 
-`rust-toolchain.toml` pins stable `1.98.1`, and CI installs it from there. resumake
-must build on stable.
+`rust-toolchain.toml` pins stable `1.98.1`, and CI installs it from there.
+resumake must build on stable.
 
 ## Compatibility
 
@@ -15,8 +15,8 @@ removes it outright.
 
 ## CI and merging
 
-- `.github/workflows/ci.yml` runs `fml fmt --check`, `fml lint`, clippy,
-  and the tests.
+- `.github/workflows/ci.yml` runs `fml fmt --check`, `fml lint`, clippy, and the
+  tests.
 - PRs are squash-merged.
 
 ## Releases

@@ -22,7 +22,7 @@ Fixes #<!-- issue number -->
 
 ## Checklist
 
-- [ ] Conventional Commit format followed
-      (`type(scope): description (Fixes #N)`).
+- [ ] Conventional Commit format followed (`type(scope): description (Fixes
+      #N)`).
 - [ ] Telemetry and 1-page layout contracts preserved.
 - [ ] No extraneous dead code or untracked scratch files left behind.
